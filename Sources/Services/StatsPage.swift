@@ -85,7 +85,19 @@ main > *:nth-child(6) { animation-delay: .20s } main > *:nth-child(7) { animatio
 #buoy { position: absolute; left: 20px; top: 0; width: 64px; height: 64px;
   pointer-events: none; z-index: 2; }
 #buoy.dry .ring { display: none; }
-#buoy.dry { left: auto; right: 14px; top: auto; bottom: 10px; }
+/* Awake on dry land he hangs behind the card: the clip cuts him at the
+   hero's top edge, so only his head and gripping paws peek over. */
+#buoy.dry { top: 0; clip-path: inset(0 0 calc(100% - 32px) 0); }
+#buoy .paws { display: none; }
+#buoy .shades { display: none; }
+.st-break #buoy .shades { display: block; }
+/* Break-time drink: floats beside the ring, or stands on the lip while he
+   peeks over (it lives outside the buoy so the dry clip can't cut it). */
+#drink { position: absolute; width: 26px; height: 34px; display: none;
+  pointer-events: none; z-index: 3; }
+.st-break #drink { display: block; }
+#buoy.dry .paws { display: block; }
+
 /* Asleep on dry land: the profile sleeper replaces the buoy — perfectly
    still except the chest slowly rising. */
 #sleeper { position: absolute; right: 14px; bottom: 8px; width: 64px; height: 40px;
@@ -131,7 +143,10 @@ main > *:nth-child(6) { animation-delay: .20s } main > *:nth-child(7) { animatio
 .abtn .fill { position: absolute; inset: 0; background: currentColor; opacity: .28;
   transform: scaleX(0); transform-origin: left; transition: transform .18s ease; }
 .abtn.holding .fill { transform: scaleX(1); transition: transform 2s linear; }
-.abtn .lbl { position: relative; }
+.abtn .lbl { position: relative; display: flex; flex-direction: column;
+  align-items: center; gap: 1px; }
+.abtn .sub { font-size: 10px; font-weight: 500; opacity: .78; }
+.abtn .sub:empty { display: none; }
 .abtn.solid-work { background: var(--work); color: var(--work-fg); }
 .abtn.solid-stop { background: var(--stop); color: var(--stop-fg); }
 .abtn.line-brk { background: var(--brk-soft); color: var(--brk);
@@ -184,6 +199,12 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
       <linearGradient id="wgrad" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" id="ws0"/><stop offset=".68" id="ws1"/><stop offset="1" id="ws2"/>
       </linearGradient>
+      <linearGradient id="ringG" x1="0" y1="0" x2="0" y2="1">
+        <stop id="rg0" offset="0"/><stop id="rg1" offset="1"/>
+      </linearGradient>
+      <linearGradient id="ringW" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d4d6d9"/>
+      </linearGradient>
       <linearGradient id="egrad" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
         <stop id="es0" stop-opacity="0"/><stop id="es1" stop-opacity=".14"/>
         <stop id="es2" stop-opacity=".5"/>
@@ -208,7 +229,8 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
           <stop offset="0" stop-color="#A37047"/><stop offset="1" stop-color="#8C5C38"/>
         </linearGradient>
         <linearGradient id="capG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#1A8C94"/><stop offset="1" stop-color="#17828A"/>
+          <stop id="cg0" offset="0" stop-color="#1A8C94"/>
+          <stop id="cg1" offset="1" stop-color="#17828A"/>
         </linearGradient>
       </defs>
       <g id="zzz"><text x="40" y="16">z</text><text x="47" y="10">z</text><text x="54" y="5">z</text></g>
@@ -222,19 +244,21 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
         <ellipse class="feet" cx="60" cy="93" rx="8" ry="5" fill="#6B4529"/>
         <!-- Chunky ring over the body, around his waist — feet stick out
              below its bottom arc. Hidden while he sits dry on the edge. -->
-        <ellipse class="ring" cx="50" cy="58" rx="46" ry="24" fill="none"
-                 stroke="#F07048" stroke-width="20"/>
-        <ellipse class="ring" cx="50" cy="58" rx="46" ry="24" fill="none" opacity=".92"
-                 stroke="#fff" stroke-width="20" stroke-dasharray="28.2 28.2"/>
+        <ellipse class="ring" cx="50" cy="58" rx="38" ry="20" fill="none"
+                 stroke="url(#ringG)" stroke-width="26"/>
+        <ellipse class="ring" cx="50" cy="58" rx="38" ry="20" fill="none" opacity=".92"
+                 stroke="url(#ringW)" stroke-width="26" stroke-dasharray="23.3 23.3"/>
+        <ellipse class="ring" cx="50" cy="55" rx="38" ry="20" fill="none"
+                 stroke="rgba(255,255,255,.35)" stroke-width="3"/>
         <!-- Head and face again, in front of the ring's top arc. -->
         <circle cx="21" cy="23" r="9" fill="#8C5C38"/><circle cx="21" cy="23" r="4.3" fill="#6B4529"/>
         <circle cx="79" cy="23" r="9" fill="#8C5C38"/><circle cx="79" cy="23" r="4.3" fill="#6B4529"/>
         <ellipse cx="50" cy="37" rx="29" ry="27" fill="url(#furG)"
                  stroke="#4D301C" stroke-opacity=".25" stroke-width="1.2"/>
-        <rect x="14" y="24" width="72" height="12" rx="5" fill="#0F5C63"/>
+        <rect class="capd" x="14" y="24" width="72" height="12" rx="5" fill="#0F5C63"/>
         <path d="M20 31.5 A30 30 0 0 1 80 31.5 A4 4 0 0 1 76 35.5 H24 A4 4 0 0 1 20 31.5 Z"
               fill="url(#capG)"/>
-        <circle cx="50" cy="2.6" r="2.2" fill="#0F5C63"/>
+        <circle class="capd" cx="50" cy="2.6" r="2.2" fill="#0F5C63"/>
         <text x="50" y="21" text-anchor="middle" font-size="14" font-weight="800"
               fill="#fff" font-family="inherit">bob</text>
         <ellipse cx="32" cy="46" rx="6.5" ry="4.3" fill="#ED8C7A" opacity=".45"/>
@@ -255,7 +279,29 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
               stroke="#4D301C" stroke-opacity=".18" stroke-width=".5"/>
         <rect x="50.3" y="48" width="6.2" height="12" rx="1.4" fill="#FCFAED"
               stroke="#4D301C" stroke-opacity=".18" stroke-width=".5"/>
+        <g class="shades">
+          <rect x="31" y="29" width="16" height="12" rx="4" fill="#16181C"/>
+          <rect x="53" y="29" width="16" height="12" rx="4" fill="#16181C"/>
+          <rect x="46" y="32" width="8" height="2.6" rx="1.3" fill="#16181C"/>
+          <path d="M34 32 l4 -2" stroke="rgba(255,255,255,.35)" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M56 32 l4 -2" stroke="rgba(255,255,255,.35)" stroke-width="1.6" stroke-linecap="round"/>
+        </g>
+        <g class="paws">
+          <ellipse cx="30" cy="52" rx="9" ry="7" fill="#A37047"
+                   stroke="#6B4529" stroke-opacity=".55" stroke-width="2"/>
+          <ellipse cx="70" cy="52" rx="9" ry="7" fill="#A37047"
+                   stroke="#6B4529" stroke-opacity=".55" stroke-width="2"/>
+        </g>
       </g>
+  </svg>
+  <svg id="drink" viewBox="0 0 26 34" aria-hidden="true">
+    <defs><linearGradient id="drinkG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB859"/><stop offset="1" stop-color="#FA853D"/>
+    </linearGradient></defs>
+    <line x1="14" y1="12" x2="19" y2="1" stroke="#F07048" stroke-width="2.4"
+          stroke-linecap="round"/>
+    <rect x="5" y="10" width="13" height="20" rx="2.6" fill="url(#drinkG)"
+          stroke="rgba(255,255,255,.55)" stroke-width="1.2"/>
   </svg>
   <svg id="sleeper" viewBox="0 0 64 40" aria-hidden="true">
     <g class="zs"><text x="46" y="10">z</text><text x="52" y="6">z</text><text x="58" y="3">z</text></g>
@@ -269,7 +315,7 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
     <circle cx="42" cy="17" r="3.2" fill="#8C5C38"/><circle cx="42" cy="17" r="1.6" fill="#6B4529"/>
     <g transform="rotate(-22 41 15)">
       <rect x="33" y="10" width="16" height="9" rx="4" fill="url(#capG)"/>
-      <rect x="45" y="15.5" width="9" height="3" rx="1.5" fill="#0F5C63"/>
+      <rect class="capd" x="45" y="15.5" width="9" height="3" rx="1.5" fill="#0F5C63"/>
     </g>
     <path d="M47.5 25 q2.2 1.8 4.4 0" stroke="#291A12" stroke-width="1.4"
           fill="none" stroke-linecap="round"/>
@@ -313,24 +359,22 @@ let snap = null;
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Water: sweeps in from the left with a sine-wave edge that keeps a small
-// swell while the day is unfinished; its color lerps from cold blue (empty)
-// to the brand teal (full). Deep tones in dark mode, pastels in light.
+// swell while the day is unfinished. It wears the Mac's accent hue (sent in
+// the snapshot) with fixed saturation/lightness — deep tones in dark mode,
+// pastels in light.
 const darkMq = matchMedia("(prefers-color-scheme: dark)");
-const PAL = {
-  dark: { blue: [[19, 52, 107], [25, 81, 158], [40, 115, 204]],
-          teal: [[17, 62, 71], [23, 105, 112], [33, 145, 153]],
-          gblue: [115, 184, 255], gteal: [117, 212, 219] },
-  light: { blue: [[107, 148, 204], [125, 166, 217], [143, 184, 230]],
-           teal: [[97, 173, 181], [115, 191, 196], [133, 207, 212]],
-           gblue: [230, 242, 255], gteal: [219, 250, 250] },
-};
+function palette() {
+  const h = (snap && snap.accentHue) || 190;
+  return darkMq.matches
+    ? { water: [`hsl(${h} 61% 17%)`, `hsl(${h} 66% 26%)`, `hsl(${h} 64% 36%)`],
+        glow: `hsl(${h} 59% 66%)` }
+    : { water: [`hsl(${h} 36% 55%)`, `hsl(${h} 40% 61%)`, `hsl(${h} 47% 68%)`],
+        glow: `hsl(${h} 76% 92%)` };
+}
 // Fresh wave character on every load, so no two sloshes look alike.
 const SEED = { p0: Math.random() * Math.PI * 2, freq: 1.9 + Math.random() * 0.7,
                ap: Math.random() * Math.PI * 2,
                o2: Math.random() * Math.PI * 2, o3: Math.random() * Math.PI * 2 };
-const lerp = (a, b, f) => a + (b - a) * f;
-const mixc = (a, b, f) =>
-  "rgb(" + a.map((v, i) => Math.round(lerp(v, b[i], f))).join(",") + ")";
 const levelFrac = () => snap && snap.target > 0 ? Math.min(1, workedNow() / snap.target) : 0;
 let waveStarted = false, waveDone = reduceMotion, heroT0 = 0, lastFrame = 0;
 // Displayed level chases the live one, so entry edits glide instead of snap.
@@ -339,9 +383,21 @@ let shown = 0;
 function paintWater(level, amp, phase, asym) {
   asym = asym || 0;
   const f = levelFrac();
-  const pal = darkMq.matches ? PAL.dark : PAL.light;
+  const pal = palette();
   for (let i = 0; i < 3; i++)
-    $("ws" + i).setAttribute("stop-color", mixc(pal.blue[i], pal.teal[i], f));
+    $("ws" + i).setAttribute("stop-color", pal.water[i]);
+  // Bob's cap and the UI's primary token follow the accent hue too.
+  const ch = (snap && snap.accentHue) || 190;
+  const root = document.documentElement.style;
+  root.setProperty("--work", darkMq.matches ? `hsl(${ch} 62% 57%)` : `hsl(${ch} 74% 22%)`);
+  root.setProperty("--work-soft", darkMq.matches
+    ? `hsl(${ch} 62% 57% / .10)` : `hsl(${ch} 74% 22% / .09)`);
+  $("cg0").setAttribute("stop-color", `hsl(${ch} 70% 34%)`);
+  $("cg1").setAttribute("stop-color", `hsl(${ch} 71% 32%)`);
+  document.querySelectorAll(".capd").forEach(el =>
+    el.setAttribute("fill", `hsl(${ch} 74% 22%)`));
+  $("rg0").setAttribute("stop-color", `hsl(${ch} 55% 62%)`);
+  $("rg1").setAttribute("stop-color", `hsl(${ch} 72% 36%)`);
   const l = level * 100;
   // Three sine components with incommensurate wavelengths and speeds sum
   // into an organic, never-quite-repeating edge; `asym` adds the lopsided
@@ -368,7 +424,7 @@ function paintWater(level, amp, phase, asym) {
   // rim stroked exactly along the edge — specular, not a soft blur.
   $("epath").setAttribute("d", d);
   $("rim").setAttribute("d", edge);
-  const glow = mixc(pal.gblue, pal.gteal, f);
+  const glow = pal.glow;
   $("rim").setAttribute("stroke", glow);
   const offs = [l - 5, l - 1.4, l];
   ["es0", "es1", "es2"].forEach((id, i) => {
@@ -382,10 +438,22 @@ function paintWater(level, amp, phase, asym) {
   $("buoy").classList.toggle("dry", dry);
   $("buoy").style.display = asleepDry ? "none" : "block";
   $("sleeper").style.display = asleepDry ? "block" : "none";
+  // Dry: standing on the deck (feet on the hero's top edge); swimming:
+  // back to the fixed top-left straddle.
+  $("buoy").style.left = "";
   $("buoy").style.transform = dry
     ? "none"
     : "translateY(" + (Math.sin(phase * 1.2) * 2.5 + 6).toFixed(1) + "px) rotate("
       + (Math.sin(phase * 0.9) * 5).toFixed(1) + "deg)";
+  // Break drink: on the lip beside peeking Bob, or bobbing beside the ring.
+  const dk = $("drink");
+  if (dry) {
+    dk.style.left = "88px"; dk.style.top = "-2px"; dk.style.transform = "none";
+  } else {
+    dk.style.left = "84px"; dk.style.top = "28px";
+    dk.style.transform = "translateY(" + (Math.sin(phase * 1.2) * 2.5 + 6).toFixed(1)
+      + "px) rotate(-8deg)";
+  }
 }
 
 function waveFrame(nowMs) {
@@ -412,6 +480,10 @@ darkMq.addEventListener("change", () => { if (snap && waveDone) paintWater(level
 
 const hm = s => { s = Math.max(0, Math.floor(s));
   return Math.floor(s / 3600) + "h " + String(Math.floor(s / 60) % 60).padStart(2, "0") + "m"; };
+// The Mac app's short duration style: "42m", "6h", "6h 12m".
+const hmShort = s => { const m = Math.max(0, Math.floor(s / 60));
+  const h = Math.floor(m / 60), r = m % 60;
+  return h > 0 ? (r > 0 ? h + "h " + r + "m" : h + "h") : m + "m"; };
 const clock = t => new Date(t * 1000).toTimeString().slice(0, 5);
 const workedNow = () => !snap ? 0 :
   snap.worked + (snap.state === "working" ? Math.max(0, Date.now() / 1000 - snap.asOf) : 0);
@@ -522,6 +594,10 @@ function tick() {
       paintWater(shown, 0, 0);
     }
   }
+  for (const b of document.querySelectorAll("#abox .abtn")) {
+    const sub = b.querySelector(".sub");
+    if (sub) sub.textContent = buttonInfo(b.dataset.name);
+  }
   const bl = $("breakline");
   if (snap.state === "break" && snap.breakEndsAt) {
     const left = snap.breakEndsAt - Date.now() / 1000;
@@ -535,8 +611,8 @@ function tick() {
 // Hold for 2 s to fire — the sweeping fill is the confirmation.
 const ACTIONS = {
   out:     [["clockIn", "Clock in", "solid-work"]],
-  working: [["clockOut", "Clock out", "solid-stop"], ["startBreak", "Start break", "line-brk"]],
-  break:   [["endBreak", "End break", "solid-work"], ["clockOut", "Clock out", "solid-stop"]],
+  working: [["clockOut", "Clock out", "solid-work"], ["startBreak", "Start break", "solid-work"]],
+  break:   [["endBreak", "End break", "solid-work"], ["clockOut", "Clock out", "solid-work"]],
 };
 
 function renderActions() {
@@ -547,11 +623,36 @@ function renderActions() {
   for (const [name, label, cls] of ACTIONS[snap.projected] ?? []) {
     const b = document.createElement("button");
     b.className = "abtn " + cls;
-    b.innerHTML = "<span class='fill'></span><span class='lbl'></span>";
-    b.querySelector(".lbl").textContent = label;
+    b.dataset.name = name;
+    b.innerHTML = "<span class='fill'></span><span class='lbl'><span class='main'></span><span class='sub'></span></span>";
+    b.querySelector(".main").textContent = label;
+    b.querySelector(".sub").textContent = buttonInfo(name);
     hold(b, name);
     box.appendChild(b);
   }
+}
+
+// The Mac Today view's trailing info, mirrored: auto-tag reason on Clock in,
+// auto-break countdown on Start break, back-in countdown (plus tag) on End
+// break. Refreshed every tick so the countdowns stay live.
+function buttonInfo(name) {
+  if (!snap) return "";
+  const now = Date.now() / 1000;
+  const tag = snap.autoReason || "";
+  if (name === "clockIn") return tag;
+  if (name === "startBreak" && snap.autoBreakDueAt) {
+    const left = snap.autoBreakDueAt - now;
+    return left <= 0 ? "auto now" : "auto in " + hmShort(left);
+  }
+  if (name === "endBreak") {
+    let out = "";
+    if (snap.breakEndsAt) {
+      const left = snap.breakEndsAt - now;
+      out = left <= 0 ? "back now" : "back in " + hmShort(left);
+    }
+    return out && tag ? out + " \u00b7 " + tag : (out || tag);
+  }
+  return "";
 }
 
 function hold(b, name) {

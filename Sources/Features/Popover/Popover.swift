@@ -192,21 +192,23 @@ struct PopoverRootView: View {
             // instead of stacking below it mid-transition.
             ZStack {
                 layout {
+                    // All actions wear the primary accent — the icons carry
+                    // the semantics.
                     switch state.projectedClockState {
                     case .clockedOut:
-                        actionButton("Clock in", symbol: "play.fill", tint: .workAccent(scheme),
+                        actionButton("Clock in", symbol: "play.fill", tint: .primaryAccent(scheme),
                                      trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
                     case .working:
-                        actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
+                        actionButton("Clock out", symbol: "stop.fill", tint: .primaryAccent(scheme),
                                      height: rowHeight) { state.clockOut() }
-                        actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
+                        actionButton("Start break", symbol: "pause.circle.fill", tint: .primaryAccent(scheme),
                                      trailing: autoBreakTrailing(now: now), height: rowHeight) {
                             state.startManualBreak()
                         }
                     case .onBreak:
-                        actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
+                        actionButton("End break", symbol: "play.fill", tint: .primaryAccent(scheme),
                                      trailing: endBreakTrailing(now: now), height: rowHeight) { state.endBreak() }
-                        actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
+                        actionButton("Clock out", symbol: "stop.fill", tint: .primaryAccent(scheme),
                                      height: rowHeight) { state.clockOut() }
                     }
                 }
@@ -354,32 +356,32 @@ struct PopoverRootView: View {
     /// a smaller Bob straddling its top edge in his swim ring.
     private func workedHeader(now: Date) -> some View {
         let v = TodayVals(state, now: now)
+        let dryAwake = v.fraction < 0.15 && state.clockState != .clockedOut
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                        compact: true)
                 .frame(height: 100)
-                .padding(.top, 30)
+                .padding(.top, dryAwake ? 26 : 18)
                 .overlay(alignment: .bottomTrailing) {
-                    // Dry land: Bob stands bottom-right inside the hero —
-                    // or lies asleep in profile when clocked out.
-                    if v.fraction < 0.15 {
-                        Group {
-                            if state.clockState == .clockedOut {
-                                SleepingBob().frame(width: 62, height: 39)
-                            } else {
-                                AnimatedBob().frame(width: 40, height: 40)
-                            }
-                        }
-                        .padding(.trailing, 12)
-                        .padding(.bottom, 8)
-                        .transition(.bobReplace)
+                    // Clocked out on dry land: asleep bottom-right.
+                    if v.fraction < 0.15, state.clockState == .clockedOut {
+                        SleepingBob().frame(width: 62, height: 39)
+                            .padding(.trailing, 12)
+                            .padding(.bottom, 8)
+                            .transition(.bobReplace)
                     }
                 }
-            // Swimming once the water is ~15% deep, slightly submerged.
+            // Swimming once the water is ~15% deep — otherwise (awake)
+            // standing on the deck, watching the pool fill below.
             if v.fraction >= 0.15 {
-                BuoyBob(sleeping: state.clockState == .clockedOut, size: 44)
-                    .padding(.top, 12)
+                BuoyBob(sleeping: state.clockState == .clockedOut,
+                        onBreak: v.onBreak, size: 44)
                     .padding(.leading, 14)
+                    .transition(.bobReplace)
+            } else if dryAwake {
+                // Hanging behind the card, paws on the lip, head peeking over.
+                PeekingBob(size: 46, onBreak: v.onBreak)
+                    .padding(.leading, 16)
                     .transition(.bobReplace)
             }
         }

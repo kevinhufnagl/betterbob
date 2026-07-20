@@ -87,19 +87,21 @@ struct TodayActions: View {
             // instead of stacking beside it mid-transition.
             ZStack {
                 layout {
+                    // All actions wear the primary accent — the icons carry
+                    // the semantics.
                     switch state.projectedClockState {
                     case .clockedOut:
-                        btn("Clock in", "play.fill", .workAccent(scheme),
+                        btn("Clock in", "play.fill", .primaryAccent(scheme),
                             trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
                     case .working:
-                        btn("Clock out", "stop.fill", .outAccent(scheme),
+                        btn("Clock out", "stop.fill", .primaryAccent(scheme),
                             height: rowHeight) { state.clockOut() }
-                        btn("Start break", "pause.circle.fill", .breakAccent(scheme),
+                        btn("Start break", "pause.circle.fill", .primaryAccent(scheme),
                             trailing: autoBreakTrailing, height: rowHeight) { state.startManualBreak() }
                     case .onBreak:
-                        btn("End break", "play.fill", .workAccent(scheme),
+                        btn("End break", "play.fill", .primaryAccent(scheme),
                             trailing: endBreakTrailing, height: rowHeight) { state.endBreak() }
-                        btn("Clock out", "stop.fill", .outAccent(scheme),
+                        btn("Clock out", "stop.fill", .primaryAccent(scheme),
                             height: rowHeight) { state.clockOut() }
                     }
                 }
@@ -313,30 +315,35 @@ struct TodayTimeline: View {
                     } bottom: {
                         EmptyView()
                     }
-                    .frame(height: 200)
-                    .padding(.top, 48)
+                    // Content-sized: a fixed frame smaller than the content
+                    // makes the hero spill past it top and bottom (SwiftUI
+                    // doesn't clip), eating the gap to the next card.
+                    .padding(.top, 36)
                     .overlay(alignment: .bottomTrailing) {
-                        // Not enough water to swim — Bob stands bottom-right
-                        // on dry land inside the hero.
-                        if v.fraction < 0.15 {
-                            Group {
-                                if state.clockState == .clockedOut {
-                                    SleepingBob().frame(width: 86, height: 54)
-                                } else {
-                                    AnimatedBob().frame(width: 64, height: 64)
-                                }
-                            }
-                            .padding(.trailing, 18)
-                            .padding(.bottom, 12)
-                            .transition(.bobReplace)
+                        // Clocked out on dry land: asleep bottom-right.
+                        if v.fraction < 0.15, state.clockState == .clockedOut {
+                            SleepingBob().frame(width: 86, height: 54)
+                                .padding(.trailing, 18)
+                                .padding(.bottom, 12)
+                                .transition(.bobReplace)
                         }
                     }
                     // Swimming once it's ~15% deep, straddling the top edge —
                     // sitting a touch lower so he reads properly submerged.
                     if v.fraction >= 0.15 {
-                        BuoyBob(sleeping: state.clockState == .clockedOut)
-                            .padding(.top, 14)
+                        // Flush with the section top — no dead air above his
+                        // head; the ring stays just as submerged (center 8pt
+                        // below the hero's edge).
+                        BuoyBob(sleeping: state.clockState == .clockedOut,
+                                onBreak: v.onBreak)
+                            .padding(.top, 2)
                             .padding(.leading, 24)
+                            .transition(.bobReplace)
+                    } else if state.clockState != .clockedOut {
+                        // Not enough water to swim: he hangs behind the card,
+                        // paws on the lip, head peeking over at the water.
+                        PeekingBob(size: 64, onBreak: v.onBreak)
+                            .padding(.leading, 26)
                             .transition(.bobReplace)
                     }
                 }
@@ -540,11 +547,19 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     /// Shown above the numbers, like the phone page's greeting line.
     var greeting: String?
     var cornerRadius: CGFloat = 16
+    /// Display overrides: the time-off pool reuses the water with its own
+    /// numbers (days instead of hours) and its own fill level.
+    var customFraction: Double?
+    var customBig: String?
+    var customLine2: String?
+    var customLine3: String?
     let top: Top
     let bottom: Bottom
 
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
+         customFraction: Double? = nil, customBig: String? = nil,
+         customLine2: String? = nil, customLine3: String? = nil,
          @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
         self.worked = worked
         self.target = target
@@ -552,6 +567,10 @@ struct LiquidHero<Top: View, Bottom: View>: View {
         self.compact = compact
         self.greeting = greeting
         self.cornerRadius = cornerRadius
+        self.customFraction = customFraction
+        self.customBig = customBig
+        self.customLine2 = customLine2
+        self.customLine3 = customLine3
         self.top = top()
         self.bottom = bottom()
     }
@@ -572,7 +591,9 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     /// level by a lot at once) instead of snapping. Nil while tracking live.
     @State private var levelAnim: (from: Double, to: Double, start: Date)?
 
-    private var fraction: Double { target > 0 ? min(1, worked / target) : 0 }
+    private var fraction: Double {
+        customFraction ?? (target > 0 ? min(1, worked / target) : 0)
+    }
     private var percent: Int { target > 0 ? Int((worked / target * 100).rounded()) : 0 }
 
     /// The level to draw: mid-animation it eases from→to; otherwise the live
@@ -586,31 +607,24 @@ struct LiquidHero<Top: View, Bottom: View>: View {
         return anim.from + (anim.to - anim.from) * eased
     }
 
-    // The water starts cold blue and settles into the brand teal as the day
-    // fills — a slow shift driven by the fraction. Dark mode is deep and
-    // saturated; light mode the same hues as pastels with dark ink on top.
+    // The water wears the Mac's accent color — the same hue the system
+    // gives buttons and sidebar selections — using the original teal's
+    // saturation/brightness recipe: deep and saturated in dark mode,
+    // pastel with dark ink in light mode.
     private var dark: Bool { scheme == .dark }
-    private func mix(_ a: (Double, Double, Double), _ b: (Double, Double, Double), _ f: Double) -> Color {
-        Color(red: a.0 + (b.0 - a.0) * f, green: a.1 + (b.1 - a.1) * f, blue: a.2 + (b.2 - a.2) * f)
-    }
     private var waterGradient: LinearGradient {
-        let stops: [((Double, Double, Double), (Double, Double, Double))] = dark
-            ? [((0.075, 0.204, 0.420), (0.066, 0.245, 0.280)),
-               ((0.098, 0.318, 0.620), (0.090, 0.410, 0.440)),
-               ((0.157, 0.451, 0.800), (0.130, 0.570, 0.600))]
-            : [((0.42, 0.58, 0.80), (0.38, 0.68, 0.71)),
-               ((0.49, 0.65, 0.85), (0.45, 0.75, 0.77)),
-               ((0.56, 0.72, 0.90), (0.52, 0.81, 0.83))]
-        return LinearGradient(colors: stops.map { mix($0.0, $0.1, fraction) },
-                              startPoint: .leading, endPoint: .trailing)
+        let stops = dark
+            ? [Color.systemAccentHued(sat: 0.76, bri: 0.28), Color.systemAccentHued(sat: 0.72, bri: 0.44),
+               Color.systemAccentHued(sat: 0.68, bri: 0.60)]
+            : [Color.systemAccentHued(sat: 0.32, bri: 0.80), Color.systemAccentHued(sat: 0.30, bri: 0.86),
+               Color.systemAccentHued(sat: 0.28, bri: 0.91)]
+        return LinearGradient(colors: stops, startPoint: .leading, endPoint: .trailing)
     }
     private var glowColor: Color {
-        dark ? mix((0.45, 0.72, 1.0), (0.46, 0.83, 0.86), fraction)
-             : mix((0.90, 0.96, 1.0), (0.86, 0.98, 0.98), fraction)
+        dark ? Color.systemAccentHued(sat: 0.45, bri: 0.88) : Color.systemAccentHued(sat: 0.14, bri: 0.99)
     }
     private var baseColor: Color {
-        dark ? mix((0.043, 0.059, 0.090), (0.031, 0.078, 0.086), fraction)
-             : mix((0.88, 0.91, 0.95), (0.86, 0.92, 0.93), fraction)
+        dark ? Color.systemAccentHued(sat: 0.55, bri: 0.09) : Color.systemAccentHued(sat: 0.08, bri: 0.92)
     }
     private var ink: Color { dark ? .white : Color(red: 0.06, green: 0.20, blue: 0.24) }
 
@@ -626,17 +640,17 @@ struct LiquidHero<Top: View, Bottom: View>: View {
                         .padding(.bottom, 2)
                 }
                 // Worked time is the headline; the percentage sits under it.
-                Text(Fmt.hm(worked))
+                Text(customBig ?? Fmt.hm(worked))
                     .font(.system(size: compact ? 30 : 44, weight: .heavy, design: .rounded))
                     .contentTransition(.numericText())
-                    .animation(Motion.numeric, value: Fmt.hm(worked))
+                    .animation(Motion.numeric, value: customBig ?? Fmt.hm(worked))
                     .foregroundStyle(ink)
-                Text(target > 0 ? "\(percent)% of \(Fmt.hm(target))" : "worked today")
+                Text(customLine2 ?? (target > 0 ? "\(percent)% of \(Fmt.hm(target))" : "worked today"))
                     .font(.system(size: compact ? 11.5 : 13, weight: .semibold))
                     .foregroundStyle(ink.opacity(0.92))
                     .contentTransition(.numericText())
-                    .animation(Motion.numeric, value: percent)
-                Text(subline)
+                    .animation(Motion.numeric, value: customLine2 ?? "\(percent)")
+                Text(customLine3 ?? subline)
                     .font(.system(size: compact ? 10 : 11))
                     .foregroundStyle(ink.opacity(0.66))
             }
@@ -779,9 +793,13 @@ struct LiquidHero<Top: View, Bottom: View>: View {
 extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
     /// Slot-less hero — the popover's compact variant.
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
-         compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16) {
+         compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
+         customFraction: Double? = nil, customBig: String? = nil,
+         customLine2: String? = nil, customLine3: String? = nil) {
         self.init(worked: worked, target: target, breakTotal: breakTotal,
                   compact: compact, greeting: greeting, cornerRadius: cornerRadius,
+                  customFraction: customFraction, customBig: customBig,
+                  customLine2: customLine2, customLine3: customLine3,
                   top: { EmptyView() }, bottom: { EmptyView() })
     }
 }
@@ -793,6 +811,8 @@ extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
 /// when the window isn't really visible.
 struct BuoyBob: View {
     var sleeping = false
+    /// On a break he wears sunglasses.
+    var onBreak = false
     var size: CGFloat = 72
     @State private var windowVisible = true
     @State private var sway = false
@@ -836,7 +856,8 @@ struct BuoyBob: View {
     private func content(blink: CGFloat) -> some View {
         // Even quarters: dash length = perimeter / 8, so the white segments
         // tile the ellipse exactly — no visible seam where the path closes.
-        let a = size * 0.47, b = size * 0.24
+        // Tight and chunky around his waist, in the Mac's accent hue.
+        let a = size * 0.40, b = size * 0.21
         let perimeter = Double.pi * (3 * (a + b) - ((3 * a + b) * (a + 3 * b)).squareRoot())
         let dash = perimeter / 8
         return ZStack {
@@ -844,21 +865,125 @@ struct BuoyBob: View {
             // sticking out below its bottom arc.
             BobMascot(blink: blink)
                 .frame(width: size, height: size)
+            // Lit from above, shaded below — an inflatable, not a sticker.
             Ellipse()
-                .stroke(Color(red: 0.95, green: 0.44, blue: 0.30), lineWidth: size * 0.20)
-                .frame(width: size * 0.94, height: size * 0.48)
+                .stroke(LinearGradient(colors: [Color.systemAccentHued(sat: 0.68, bri: 0.82),
+                                                Color.systemAccentHued(sat: 0.86, bri: 0.50)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: size * 0.26)
+                .frame(width: size * 0.80, height: size * 0.42)
                 .offset(y: size * 0.08)
             Ellipse()
-                .stroke(.white.opacity(0.92),
-                        style: StrokeStyle(lineWidth: size * 0.20, dash: [dash, dash]))
-                .frame(width: size * 0.94, height: size * 0.48)
+                .stroke(LinearGradient(colors: [.white, Color(white: 0.80)],
+                                       startPoint: .top, endPoint: .bottom),
+                        style: StrokeStyle(lineWidth: size * 0.26, dash: [dash, dash]))
+                .frame(width: size * 0.80, height: size * 0.42)
                 .offset(y: size * 0.08)
+                .opacity(0.92)
+            // Glossy rim along the tube's upper edge.
+            Ellipse()
+                .stroke(Color.white.opacity(0.35), lineWidth: size * 0.035)
+                .frame(width: size * 0.80, height: size * 0.42)
+                .offset(y: size * 0.035)
             // Head and face again in front of the ring's top arc; the mask's
             // straight edge hides inside the ring band.
             BobMascot(blink: blink)
                 .frame(width: size, height: size)
                 .mask(alignment: .top) { Rectangle().frame(height: size * 0.56) }
+            if onBreak {
+                BobShades(size: size)
+                TropicalDrink(size: size)
+                    .rotationEffect(.degrees(-8))
+                    .offset(x: size * 0.56, y: size * 0.14)
+            }
         }
+    }
+}
+
+/// Break-time sunglasses: two dark lenses over the eyes plus a bridge,
+/// sized/positioned relative to the Bob they sit on (his frame's center).
+struct BobShades: View {
+    var size: CGFloat
+
+    var body: some View {
+        ZStack {
+            ForEach([-1.0, 1.0], id: \.self) { side in
+                RoundedRectangle(cornerRadius: size * 0.045, style: .continuous)
+                    .fill(Color(red: 0.09, green: 0.10, blue: 0.13))
+                    .overlay(alignment: .topLeading) {
+                        Capsule().fill(.white.opacity(0.35))
+                            .frame(width: size * 0.055, height: size * 0.018)
+                            .rotationEffect(.degrees(-30))
+                            .offset(x: size * 0.03, y: size * 0.03)
+                    }
+                    .frame(width: size * 0.17, height: size * 0.125)
+                    .offset(x: size * 0.11 * side, y: -size * 0.15)
+            }
+            RoundedRectangle(cornerRadius: size * 0.01)
+                .fill(Color(red: 0.09, green: 0.10, blue: 0.13))
+                .frame(width: size * 0.07, height: size * 0.025)
+                .offset(y: -size * 0.17)
+        }
+    }
+}
+
+/// A break-time drink: juice glass with a straw, scaled off its Bob.
+struct TropicalDrink: View {
+    var size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Capsule().fill(Color(red: 0.95, green: 0.44, blue: 0.30))
+                .frame(width: size * 0.035, height: size * 0.20)
+                .rotationEffect(.degrees(22))
+                .offset(x: size * 0.055, y: -size * 0.14)
+            RoundedRectangle(cornerRadius: size * 0.035, style: .continuous)
+                .fill(LinearGradient(colors: [Color(red: 1.0, green: 0.72, blue: 0.35),
+                                              Color(red: 0.98, green: 0.52, blue: 0.24)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(width: size * 0.17, height: size * 0.24)
+                .overlay(RoundedRectangle(cornerRadius: size * 0.035, style: .continuous)
+                    .strokeBorder(.white.opacity(0.55), lineWidth: size * 0.015))
+                .offset(y: size * 0.05)
+        }
+        .frame(width: size * 0.26, height: size * 0.34)
+    }
+}
+
+/// Bob hanging behind the hero's top edge: paws gripping the lip, head
+/// peeking over, eyes on the water filling below — waiting for enough
+/// depth to swim. The mask cutoff sits exactly on the card's edge, so his
+/// body reads as hidden behind it.
+struct PeekingBob: View {
+    var size: CGFloat = 64
+    /// On a break: sunglasses on, drink standing on the lip beside him.
+    var onBreak = false
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            AnimatedBob(lookAt: .zero)
+                .frame(width: size, height: size)
+                .overlay { if onBreak { BobShades(size: size) } }
+                .mask(alignment: .top) { Rectangle().frame(height: size * 0.56) }
+            HStack(spacing: size * 0.40) {
+                paw
+                paw
+            }
+            .offset(y: size * 0.50)
+            if onBreak {
+                TropicalDrink(size: size)
+                    .offset(x: size * 0.46, y: size * 0.23)
+            }
+        }
+        .frame(width: size, height: size * 0.64, alignment: .top)
+    }
+
+    private var paw: some View {
+        Ellipse()
+            .fill(Color(red: 0.64, green: 0.44, blue: 0.28))
+            .overlay(Ellipse().strokeBorder(
+                Color(red: 0.42, green: 0.27, blue: 0.16).opacity(0.55), lineWidth: 1.2))
+            .frame(width: size * 0.19, height: size * 0.13)
     }
 }
 

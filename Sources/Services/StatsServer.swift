@@ -23,6 +23,12 @@ struct StatsSnapshot {
     var targetSeconds: Int
     var breakSeconds: Int
     var breakEndsAt: Int?
+    /// When the auto-break engine will insert a break (epoch), if armed.
+    var autoBreakDueAt: Int? = nil
+    /// Reason auto-applied to new work entries (Wi-Fi rule or default).
+    var autoReason: String = ""
+    /// The Mac's accent hue (0–360) so the page's water matches the app.
+    var accentHue: Int = 190
     var entries: [Entry]
 
     struct Entry {
@@ -89,6 +95,9 @@ enum StatsHTTP {
             + "\"projected\":\"\(jsonEscape(s.projected))\",\"actions\":\(s.actionsEnabled),"
             + "\"worked\":\(s.workedSeconds),\"asOf\":\(s.asOf),\"target\":\(s.targetSeconds),"
             + "\"breakTotal\":\(s.breakSeconds),\"breakEndsAt\":\(s.breakEndsAt.map(String.init) ?? "null"),"
+            + "\"autoBreakDueAt\":\(s.autoBreakDueAt.map(String.init) ?? "null"),"
+            + "\"autoReason\":\"\(jsonEscape(s.autoReason))\","
+            + "\"accentHue\":\(s.accentHue),"
             + "\"entries\":[\(entries)]}"
     }
 

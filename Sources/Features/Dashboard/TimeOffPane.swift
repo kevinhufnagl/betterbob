@@ -43,6 +43,20 @@ struct TimeOffPane: View {
                 .disabled(state.timeOffPolicyTypes.isEmpty)
             }
 
+            // The pool: remaining allowance as a draining water level —
+            // full at a fresh cycle, emptying as days get used. The year's
+            // pot includes the carryover ("Prev. balance"), so a 45-day
+            // balance against a 25-day allowance still reads sensibly.
+            if let b = mainBalance, let left = number(b.currentBalance) {
+                let pot = poolTotal(for: b)
+                LiquidHero(worked: 0, target: 0,
+                           customFraction: pot > 0 ? max(0, min(1, left / pot)) : 0,
+                           customBig: trimmed(left),
+                           customLine2: pot > 0 ? "of \(trimmed(pot)) \(b.unit) left" : "\(b.unit) left",
+                           customLine3: poolLine3(for: b))
+                    .frame(height: 150)
+            }
+
             upcomingCard
             TimeOffCalendar(state: state) { start, end in
                 booking = BookingRange(start: start, end: end)
@@ -54,6 +68,60 @@ struct TimeOffPane: View {
         .sheet(item: $booking) { b in
             TimeOffBookingSheet(state: state, start: b.start, end: b.end)
         }
+    }
+
+    /// The balance the pool shows: the vacation-style policy if there is
+    /// one, otherwise the first balance HiBob returns.
+    private var mainBalance: TimeOffBalance? {
+        state.timeOffBalances.first {
+            let n = $0.displayName.lowercased()
+            return n.contains("holiday") || n.contains("vacation")
+                || n.contains("urlaub") || n.contains("sunny")
+        } ?? state.timeOffBalances.first
+    }
+
+    /// The year's whole pot: carryover plus this cycle's allowance, falling
+    /// back to the plain allowance when the metrics are missing.
+    private func poolTotal(for b: TimeOffBalance) -> Double {
+        let carry = b.prevBalance.flatMap(number) ?? 0
+        let annual = b.annualAllowance.flatMap(number)
+            ?? number(b.totalAllowance) ?? 0
+        return annual + max(0, carry)
+    }
+
+    /// "Holidays · 26 carried over · 6 days taken · next time off in 12d"
+    private func poolLine3(for b: TimeOffBalance) -> String {
+        var parts: [String] = []
+        // "Holidays (days)" → "Holidays".
+        let name = b.displayName.replacingOccurrences(of: " (\(b.unit))", with: "")
+        if !name.isEmpty { parts.append(name) }
+        let carry = b.prevBalance.flatMap(number) ?? 0
+        let annual = b.annualAllowance.flatMap(number) ?? 0
+        if carry > 0, annual > 0 {
+            parts.append("\(trimmed(carry)) carried over + \(trimmed(annual)) added")
+        } else if carry > 0 {
+            parts.append("\(trimmed(carry)) carried over")
+        }
+        if let taken = b.daysTaken.flatMap(number), taken != 0 {
+            parts.append("\(trimmed(abs(taken))) \(b.unit) taken")
+        }
+        if let next = upcoming.first, let d = DayFmt.date(next.startDate) {
+            let days = Calendar.current.dateComponents(
+                [.day], from: Calendar.current.startOfDay(for: Date()), to: d).day ?? 0
+            parts.append(days <= 0 ? "time off now" : "next time off in \(days)d")
+        }
+        return parts.isEmpty ? b.cycleRange : parts.joined(separator: " · ")
+    }
+
+    /// First number in a HiBob balance string ("12.5", "12,5 days", …).
+    private func number(_ s: String) -> Double? {
+        let cleaned = s.filter { "0123456789.,-".contains($0) }
+            .replacingOccurrences(of: ",", with: ".")
+        return Double(cleaned)
+    }
+
+    private func trimmed(_ v: Double) -> String {
+        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
     }
 
     // MARK: - Upcoming
@@ -154,8 +222,14 @@ struct TimeOffPane: View {
         Card {
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(b.displayName).font(.system(size: 13, weight: .semibold))
+                    Text(b.displayName.replacingOccurrences(of: " (\(b.unit))", with: ""))
+                        .font(.system(size: 13, weight: .semibold))
                     Text(b.cycleRange).font(.system(size: 10)).foregroundStyle(.secondary)
+                    if let carry = b.prevBalance.flatMap(number), carry > 0,
+                       let annual = b.annualAllowance.flatMap(number) {
+                        Text("\(trimmed(carry)) carried over + \(trimmed(annual)) added")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                     if let taken = b.daysTaken {
                         // Drop the sign — "-4" reads better as "4 taken".
                         Text("\(taken.trimmingCharacters(in: CharacterSet(charactersIn: "+-"))) taken")
@@ -166,7 +240,10 @@ struct TimeOffPane: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(b.currentBalance).font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.workAccent(scheme))
-                    Text("of \(b.totalAllowance) \(b.unit)").font(.system(size: 10)).foregroundStyle(.secondary)
+                    // The pot includes the carryover, so 45-of-51 reads
+                    // sensibly (plain allowance when metrics are absent).
+                    Text("of \(trimmed(poolTotal(for: b))) \(b.unit)")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
             }
         }

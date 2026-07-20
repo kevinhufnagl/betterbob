@@ -18,8 +18,9 @@ struct BobPalette {
     var pupil    = Color(red: 0.16, green: 0.10, blue: 0.07)
     var blush    = Color(red: 0.93, green: 0.55, blue: 0.48)
     var outline  = Color(red: 0.30, green: 0.19, blue: 0.11)
-    var capBlue  = Color(red: 0.10, green: 0.55, blue: 0.58)
-    var capDark  = Color(red: 0.06, green: 0.36, blue: 0.39)
+    // Bob's cap wears the Mac's accent, like the rest of the brand.
+    var capBlue  = Color.systemAccentHued(sat: 0.83, bri: 0.58)
+    var capDark  = Color.systemAccentHued(sat: 0.85, bri: 0.39)
 }
 
 /// A single frame of Bob's face. `blink` 0→1 closes the eyes; `tail` -1→1 wags

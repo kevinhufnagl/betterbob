@@ -120,16 +120,27 @@ struct SectionCaption: View {
 // These are hand-picked to stay legible in both appearances: deeper and more
 // saturated in light mode, brighter in dark mode.
 extension Color {
-    /// BetterBob's primary accent — the blue-leaning teal the liquid hero
-    /// settles on. Replaces the old work green and the popover's system blue;
-    /// also Bob's cap and the app icon.
-    static func primaryAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.30, green: 0.82, blue: 0.85)
-                        : Color(red: 0.04, green: 0.38, blue: 0.40)
+    /// The Mac's accent hue re-lit with our own saturation/brightness recipe
+    /// — how every brand color stays legible in both appearances while
+    /// following System Settings.
+    static func systemAccentHued(sat: Double, bri: Double) -> Color {
+        var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
+            .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: Double(h), saturation: sat, brightness: bri)
     }
-    /// Fixed mid-teal for contexts that can't read the color scheme
+
+    /// BetterBob's primary accent — the system accent color (the same one
+    /// buttons and sidebar selections wear), deepened for light mode and
+    /// brightened for dark so it stays legible. Replaces the old work green
+    /// and the popover's system blue.
+    static func primaryAccent(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? systemAccentHued(sat: 0.65, bri: 0.85)
+                        : systemAccentHued(sat: 0.90, bri: 0.40)
+    }
+    /// Fixed mid-tone for contexts that can't read the color scheme
     /// (menu-bar tint, clock-state dots) — legible on both appearances.
-    static let bobTeal = Color(red: 0.11, green: 0.60, blue: 0.62)
+    static var bobTeal: Color { systemAccentHued(sat: 0.82, bri: 0.62) }
     /// Fixed warm tones tuned to complement the teal: a coral-leaning orange
     /// for break/attention and a rose-leaning red for hard warnings.
     static let bobOrange = Color(red: 0.88, green: 0.47, blue: 0.24)

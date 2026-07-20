@@ -61,3 +61,26 @@ covered, add a fixture to `Tests/main.swift` first, then extend the parser.
   HiBob didn't record it; the body shape is probably wrong.
 - Empty timeline while the web UI shows entries — the today-route is wrong
   or its response shape isn't covered by `BobParsing.entries`.
+
+## Captured: timesheet summary shape (2026-07)
+
+`GET api/attendance/employees/{id}/timesheets/{n}/summary` — the fields the
+dashboard reads (verified against a live capture):
+
+```
+dailyBreakdown.categories                     ["yyyy-MM-dd", …]
+dailyBreakdown.graphData[]                    series, matched by "id":
+  id=hoursWorked      .data[].value           worked hours per day
+  id=potentialHours   .target[].value         target hours per day
+  id=overtime         .data[].value           signed over/under per day
+                      .data[].valueDisplay    exact "0h 34m" (sum = the web
+                                              UI's "running cycle balance")
+cycleSummary.hoursWorkedDisplay               cycle worked total ("107h 59m")
+cycleSummary.potentialHours.summaryDisplay    cycle potential ("176h 30m")
+cycleSummary.potentialHours.payableTimePercentage
+cycleSummary.overUnderTime.{sign,hoursDisplay}  balance incl. in-progress day
+breakViolationCounter
+```
+
+Careful: `payableHoursBreakdown.totalHoursDisplay` is a *different* total
+(regular+overtime payable) — don't use it for "worked".

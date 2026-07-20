@@ -110,11 +110,16 @@ enum BobParsing {
         let worked = series("hoursWorked", "data")
         let target = series("potentialHours", "target")
 
+        // The per-day over/undertime series — exact daily values for the
+        // balance trend (worked−target re-derivation drifts by rounding).
+        let overtimes = series("overtime", "data")
+
         var days: [DayHours] = []
         for (i, date) in categories.enumerated() {
             days.append(DayHours(date: date,
                                  worked: i < worked.count ? (worked[i] ?? 0) : 0,
-                                 target: i < target.count ? target[i] : nil))
+                                 target: i < target.count ? target[i] : nil,
+                                 overtime: i < overtimes.count ? overtimes[i] : nil))
         }
 
         // Cycle totals live in a nested summary object; find by key anywhere.
@@ -122,11 +127,30 @@ enum BobParsing {
         let sign = (overUnder?["sign"] as? String) == "-" ? -1 : 1
         let overUnderMin = sign * minutes(fromDisplay: overUnder?["hoursDisplay"] as? String ?? "0h 0m")
 
+        // HiBob's whole-cycle "potential hours" total — the same number its
+        // own web UI shows, preferred over summing per-day targets (which
+        // drift by per-day rounding). Tolerant about the value's shape.
+        // Captured shape: cycleSummary.potentialHours.summaryDisplay.
+        let potentialMin: Int = {
+            if let d = findDict(root, key: "potentialHours"),
+               let disp = (d["summaryDisplay"] ?? d["hoursDisplay"] ?? d["display"]) as? String {
+                return minutes(fromDisplay: disp)
+            }
+            if let disp = findString(root, key: "potentialHoursDisplay") {
+                return minutes(fromDisplay: disp)
+            }
+            return 0
+        }()
+
         return CycleSummary(
             days: days,
+            potentialMinutes: potentialMin,
             overUnderMinutes: overUnderMin,
             payableTimePercent: findInt(root, key: "payableTimePercentage") ?? 0,
-            totalHoursDisplay: findString(root, key: "totalHoursDisplay") ?? "—",
+            // "hoursWorkedDisplay" is the cycle's worked total; the older
+            // "totalHoursDisplay" probe hit the payable-hours breakdown.
+            totalHoursDisplay: findString(root, key: "hoursWorkedDisplay")
+                ?? findString(root, key: "totalHoursDisplay") ?? "—",
             breakViolations: findInt(root, key: "breakViolationCounter") ?? 0)
     }
 
@@ -237,8 +261,10 @@ enum BobParsing {
               let summary = root["summary"] as? [[String: Any]] else { return [] }
         return summary.compactMap { s in
             guard let type = s["type"] as? String else { return nil }
-            let taken = (s["metrics"] as? [[String: Any]])?
-                .first { ($0["title"] as? String) == "Days taken" }?["value"] as? String
+            let metrics = s["metrics"] as? [[String: Any]] ?? []
+            func metric(_ title: String) -> String? {
+                metrics.first { ($0["title"] as? String) == title }?["value"] as? String
+            }
             return TimeOffBalance(
                 type: type,
                 displayName: s["policyTypeDisplayName"] as? String ?? type,
@@ -246,7 +272,9 @@ enum BobParsing {
                 currentBalance: stringValue(s["currentBalance"]) ?? "—",
                 totalAllowance: stringValue(s["totalAllowance"]) ?? "—",
                 cycleRange: s["cycleRange"] as? String ?? "",
-                daysTaken: taken)
+                daysTaken: metric("Days taken"),
+                prevBalance: metric("Prev. balance"),
+                annualAllowance: metric("Annual allowance"))
         }
     }
 
@@ -375,5 +403,8 @@ enum BobParsing {
     }
     private static func findString(_ any: Any, key: String) -> String? {
         findValue(any, key: key) as? String
+    }
+    private static func findDouble(_ any: Any, key: String) -> Double? {
+        doubleValue(findValue(any, key: key))
     }
 }

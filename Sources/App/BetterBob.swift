@@ -127,10 +127,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let bob = BobIcon.menuBar(height: 18, badge: badge)
 
         if Prefs.shared.colorMenuBarIcon, state != .clockedOut {
-            // Tinted (non-template) Bob by clock state.
+            // Tinted (non-template) Bob by clock state; working follows the
+            // system accent like the rest of the brand colors.
+            let workingTint: NSColor = {
+                var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
+                    .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+                return NSColor(hue: h, saturation: 0.82, brightness: 0.62, alpha: 1)
+            }()
             button.image = bob.tinted(onBreak
                 ? NSColor(red: 0.88, green: 0.47, blue: 0.24, alpha: 1)
-                : NSColor(red: 0.11, green: 0.60, blue: 0.62, alpha: 1))
+                : workingTint)
         } else {
             button.image = bob
         }

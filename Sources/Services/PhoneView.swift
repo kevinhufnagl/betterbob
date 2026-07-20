@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SystemConfiguration
+import AppKit
 
 // App-side glue for the phone stats page: watches the Settings toggle and
 // token, runs the StatsServer while enabled, and snapshots BobState for it.
@@ -78,6 +79,14 @@ final class PhoneView: ObservableObject {
         return true
     }
 
+    /// The Mac's accent hue (0–360), so the page's water matches the app.
+    private static func accentHue() -> Int {
+        var h: CGFloat = 0.53, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
+            .getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
+        return Int((h * 360).rounded())
+    }
+
     private static func stateName(_ s: ClockState) -> String {
         switch s {
         case .working: return "working"
@@ -101,6 +110,9 @@ final class PhoneView: ObservableObject {
             targetSeconds: Int(v.targetSecs),
             breakSeconds: Int(v.breakTotal),
             breakEndsAt: state.autoBreakEnds.map { Int($0.timeIntervalSince1970) },
+            autoBreakDueAt: state.autoBreakDue.map { Int($0.timeIntervalSince1970) },
+            autoReason: state.currentAutoReason ?? "",
+            accentHue: accentHue(),
             entries: state.entries.map { e in
                 StatsSnapshot.Entry(kind: e.kind == .breakTime ? "break" : "work",
                                     start: Int(e.start.timeIntervalSince1970),

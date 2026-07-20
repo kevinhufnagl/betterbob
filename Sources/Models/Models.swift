@@ -150,6 +150,9 @@ struct DayHours: Equatable, Hashable {
     var date: String    // "yyyy-MM-dd"
     var worked: Double
     var target: Double?
+    /// HiBob's own signed over/undertime for the day, in hours — exact where
+    /// worked−target drifts by rounding. Nil for unfinished days.
+    var overtime: Double?
 }
 
 /// One day's full attendance entries (from the monthly timesheet grid),
@@ -165,7 +168,12 @@ struct DayEntries: Identifiable, Equatable {
 /// `GET .../timesheets/{id}/summary`.
 struct CycleSummary: Equatable {
     var days: [DayHours]
-    /// Signed over/undertime for the cycle so far, in minutes (negative = behind).
+    /// HiBob's own "potential hours" for the whole cycle, in minutes
+    /// (0 = the payload didn't carry it). More authoritative than summing
+    /// the per-day targets, which can drift by rounding.
+    var potentialMinutes: Int = 0
+    /// Signed over/undertime for the cycle so far, in minutes (negative =
+    /// behind) — HiBob's "running cycle balance".
     var overUnderMinutes: Int
     /// Percent of the cycle's potential hours already worked.
     var payableTimePercent: Int
@@ -199,6 +207,10 @@ struct TimeOffBalance: Equatable, Identifiable {
     var totalAllowance: String
     var cycleRange: String
     var daysTaken: String?
+    /// Carryover into this cycle ("Prev. balance" metric), e.g. "+26".
+    var prevBalance: String?
+    /// This cycle's grant ("Annual allowance" metric), e.g. "+25".
+    var annualAllowance: String?
 }
 
 /// A bookable leave type for the request picker.

@@ -112,6 +112,11 @@ final class EndpointCaptureController: NSObject, WKNavigationDelegate, WKScriptM
         webView = web
 
         web.load(URLRequest(url: URL(string: "https://app.hibob.com/attendance/my-attendance")!))
+        // After the attendance page has fired its calls, visit the time-off
+        // page too so its balance endpoints get captured in the same run.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak web] in
+            web?.load(URLRequest(url: URL(string: "https://app.hibob.com/time-off/my-time-off")!))
+        }
         NSApp.setActivationPolicy(.regular)
         win.center()
         win.makeKeyAndOrderFront(nil)

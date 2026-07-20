@@ -448,10 +448,29 @@ struct CyclePane: View {
     }
 
     private var monthWorkedSecs: TimeInterval {
-        (state.cycleSummary?.days ?? []).reduce(0) { $0 + $1.worked * 3600 }
+        // HiBob's own total is authoritative; the per-day series drifts from
+        // it by a few minutes of rounding.
+        if let display = state.cycleSummary?.totalHoursDisplay {
+            let mins = BobParsing.minutes(fromDisplay: display)
+            if mins > 0 { return TimeInterval(mins * 60) }
+        }
+        return (state.cycleSummary?.days ?? []).reduce(0) { $0 + $1.worked * 3600 }
     }
     private var monthTargetSecs: TimeInterval {
-        (state.cycleSummary?.days ?? []).reduce(0) { $0 + ($1.target ?? 0) * 3600 }
+        // HiBob's own whole-cycle "potential hours" is authoritative — the
+        // per-day target sum drifts from it by rounding (~15 min).
+        if let potential = state.cycleSummary?.potentialMinutes, potential > 0 {
+            return TimeInterval(potential * 60)
+        }
+        let summed = (state.cycleSummary?.days ?? []).reduce(0) { $0 + ($1.target ?? 0) * 3600 }
+        // If a tenant's series stops carrying targets after today, the sum
+        // comes out too small — HiBob's progress percentage then gives the
+        // better whole-cycle expectation.
+        if let pct = state.cycleSummary?.payableTimePercent, pct > 0 {
+            let derived = monthWorkedSecs * 100 / Double(pct)
+            if derived > summed * 1.05 { return derived }
+        }
+        return summed
     }
 
     private var cycleSubtitle: String {
@@ -465,13 +484,12 @@ struct CyclePane: View {
             StatTile(value: s?.totalHoursDisplay ?? "—", caption: "Month worked",
                      tint: .workAccent(scheme), symbol: "sum")
             StatTile(value: s.map { signedHours(Double($0.overUnderMinutes) / 60) } ?? "—",
-                     caption: "Over / under",
+                     caption: "Cycle balance",
                      tint: (s?.overUnderMinutes ?? 0) >= 0 ? .workAccent(scheme) : .breakAccent(scheme),
                      symbol: "plusminus")
             StatTile(value: s.map { "\($0.payableTimePercent)%" } ?? "—", caption: "Progress", symbol: "chart.pie")
-            StatTile(value: deadlineText, caption: "Locks in", tint: .bobOrange, symbol: "lock")
+            StatTile(value: deadlineText, caption: "Locks in", symbol: "lock")
             StatTile(value: "\(s?.breakViolations ?? 0)", caption: "Break issues",
-                     tint: (s?.breakViolations ?? 0) == 0 ? .green : .bobOrange,
                      symbol: (s?.breakViolations ?? 0) == 0 ? "checkmark.shield" : "exclamationmark.shield")
         }
     }
@@ -611,7 +629,7 @@ struct BalanceTrendCard: View {
         for d in days {
             guard let date = DayFmt.date(d.date), (d.target ?? 0) > 0 || d.worked > 0 else { continue }
             if date > Date() { break }
-            running += d.worked - (d.target ?? 0)
+            running += d.overtime ?? (d.worked - (d.target ?? 0))
             out.append(Point(date: date, balance: running))
         }
         return out
