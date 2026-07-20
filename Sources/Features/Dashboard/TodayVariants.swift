@@ -63,6 +63,7 @@ struct StatusPill: View {
 struct TodayActions: View {
     @ObservedObject var state: BobState
     var vertical = true
+    var now = Date()
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -78,9 +79,11 @@ struct TodayActions: View {
                         "play.fill", .workAccent(scheme)) { state.clockIn() }
                 case .working:
                     btn("Clock out", "stop.fill", .outAccent(scheme)) { state.clockOut() }
-                    btn("Start break", "pause.circle.fill", .breakAccent(scheme)) { state.startManualBreak() }
+                    btn("Start break", "pause.circle.fill", .breakAccent(scheme),
+                        trailing: autoBreakTrailing) { state.startManualBreak() }
                 case .onBreak:
-                    btn("End break", "play.fill", .workAccent(scheme)) { state.endBreak() }
+                    btn("End break", "play.fill", .workAccent(scheme),
+                        trailing: backToWorkTrailing) { state.endBreak() }
                     btn("Clock out", "stop.fill", .outAccent(scheme)) { state.clockOut() }
                 }
             }
@@ -91,8 +94,21 @@ struct TodayActions: View {
         }
     }
     private func btn(_ label: String, _ sym: String, _ tint: Color,
+                     trailing: String? = nil,
                      _ act: @escaping () -> Void) -> some View {
-        ActionButton(label: label, sym: sym, tint: tint, act: act)
+        ActionButton(label: label, sym: sym, tint: tint, trailing: trailing, act: act)
+    }
+
+    /// "auto in 42m" inside the Start-break button — same as the popover.
+    private var autoBreakTrailing: String? {
+        guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
+        return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
+    }
+
+    /// "back in 12m" inside the End-break button during an auto-break.
+    private var backToWorkTrailing: String? {
+        guard let ends = state.autoBreakEnds else { return nil }
+        return ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
     }
 }
 
@@ -101,16 +117,24 @@ private struct ActionButton: View {
     let label: String
     let sym: String
     let tint: Color
+    var trailing: String? = nil
     let act: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: act) {
-            Label(label, systemImage: sym).font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity).frame(height: 34)
-                .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
-                .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
-                .foregroundStyle(tint)
+            HStack(spacing: 6) {
+                Image(systemName: sym).font(.system(size: 12, weight: .bold))
+                Text(label).font(.system(size: 13, weight: .semibold))
+                if let trailing {
+                    Text("· \(trailing)")
+                        .font(.system(size: 11, weight: .medium)).opacity(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity).frame(height: 34)
+            .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
+            .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
+            .foregroundStyle(tint)
         }
         .buttonStyle(.plain)
         .onHover { h in
@@ -305,16 +329,12 @@ struct TodayTimeline: View {
                             legend(.workAccent(scheme), "Work")
                             legend(.breakAccent(scheme), "Break")
                             Spacer()
-                            if case .working = state.clockState, let due = state.autoBreakDue {
-                                stat(due <= ctx.date ? "now" : Fmt.hm(due.timeIntervalSince(ctx.date)),
-                                     "auto-break", .breakAccent(scheme))
-                            }
                             stat(Fmt.hm(v.breakTotal), "break", .breakAccent(scheme))
                             if v.over { stat(Fmt.hm(v.worked - v.targetSecs), "over", .workAccent(scheme)) }
                             else if v.remaining > 0 { stat(Fmt.hm(v.remaining), "left", .primary) }
                         }
                         Divider().opacity(0.15)
-                        TodayActions(state: state, vertical: false)
+                        TodayActions(state: state, vertical: false, now: ctx.date)
                     }
                 }
 
