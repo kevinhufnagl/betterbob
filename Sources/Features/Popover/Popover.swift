@@ -197,12 +197,12 @@ struct PopoverRootView: View {
     }
 
     /// "auto in 42m" shown inside the Start-break button while working —
-    /// just "42m" in the compact one-row layout, where space is tight.
+    /// "auto 42m" in the compact one-row layout, where space is tight.
     private func autoBreakTrailing(now: Date) -> String? {
         guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
-        if due <= now { return prefs.popoverCompact ? "now" : "auto now" }
+        if due <= now { return "auto now" }
         let t = Fmt.hm(due.timeIntervalSince(now))
-        return prefs.popoverCompact ? t : "auto in \(t)"
+        return prefs.popoverCompact ? "auto \(t)" : "auto in \(t)"
     }
 
     /// "as In Office" inside the Clock-in button — the reason the new entry
@@ -211,16 +211,16 @@ struct PopoverRootView: View {
         state.currentAutoReason.map { "as \($0)" }
     }
 
-    /// "back in 12m" shown inside the End-break button during an auto-break;
-    /// with an auto-tag too (or in compact) it shortens to "12m · as xx".
+    /// "back in 12m" shown inside the End-break button during an auto-break,
+    /// plus the auto-tag when one applies: "back in 12m · as In Office".
+    /// Compact keeps the short "back 12m" so the one-row buttons still fit.
     private func endBreakTrailing(now: Date) -> String? {
         guard let ends = state.autoBreakEnds else { return autoTagTrailing }
-        let t = ends <= now ? "now" : Fmt.hm(ends.timeIntervalSince(now))
-        guard let tag = autoTagTrailing else {
-            if ends <= now { return prefs.popoverCompact ? "now" : "back now" }
-            return prefs.popoverCompact ? t : "back in \(t)"
-        }
-        return "\(t) · \(tag)"
+        let back = ends <= now ? "back now"
+            : prefs.popoverCompact ? "back \(Fmt.hm(ends.timeIntervalSince(now)))"
+            : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
+        guard let tag = autoTagTrailing else { return back }
+        return "\(back) · \(tag)"
     }
 
     // MARK: - Over-max-non-break warning + wand

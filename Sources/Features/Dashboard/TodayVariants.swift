@@ -107,15 +107,13 @@ struct TodayActions: View {
         state.currentAutoReason.map { "as \($0)" }
     }
 
-    /// "back in 12m" inside the End-break button during an auto-break; with an
-    /// auto-tag too it shortens to "12m · as In Office" to keep the pill sane.
+    /// "back in 12m" inside the End-break button during an auto-break, plus
+    /// the auto-tag when one applies: "back in 12m · as In Office".
     private var endBreakTrailing: String? {
         guard let ends = state.autoBreakEnds else { return autoTagTrailing }
-        let time = ends <= now ? "now" : Fmt.hm(ends.timeIntervalSince(now))
-        guard let tag = autoTagTrailing else {
-            return ends <= now ? "back now" : "back in \(time)"
-        }
-        return "\(time) · \(tag)"
+        let back = ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
+        guard let tag = autoTagTrailing else { return back }
+        return "\(back) · \(tag)"
     }
 }
 
