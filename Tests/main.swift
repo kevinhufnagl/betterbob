@@ -545,6 +545,36 @@ let dr9 = AttendanceLogic.dragged(dayGap, index: 1, mode: .translate, by: -7200,
 expect(dr9[1].start == t(12) && dr9[1].end == t(14) && dr9[0].end == t(12),
        "translate slides left across a gap, clamped at the previous block")
 
+// MARK: - boundaryMoved (drag the edge between two blocks)
+
+print("AttendanceLogic.boundaryMoved")
+
+let bm1 = AttendanceLogic.boundaryMoved(dayCont, after: 0, by: 1800, now: t(18))
+expect(bm1[0].end == t(12.5) && bm1[1].start == t(12.5) && bm1[1].end == t(13)
+       && bm1[2].start == t(13) && bm1[2].end == t(17),
+       "boundary right: left block grows, right block shrinks, rest untouched")
+
+let bm2 = AttendanceLogic.boundaryMoved(dayCont, after: 1, by: 36000, now: t(18))
+expect(bm2[1].end == t(17).addingTimeInterval(-300) && bm2[2].start == t(17).addingTimeInterval(-300)
+       && bm2[2].end == t(17),
+       "clamped so the right block keeps >= minGap")
+
+let bm3 = AttendanceLogic.boundaryMoved(dayCont, after: 0, by: -36000, now: t(18))
+expect(bm3[0].end == t(9).addingTimeInterval(300) && bm3[1].start == t(9).addingTimeInterval(300),
+       "clamped so the left block keeps >= minGap")
+
+let bm4 = AttendanceLogic.boundaryMoved(dayCont, after: 2, by: 3600, now: t(18))
+expect(bm4[2].end == t(18) && bm4[1] == dayCont[1],
+       "last boundary just moves the clock-out")
+
+let bm5 = AttendanceLogic.boundaryMoved(dayOpen, after: 1, by: 3600, now: t(15))
+expect(bm5[1].end == t(14) && bm5[2].start == t(14) && bm5[2].end == nil,
+       "boundary before the open block moves it and keeps it open")
+
+let bm6 = AttendanceLogic.boundaryMoved(dayCont, after: 0, by: 420, now: t(18))
+expect(bm6[0].end == t(12).addingTimeInterval(300),
+       "boundary snaps to the 5-min grid")
+
 // MARK: - TOTP (RFC 6238 SHA-1 vectors, 6-digit)
 
 print("TOTP")

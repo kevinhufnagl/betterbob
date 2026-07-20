@@ -56,8 +56,7 @@ two choices:
 **Menu bar** — your status at a glance: Bob wears a little play or pause badge
 while the clock runs, and the text next to him is your choice — per status —
 of worked time, the auto-break countdown, break time left, and more. Click him
-for big clock in/out and break buttons, today's entries, and a mini timeline
-you can edit right there.
+for big clock in/out and break buttons and today's entries.
 
 **Main window**
 - **Today** — your worked total and a timeline of the day. Drag a break along

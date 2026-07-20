@@ -304,6 +304,28 @@ enum AttendanceLogic {
         return es
     }
 
+    /// Move the boundary between block `index` and the one after it: the left
+    /// block's end and the right block's start both become the new time, so
+    /// one lengthens exactly as much as the other shortens — nothing else
+    /// moves. On the last block it just moves the day's clock-out. Snapped to
+    /// `snap`; both blocks keep at least `minGap`. No-op if `index` is open.
+    static func boundaryMoved(_ input: [AttendanceEntry], after index: Int,
+                              by delta: TimeInterval, now: Date,
+                              minGap: TimeInterval = 300, snap: TimeInterval = 300) -> [AttendanceEntry] {
+        var es = input.sorted { $0.start < $1.start }
+        guard es.indices.contains(index), let end = es[index].end else { return input }
+        var boundary = end.addingTimeInterval(snap > 0 ? (delta / snap).rounded() * snap : delta)
+        let earliest = es[index].start.addingTimeInterval(minGap)
+        if boundary < earliest { boundary = earliest }
+        if es.indices.contains(index + 1) {
+            let latest = (es[index + 1].end ?? now).addingTimeInterval(-minGap)
+            if boundary > latest { boundary = latest }
+        }
+        es[index].end = boundary
+        if es.indices.contains(index + 1) { es[index + 1].start = boundary }
+        return es
+    }
+
     /// When the next scheduled transition (auto-break start or end) is due,
     /// so the engine can arm a precise timer instead of relying on polling.
     static func nextEvent(entries: [AttendanceEntry],

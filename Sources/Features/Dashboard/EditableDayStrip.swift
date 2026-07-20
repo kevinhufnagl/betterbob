@@ -11,10 +11,10 @@ import AppKit
 /// Two grabs:
 /// - A closed break's body moves the whole break (surrounding work resizes,
 ///   total worked time unchanged).
-/// - A boundary between blocks (or the day's first/last edge) resizes: the
-///   block to its left grows/shrinks and everything after ripples along
-///   (`AttendanceLogic.dragged`); the day-start edge moves the clock-in.
-/// The open (ongoing) block's leading "now" edge isn't draggable.
+/// - A boundary between blocks resizes both neighbours: one lengthens exactly
+///   as much as the other shortens and nothing else moves. The day's first
+///   edge moves the clock-in, the last edge (when closed) the clock-out.
+/// The open (ongoing) block's trailing "now" edge isn't draggable.
 struct EditableDayStrip: View {
     let entries: [AttendanceEntry]
     let now: Date
@@ -132,9 +132,12 @@ struct EditableDayStrip: View {
                 let delta = TimeInterval(v.translation.width / max(1, w)) * span
 
                 if let edge = edgeGrab {
-                    // Resize: dragged() snaps, keeps minGap and ripples the tail.
-                    let p = AttendanceLogic.dragged(entries, index: edge.index, mode: edge.mode,
-                                                    by: delta, now: now)
+                    // Resize: both share the snapping and the minGap clamps.
+                    let p = edge.mode == .moveStart
+                        ? AttendanceLogic.dragged(entries, index: edge.index, mode: .moveStart,
+                                                  by: delta, now: now)
+                        : AttendanceLogic.boundaryMoved(entries, after: edge.index,
+                                                        by: delta, now: now)
                     preview = p
                     let ps = p.sorted { $0.start < $1.start }
                     guard ps.indices.contains(edge.index) else { return }
