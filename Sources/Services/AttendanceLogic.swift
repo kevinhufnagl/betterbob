@@ -251,10 +251,12 @@ enum AttendanceLogic {
     /// Edit an existing day by dragging one block on the timeline, ripple-style:
     /// the block and *everything to its right* shift by the same amount, so
     /// later entries move along instead of being compressed. `.moveEnd` resizes
-    /// the block's end (its start stays put) and ripples the rest; any other
-    /// mode translates the whole block (keeping its duration) and ripples the
-    /// rest. `delta` is the time shift (seconds); results snap to `snap`, keep
-    /// at least `minGap`, and never overlap the block before it.
+    /// the block's end (its start stays put) and ripples the rest; `.moveStart`
+    /// resizes the block from the left (only its start moves — nothing else
+    /// shifts, so on the first block it moves the day's clock-in); `.translate`
+    /// moves the whole block (keeping its duration) and ripples the rest.
+    /// `delta` is the time shift (seconds); results snap to `snap`, keep at
+    /// least `minGap`, and never overlap the block before it.
     static func dragged(_ input: [AttendanceEntry], index: Int, mode: DragMode,
                         by delta: TimeInterval, now: Date,
                         minGap: TimeInterval = 300, snap: TimeInterval = 300) -> [AttendanceEntry] {
@@ -279,6 +281,18 @@ enum AttendanceLogic {
             if d < minD { d = minD }
             es[index].end = es[index].end!.addingTimeInterval(d)
             for k in (index + 1)..<es.count { shift(k, d) }
+        } else if mode == .moveStart {
+            // Resize from the left: only this block's start moves (an open
+            // block is clamped against `now`). Nothing before or after shifts.
+            let maxD = (es[index].end ?? now).addingTimeInterval(-minGap)
+                .timeIntervalSince(es[index].start)
+            if d > maxD { d = maxD }
+            if index > 0 {
+                let lower = es[index - 1].end ?? es[index - 1].start
+                let minD = lower.timeIntervalSince(es[index].start)
+                if d < minD { d = minD }
+            }
+            es[index].start = es[index].start.addingTimeInterval(d)
         } else {
             // Translate this block and everything after it; don't let it slide
             // back over the previous block (or before the day's start).

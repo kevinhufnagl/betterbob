@@ -238,7 +238,7 @@ struct DayDetailSheet: View {
                     EditableDayStrip(entries: day.entries, now: Date(), height: 72) { updated in
                         state.saveDay(updated, on: day.date)
                     }
-                    Text("Drag a break along the timeline to move it — the surrounding work adjusts.")
+                    Text("Drag a break to move it, or grab a boundary to resize — later entries shift along.")
                         .font(.system(size: 10)).foregroundStyle(.tertiary)
                 }
                 VStack(spacing: 0) {

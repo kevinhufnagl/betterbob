@@ -274,6 +274,12 @@ struct PopoverRootView: View {
                 .foregroundStyle(.secondary)
                 .kerning(0.5)
                 .padding(.bottom, 2)
+            // Same interactive strip as the dashboard: drag a break to move
+            // it, drag a boundary to resize the blocks around it.
+            EditableDayStrip(entries: state.entries, now: Date(), height: 28) { updated in
+                state.saveDay(updated, on: Date())
+            }
+            .padding(.bottom, 4)
             ForEach(Array(state.entries.enumerated()), id: \.offset) { index, entry in
                 if index > 0 {
                     Divider().opacity(0.25)

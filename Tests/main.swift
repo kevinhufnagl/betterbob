@@ -517,6 +517,27 @@ let dr8 = AttendanceLogic.dragged(dayCont, index: 0, mode: .moveEnd, by: 420, no
 expect(dr8[0].end == t(12).addingTimeInterval(300) && dr8[1].start == t(12).addingTimeInterval(300),
        "drag result snaps to the step and ripples the tail")
 
+// moveStart resizes from the left: only the block's start moves — used for
+// the day-start edge, so the clock-in shifts and nothing else does.
+let dr10 = AttendanceLogic.dragged(dayCont, index: 0, mode: .moveStart, by: -3600, now: t(18))
+expect(dr10[0].start == t(8) && dr10[0].end == t(12) && dr10[2].end == t(17),
+       "moveStart moves the day's clock-in; everything else stays put")
+
+// moveStart shrinking is clamped so the block keeps at least minGap.
+let dr11 = AttendanceLogic.dragged(dayCont, index: 0, mode: .moveStart, by: 36000, now: t(18))
+expect(dr11[0].start == t(12).addingTimeInterval(-300) && dr11[0].end == t(12),
+       "moveStart clamped to keep the block >= minGap")
+
+// An interior moveStart can't cross the previous block's end.
+let dr12 = AttendanceLogic.dragged(dayCont, index: 2, mode: .moveStart, by: -7200, now: t(18))
+expect(dr12[2].start == t(13) && dr12[1].end == t(13),
+       "interior moveStart clamped at the previous block")
+
+// moveStart on the open block clamps against now.
+let dr13 = AttendanceLogic.dragged(dayOpen, index: 2, mode: .moveStart, by: 36000, now: t(15))
+expect(dr13[2].start == t(15).addingTimeInterval(-300) && dr13[2].end == nil,
+       "open block's moveStart clamped to now - minGap, stays open")
+
 // A gap day: work 9–12, work 13–15. translate index 1 can slide left into the
 // gap (up to the previous block) and ripples nothing after it (it's last).
 let dayGap = [work(9, 12), work(13, 15)]

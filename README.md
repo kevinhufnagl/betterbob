@@ -56,12 +56,14 @@ two choices:
 **Menu bar** — your status at a glance: Bob wears a little play or pause badge
 while the clock runs, and the text next to him is your choice — per status —
 of worked time, the auto-break countdown, break time left, and more. Click him
-for big clock in/out and break buttons and today's entries.
+for big clock in/out and break buttons, today's entries, and a mini timeline
+you can edit right there.
 
 **Main window**
 - **Today** — your worked total and a timeline of the day. Drag a break along
-  the timeline to move it; the work around it adjusts and you see where it lands
-  before you drop.
+  the timeline to move it (the work around it adjusts), or grab the edge
+  between two entries to lengthen or shorten them — you see where everything
+  lands before you drop.
 - **This month** — a calendar of your hours (days that need a break show up in
   orange, days over your daily max in red), how far over or under you are, and
   a day-by-day list. Click any past day to fix its entries, or tap the wand to
