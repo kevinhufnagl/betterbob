@@ -61,13 +61,13 @@ struct SettingsPanel: View {
 
                 Text("Opens the sign-in window where you choose automatic sign-in (password + authenticator code, stored in your Keychain) or a browser sign-in (Okta Verify push included). You can change how it's set up any time below.")
                     .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Text("The session lives in your login Keychain / cookie store and is used only against app.hibob.com — the same internal API the HiBob website itself uses with your own session. Nothing is sent anywhere else.")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -100,7 +100,7 @@ struct SettingsPanel: View {
 
             Text("A break you take yourself resets the counter — the auto-break only fires after truly uninterrupted work. If your Mac was asleep at the mark, the break is inserted retroactively at the right time.")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -119,7 +119,7 @@ struct SettingsPanel: View {
             }
             Text("Days over the limit show up red on Today and the month calendar, and Bob notifies you the moment you cross it while clocked in. Unlike a missing break there's nothing to auto-fix — only clocking out earlier helps.")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -141,7 +141,7 @@ struct SettingsPanel: View {
                 Spacer()
             }
             Text("Applied to an untagged open work entry automatically. A matching Wi-Fi rule below overrides it; otherwise this is used. Works on its own — no Wi-Fi needed.")
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -171,7 +171,7 @@ struct SettingsPanel: View {
                     HStack(spacing: 8) {
                         TextField("Network name (SSID)", text: $rule.ssid)
                             .textFieldStyle(.roundedBorder).font(.system(size: 12))
-                        Image(systemName: "arrow.right").font(.system(size: 9)).foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.right").font(.system(size: 9)).foregroundStyle(.secondary)
                         Picker("", selection: $rule.reasonName) {
                             Text("Choose reason").tag("")
                             ForEach(state.reasonOptions, id: \.name) { opt in
@@ -196,14 +196,14 @@ struct SettingsPanel: View {
                     }
                     .controlSize(.small)
                     if prefs.wifiRules.isEmpty {
-                        Text("No rules yet.").font(.system(size: 11)).foregroundStyle(.tertiary)
+                        Text("No rules yet.").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
 
                 if !WiFiMonitor.shared.hasAccess {
                     Text("macOS needs Location access to read the Wi-Fi network name — “Add rule” prefills the current one and will ask for it. Your location is never used or stored.")
                         .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -211,7 +211,7 @@ struct SettingsPanel: View {
 
             Text("On a matching network, the open work entry gets that reason — overriding the default above. Only applied if you haven't set a reason yourself.")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -326,7 +326,7 @@ struct SettingsPanel: View {
             }
             Text("If HiBob's internal API changed, re-capture the routes (Docs/endpoints.md) and update BobAPI in Sources/Services/BobClient.swift.")
                 .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -359,7 +359,7 @@ private struct AutoSignInCard: View {
             }
 
             Text("Stored only in your macOS login Keychain and used only against the HiBob login form — never sent anywhere else. Signing in itself happens from the sign-in window (the “Sign in…” button above). If Okta changes their login page this may stop — sign in with a browser that day.")
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -510,7 +510,7 @@ private struct UpdatesCard: View {
             }
 
             Text("Updates download and install automatically in the background, and take effect the next time Bob starts.")
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -557,7 +557,7 @@ struct PhoneViewCard: View {
                         Button("New link") { prefs.phoneViewToken = Prefs.newPhoneViewToken() }
                             .controlSize(.small)
                         Text("Regenerating cuts off anyone holding the old link.")
-                            .font(.system(size: 10)).foregroundStyle(.tertiary)
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                     Spacer()
                 }
@@ -570,7 +570,7 @@ struct PhoneViewCard: View {
         }
 
         Text("Serves a read-only page (plus the buttons above, if allowed) to devices on your network. The link's secret token is the key — nothing shows without it. macOS may ask once to allow incoming connections.")
-            .font(.system(size: 10)).foregroundStyle(.tertiary)
+            .font(.system(size: 10)).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 

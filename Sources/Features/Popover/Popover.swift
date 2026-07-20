@@ -314,7 +314,8 @@ struct PopoverRootView: View {
     /// The same liquid hero as the dashboard, sized for the popover.
     private func workedHeader(now: Date) -> some View {
         let v = TodayVals(state, now: now)
-        return LiquidHero(worked: v.worked, target: v.targetSecs, compact: true)
+        return LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
+                          compact: true)
             .frame(height: 100)
     }
 
@@ -463,7 +464,7 @@ struct PopoverRootView: View {
             } else if let sync = state.lastSync {
                 Text("Synced \(Fmt.clock(sync))")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .transition(.opacity)
             }
             Spacer()

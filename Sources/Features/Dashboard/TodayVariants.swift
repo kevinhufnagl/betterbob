@@ -329,7 +329,7 @@ struct TodayTimeline: View {
                     StatusPill(state: state)
                 }
 
-                LiquidHero(worked: v.worked, target: v.targetSecs,
+                LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                            saving: state.busy || !state.deletingEntries.isEmpty)
                     .frame(height: 176)
 
@@ -344,28 +344,19 @@ struct TodayTimeline: View {
                                 }
                                 HStack {
                                     Text(state.entries.map(\.start).min().map(Fmt.clock) ?? "")
-                                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
                                     Spacer()
                                     // "now" only while an entry is open — a
                                     // clocked-out day ends at its last entry.
                                     if state.entries.contains(where: { $0.end == nil }) {
                                         Text(Fmt.clock(ctx.date) + " now")
-                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
                                     } else {
                                         Text(state.entries.compactMap(\.end).max().map(Fmt.clock) ?? "")
-                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
                                     }
                                 }
                             }
-                        }
-
-                        HStack(spacing: 18) {
-                            legend(.workAccent(scheme), "Work")
-                            legend(.breakAccent(scheme), "Break")
-                            Spacer()
-                            stat(Fmt.hm(v.breakTotal), "break", .breakAccent(scheme))
-                            if v.over { stat(Fmt.hm(v.worked - v.targetSecs), "over", .workAccent(scheme)) }
-                            else if v.remaining > 0 { stat(Fmt.hm(v.remaining), "left", .primary) }
                         }
                         Divider().opacity(0.15)
                         TodayActions(state: state, vertical: false, now: ctx.date)
@@ -459,24 +450,8 @@ struct TodayTimeline: View {
             .strokeBorder(Color.bobRed.opacity(0.30), lineWidth: 0.8))
     }
 
-    private func stat(_ value: String, _ label: String, _ tint: Color) -> some View {
-        HStack(spacing: 6) {
-            Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(tint)
-                .contentTransition(.numericText())
-                .animation(Motion.numeric, value: value)
-            Text(label.uppercased()).kerning(0.4).font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
-        }
-    }
-    private func legend(_ c: Color, _ t: String) -> some View {
-        HStack(spacing: 5) {
-            RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 12, height: 8)
-            Text(t).font(.system(size: 10)).foregroundStyle(.secondary) }
-    }
 }
 
-/// Outsiders-style liquid progress hero: a dark green card whose water level
-/// is today's fraction of target, with a glowing waterline drifting like a
-/// slow wave. Deliberately dark in both appearances — same as the phone page.
 /// Gate for the dashboard hero's sweep-in: it plays once per "window
 /// session". Closing the main window bumps the generation, so reopening it
 /// (from the popover or an app relaunch) replays the sweep — but tab
@@ -516,12 +491,34 @@ final class HeroSweep {
     }
 }
 
-struct LiquidHero: View {
+/// Outsiders-style liquid progress hero: the water level is today's fraction
+/// of target, with a sloshing waterline. Optional `top`/`bottom` slots render
+/// on the water — the dashboard puts its greeting row and the timeline-plus-
+/// buttons glass panel there. `cornerRadius: 0` makes it a full-bleed section.
+struct LiquidHero<Top: View, Bottom: View>: View {
     let worked: TimeInterval
     let target: TimeInterval
+    var breakTotal: TimeInterval = 0
     var saving = false
     /// Smaller type and padding for the popover.
     var compact = false
+    var cornerRadius: CGFloat = 16
+    let top: Top
+    let bottom: Bottom
+
+    init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
+         saving: Bool = false, compact: Bool = false, cornerRadius: CGFloat = 16,
+         @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
+        self.worked = worked
+        self.target = target
+        self.breakTotal = breakTotal
+        self.saving = saving
+        self.compact = compact
+        self.cornerRadius = cornerRadius
+        self.top = top()
+        self.bottom = bottom()
+    }
+
     @Environment(\.colorScheme) private var scheme
     /// Anchor for the sweep-in and the decaying wave.
     @State private var appearedAt: Date?
@@ -565,7 +562,42 @@ struct LiquidHero: View {
     private var ink: Color { dark ? .white : Color(red: 0.06, green: 0.20, blue: 0.24) }
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        VStack(alignment: .leading, spacing: compact ? 8 : 14) {
+            top.foregroundStyle(ink)
+            Spacer(minLength: compact ? 4 : 8)
+            VStack(alignment: .leading, spacing: 2) {
+                // Worked time is the headline; the percentage sits under it.
+                HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    Text(Fmt.hm(worked))
+                        .font(.system(size: compact ? 30 : 44, weight: .heavy, design: .rounded))
+                        .contentTransition(.numericText())
+                        .animation(Motion.numeric, value: Fmt.hm(worked))
+                        .foregroundStyle(ink)
+                    if saving {
+                        HStack(spacing: 5) {
+                            ProgressView().controlSize(.small).scaleEffect(0.7).tint(ink)
+                            Text("Saving…").font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(ink.opacity(0.8))
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                Text(target > 0 ? "\(percent)% of \(Fmt.hm(target))" : "worked today")
+                    .font(.system(size: compact ? 11.5 : 13, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.92))
+                    .contentTransition(.numericText())
+                    .animation(Motion.numeric, value: percent)
+                Text(subline)
+                    .font(.system(size: compact ? 10 : 11))
+                    .foregroundStyle(ink.opacity(0.66))
+            }
+            bottom
+        }
+        .padding(compact ? 12 : 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            // Water sized by the content — a greedy GeometryReader sibling
+            // would fight a slot-driven height.
             GeometryReader { geo in
                 ZStack(alignment: .topLeading) {
                     baseColor
@@ -596,44 +628,16 @@ struct LiquidHero: View {
                     }
                 }
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(target > 0 ? "\(percent)" : Fmt.hm(worked))
-                        .font(.system(size: compact ? 30 : 44, weight: .heavy, design: .rounded))
-                        .contentTransition(.numericText())
-                        .animation(Motion.numeric, value: target > 0 ? "\(percent)" : Fmt.hm(worked))
-                    if target > 0 {
-                        Text("%").font(.system(size: compact ? 16 : 23, weight: .bold, design: .rounded))
-                            .opacity(0.9)
-                    }
-                }
-                .foregroundStyle(ink)
-                Text(target > 0 ? "\(Fmt.hm(worked)) worked" : "worked today")
-                    .font(.system(size: compact ? 11.5 : 13, weight: .semibold))
-                    .foregroundStyle(ink.opacity(0.92))
-                Text(subline)
-                    .font(.system(size: compact ? 10 : 11))
-                    .foregroundStyle(ink.opacity(0.66))
-            }
-            .padding(compact ? 12 : 16)
-        }
-        .overlay(alignment: .topTrailing) {
-            if saving {
-                HStack(spacing: 5) {
-                    ProgressView().controlSize(.small).scaleEffect(0.7).tint(ink)
-                    Text("Saving…").font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(ink.opacity(0.8))
-                }
-                .padding(12)
-                .transition(.opacity)
-            }
         }
         .animation(Motion.quick, value: saving)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(dark ? Color.white.opacity(0.09) : Color.black.opacity(0.08),
-                          lineWidth: 0.6))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            if cornerRadius > 0 {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(dark ? Color.white.opacity(0.09) : Color.black.opacity(0.08),
+                                  lineWidth: 0.6)
+            }
+        }
         .trackWindowVisibility { visible in
             // Regaining visibility resumes the standing wave where it was;
             // the sweep only replays for a fresh window session (reopened
@@ -689,10 +693,26 @@ struct LiquidHero: View {
     }
 
     private var subline: String {
-        guard target > 0 else { return "No target today" }
-        let over = worked - target
-        return over >= 0 ? "+\(Fmt.hm(over)) over your \(Fmt.hm(target)) target"
-                         : "\(Fmt.hm(-over)) left of \(Fmt.hm(target))"
+        var parts: [String] = []
+        if target > 0 {
+            let over = worked - target
+            // The percent line above already names the target.
+            parts.append(over >= 0 ? "+\(Fmt.hm(over)) over" : "\(Fmt.hm(-over)) left")
+        } else {
+            parts.append("No target today")
+        }
+        if breakTotal > 0 { parts.append("\(Fmt.hm(breakTotal)) break") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
+    /// Slot-less hero — the popover's compact variant.
+    init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
+         saving: Bool = false, compact: Bool = false, cornerRadius: CGFloat = 16) {
+        self.init(worked: worked, target: target, breakTotal: breakTotal, saving: saving,
+                  compact: compact, cornerRadius: cornerRadius,
+                  top: { EmptyView() }, bottom: { EmptyView() })
     }
 }
 

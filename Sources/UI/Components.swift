@@ -143,8 +143,7 @@ extension Color {
                         : Color(red: 0.75, green: 0.34, blue: 0.13)
     }
     static func reasonAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.45, green: 0.72, blue: 1.00)
-                        : Color(red: 0.10, green: 0.42, blue: 0.85)
+        primaryAccent(scheme)
     }
     /// Clock-out / stop red — rose-leaning to sit well next to the teal,
     /// muted in light mode where system red is too hot.

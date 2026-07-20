@@ -244,7 +244,7 @@ struct DayDetailSheet: View {
                         state.saveDay(updated, on: day.date)
                     }
                     Text("Drag a break to move it, or grab a boundary to resize — later entries shift along.")
-                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 VStack(spacing: 0) {
                     DayEntriesList(state: state, entries: day.entries, date: day.date)
@@ -260,7 +260,7 @@ struct DayDetailSheet: View {
             }
 
             Text("Edit times or reasons, drag breaks, or delete entries — changes save to HiBob for this day.")
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .padding(20).frame(width: 560)
         .animation(Motion.standard, value: day?.entries)
@@ -372,7 +372,7 @@ struct CyclePane: View {
                     Text("Today").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.bobTeal)
                 }
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 9).contentShape(Rectangle())
         }
@@ -458,7 +458,7 @@ struct CalendarHeatmap: View {
                 VStack(spacing: 8) {
                     LazyVGrid(columns: cols, spacing: 6) {
                         ForEach(weekdays, id: \.self) { wd in
-                            Text(wd).font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                            Text(wd).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                         }
                         ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 40) }
                         ForEach(days, id: \.date) { day in cell(day, maxWorked: maxWorked) }
@@ -543,16 +543,16 @@ struct CalendarHeatmap: View {
 
     private var legend: some View {
         HStack(spacing: 6) {
-            Text("Fewer hours").font(.system(size: 9)).foregroundStyle(.tertiary)
+            Text("Fewer hours").font(.system(size: 9)).foregroundStyle(.secondary)
             ForEach([0.18, 0.4, 0.65, 0.9], id: \.self) { o in
                 RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(o)).frame(width: 14, height: 10)
             }
-            Text("More").font(.system(size: 9)).foregroundStyle(.tertiary)
+            Text("More").font(.system(size: 9)).foregroundStyle(.secondary)
             Spacer()
             RoundedRectangle(cornerRadius: 3).fill(Color.bobOrange.opacity(0.5)).frame(width: 14, height: 10)
-            Text("Break issue").font(.system(size: 9)).foregroundStyle(.tertiary)
+            Text("Break issue").font(.system(size: 9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.bobRed.opacity(0.5)).frame(width: 14, height: 10)
-            Text("Over daily max").font(.system(size: 9)).foregroundStyle(.tertiary)
+            Text("Over daily max").font(.system(size: 9)).foregroundStyle(.secondary)
         }
     }
 }
@@ -624,7 +624,7 @@ struct ActivityPane: View {
                                 }
                                 Spacer()
                                 Text(Fmt.clock(ev.timestamp)).font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(.secondary)
                             }
                             .padding(.vertical, 10)
                             .transition(.bobBanner)

@@ -15,7 +15,7 @@ enum StatsPage {
 <style>
 :root {
   --bg: #fafafa; --card: #ffffff; --border: #e4e4e7; --fg: #18181b;
-  --muted: #71717a; --faint: #a1a1aa; --track: #f4f4f5;
+  --muted: #71717a; --faint: #7c7c85; --track: #f4f4f5;
   --work: #0a6166; --work-fg: #ffffff; --work-soft: rgba(10,97,102,.09);
   --brk: #bf5721; --brk-soft: rgba(191,87,33,.09);
   --stop: #b82640; --stop-fg: #ffffff;
@@ -25,7 +25,7 @@ enum StatsPage {
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #09090b; --card: #101013; --border: #27272a; --fg: #fafafa;
-    --muted: #a1a1aa; --faint: #63636b; --track: #27272a;
+    --muted: #a1a1aa; --faint: #8f8f98; --track: #27272a;
     --work: #4dd1d9; --work-fg: #032527; --work-soft: rgba(77,209,217,.10);
     --brk: #ffa16e; --brk-soft: rgba(255,161,110,.12);
     --stop: #ff7080; --stop-fg: #33060b;
@@ -423,12 +423,11 @@ function tick() {
   $("sbreak").textContent = hm(snap.breakTotal);
   if (snap.target > 0) {
     const f = w / snap.target;
-    $("big").innerHTML = Math.round(f * 100) + "<small>%</small>";
-    $("line2").textContent = hm(w) + " worked";
+    // Worked time is the headline; the percentage sits under it.
+    $("big").textContent = hm(w);
+    $("line2").textContent = Math.round(f * 100) + "% of " + hm(snap.target);
     const over = w - snap.target;
-    $("line3").textContent = over >= 0
-      ? "+" + hm(over) + " over your " + hm(snap.target) + " target"
-      : hm(-over) + " left of " + hm(snap.target);
+    $("line3").textContent = over >= 0 ? "+" + hm(over) + " over" : hm(-over) + " left";
     $("sleftk").textContent = over >= 0 ? "Over" : "Left";
     $("sleft").textContent = over >= 0 ? "+" + hm(over) : hm(-over);
   } else {

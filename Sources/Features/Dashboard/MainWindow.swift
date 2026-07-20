@@ -165,10 +165,10 @@ struct FooterBar: View {
                     .font(.system(size: 10)).foregroundStyle(Color.bobOrange).lineLimit(1)
             } else if let sync = state.lastSync {
                 Text("Synced \(Fmt.clock(sync))")
-                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
             }
             Text("v\(Updater.shared.currentVersion)")
-                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
+                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14).padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 28)
@@ -234,7 +234,7 @@ struct QueueChip: View {
                         .transition(.bobBanner)
                     }
                     Text("HiBob allows one punch per minute — queued punches fire automatically.")
-                        .font(.system(size: 9)).foregroundStyle(.tertiary)
+                        .font(.system(size: 9)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

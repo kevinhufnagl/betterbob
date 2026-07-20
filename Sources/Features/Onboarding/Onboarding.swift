@@ -73,7 +73,7 @@ struct OnboardingView: View {
                 autoCard
                 browserCard
                 Text("Your details are stored only in your Mac's login Keychain and used only against HiBob's login form — never sent anywhere else.")
-                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 8)

@@ -155,7 +155,7 @@ struct TimeOffPane: View {
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(b.displayName).font(.system(size: 13, weight: .semibold))
-                    Text(b.cycleRange).font(.system(size: 10)).foregroundStyle(.tertiary)
+                    Text(b.cycleRange).font(.system(size: 10)).foregroundStyle(.secondary)
                     if let taken = b.daysTaken {
                         // Drop the sign — "-4" reads better as "4 taken".
                         Text("\(taken.trimmingCharacters(in: CharacterSet(charactersIn: "+-"))) taken")
@@ -263,12 +263,12 @@ struct TimeOffCalendar: View {
                 HStack(spacing: spacing) {
                     ForEach(weekdays, id: \.self) {
                         Text($0).font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.tertiary).frame(maxWidth: .infinity)
+                            .foregroundStyle(.secondary).frame(maxWidth: .infinity)
                     }
                 }
                 grid
                 Text("Click a day — or drag across days — to request time off. Click a booked day to cancel it.")
-                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
             }
         }
         .confirmationDialog("Cancel time off?",
@@ -478,7 +478,7 @@ struct TimeOffBookingSheet: View {
                 Text("From").font(.system(size: 12)).frame(width: 40, alignment: .leading)
                 PillDateField(date: $start, components: .date)
                     .onChange(of: start) { _, v in if end < v { end = v }; recalc() }
-                Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.secondary)
                 PillDateField(date: $end, components: .date, range: start...Date.distantFuture)
                     .onChange(of: end) { _, _ in recalc() }
             }
@@ -547,7 +547,7 @@ struct TimeOffBookingSheet: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 } else {
                     Text("Choose what kind of time off to request")
-                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
             Spacer()
