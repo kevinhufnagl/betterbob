@@ -456,6 +456,26 @@ final class BobState: ObservableObject {
         saveDay(rebuilt, on: date)
     }
 
+    /// HiBob's "Break not taken or doesn't meet guidelines" for a day: worked
+    /// past the threshold with too little qualifying pause (only pauses of
+    /// 15 min or more count). Returns the missing pause time.
+    func breakShortfall(_ dayEntries: [AttendanceEntry]) -> TimeInterval? {
+        AttendanceLogic.breakShortfall(entries: dayEntries, threshold: Prefs.shared.threshold,
+                                       required: Prefs.shared.breakLength, now: now)
+    }
+    /// Today's break-guideline shortfall, if any.
+    var breakGuidelineShortfall: TimeInterval? { breakShortfall(entries) }
+
+    /// Wand fix for a break-guideline shortfall: grow the day's longest break
+    /// (or insert one) so the required pause is met.
+    func fixBreakGuideline() { fixBreakGuideline(in: entries, on: today) }
+    func fixBreakGuideline(in dayEntries: [AttendanceEntry], on date: Date) {
+        guard let rebuilt = AttendanceLogic.meetingBreakGuideline(
+                entries: dayEntries, threshold: Prefs.shared.threshold,
+                required: Prefs.shared.breakLength, now: now) else { return }
+        saveDay(rebuilt, on: date)
+    }
+
     /// Resave a whole day's entries for `date` (the write API is whole-day).
     /// `anchor` is the id of the entry the user just edited; when the
     /// auto-fix-gaps-and-overlaps preference is on, the day is normalised so it

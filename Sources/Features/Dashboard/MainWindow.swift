@@ -160,7 +160,13 @@ struct FooterBar: View {
             }
             if !state.queue.isEmpty { QueueChip(state: state).transition(.bobReplace) }
             Spacer()
-            if let err = state.lastError {
+            if state.busy || !state.deletingEntries.isEmpty {
+                HStack(spacing: 5) {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                    Text("Saving…").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                .transition(.opacity)
+            } else if let err = state.lastError {
                 Label(err, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 10)).foregroundStyle(Color.bobOrange).lineLimit(1)
             } else if let sync = state.lastSync {
@@ -176,6 +182,7 @@ struct FooterBar: View {
         .overlay(alignment: .top) { Divider().opacity(0.4) }
         .animation(Motion.standard, value: state.clockState)
         .animation(Motion.standard, value: state.queue.isEmpty)
+        .animation(Motion.quick, value: state.busy || !state.deletingEntries.isEmpty)
     }
 }
 

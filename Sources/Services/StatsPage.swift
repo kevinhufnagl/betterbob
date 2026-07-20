@@ -71,26 +71,41 @@ main > *:nth-child(6) { animation-delay: .20s } main > *:nth-child(7) { animatio
   padding: 18px; min-height: 196px;
   display: flex; flex-direction: column; justify-content: flex-end; }
 #water { position: absolute; inset: 0; width: 100%; height: 100%; }
-#hero .hc { position: relative; padding-right: 96px; }
+#hero .hc { position: relative; padding-right: 8px; }
 #hlabel { font-size: 13px; font-weight: 500; color: color-mix(in srgb, var(--hero-ink) 72%, transparent); }
 #big { font-size: 54px; font-weight: 800; letter-spacing: -.03em; line-height: 1.08; margin: 2px 0 4px; }
 #big small { font-size: 26px; font-weight: 700; letter-spacing: 0; }
 #line2 { font-size: 14px; font-weight: 600; color: color-mix(in srgb, var(--hero-ink) 92%, transparent); }
 #line3 { font-size: 12.5px; color: color-mix(in srgb, var(--hero-ink) 66%, transparent); margin-top: 1px; }
 
-/* Bob (ported from BobMascot.swift) */
-#bob { position: absolute; right: 12px; bottom: 10px; width: 88px; height: 88px; }
+/* Bob (ported from BobMascot.swift), in his swim ring — straddling the
+   hero's top edge: ring on the waterline, head out of the water. The
+   wrapper's headroom keeps him unclipped; JS gives him a float and tilt. */
+#herowrap { position: relative; padding-top: 32px; }
+#buoy { position: absolute; left: 20px; top: 0; width: 64px; height: 64px;
+  pointer-events: none; z-index: 2; }
+#buoy.dry .ring { display: none; }
+#buoy.dry { left: auto; right: 14px; top: auto; bottom: 10px; }
+/* Asleep on dry land: the profile sleeper replaces the buoy — perfectly
+   still except the chest slowly rising. */
+#sleeper { position: absolute; right: 14px; bottom: 8px; width: 64px; height: 40px;
+  display: none; pointer-events: none; z-index: 2; }
+#sleeper .chest { transform-box: fill-box; transform-origin: 50% 100%;
+  animation: breathe 3.6s ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { transform: scaleY(1) } 50% { transform: scaleY(1.05) } }
+#sleeper .zs text { font-size: 7px; font-weight: 700;
+  fill: color-mix(in srgb, var(--hero-ink) 55%, transparent);
+  animation: floatz 3.2s ease-in-out infinite; }
+#sleeper .zs text:nth-child(2) { animation-delay: .55s; }
+#sleeper .zs text:nth-child(3) { animation-delay: 1.1s; }
 #zzz text { fill: color-mix(in srgb, var(--hero-ink) 55%, transparent) !important; }
-.st-working #bob { animation: bobble 2.8s ease-in-out infinite; }
-@keyframes bobble { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
-#bob .eyeb { transform-box: fill-box; transform-origin: center; animation: blink 4.6s infinite; }
+#buoy .eyeb { transform-box: fill-box; transform-origin: center; animation: blink 4.6s infinite; }
 @keyframes blink { 0%, 95%, 100% { transform: scaleY(1) } 96.5%, 98.5% { transform: scaleY(.1) } }
-.st-out #bob .eyeb { transform: scaleY(.1); animation: none; }
-.st-out #bob .glint { display: none; }
-#mug, #zzz { opacity: 0; transition: opacity .35s; }
-.st-break #mug { opacity: 1; }
+.st-out #buoy .eyeb { transform: scaleY(.1); animation: none; }
+.st-out #buoy .glint { display: none; }
+#zzz { opacity: 0; transition: opacity .35s; }
 .st-out #zzz { opacity: 1; }
-#zzz text { fill: var(--faint); font-size: 11px; font-weight: 700; }
+#zzz text { font-size: 7px; font-weight: 700; }
 .st-out #zzz text { animation: floatz 3.2s ease-in-out infinite; }
 .st-out #zzz text:nth-child(2) { animation-delay: .55s; }
 .st-out #zzz text:nth-child(3) { animation-delay: 1.1s; }
@@ -162,6 +177,7 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
   <span id="badge"><span id="dot"></span><span id="state">Connecting</span></span>
 </header>
 
+<div id="herowrap">
 <section id="hero">
   <svg id="water" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
     <defs>
@@ -169,14 +185,24 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
         <stop offset="0" id="ws0"/><stop offset=".68" id="ws1"/><stop offset="1" id="ws2"/>
       </linearGradient>
       <linearGradient id="egrad" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
-        <stop id="es0" stop-opacity="0"/><stop id="es1" stop-opacity=".11"/>
-        <stop id="es2" stop-opacity=".27"/><stop id="es3" stop-opacity=".5"/>
+        <stop id="es0" stop-opacity="0"/><stop id="es1" stop-opacity=".14"/>
+        <stop id="es2" stop-opacity=".5"/>
       </linearGradient>
     </defs>
     <path id="wpath" fill="url(#wgrad)"/>
     <path id="epath" fill="url(#egrad)"/>
+    <path id="rim" fill="none" stroke-width="1.5" stroke-linejoin="round"
+          stroke-linecap="round" opacity=".9" vector-effect="non-scaling-stroke"/>
   </svg>
-  <svg id="bob" viewBox="0 0 100 100" aria-hidden="true">
+
+  <div class="hc">
+    <p id="hlabel">Hello</p>
+    <p id="big" class="mono">–</p>
+    <p id="line2" class="mono"></p>
+    <p id="line3" class="mono"></p>
+  </div>
+</section>
+  <svg id="buoy" viewBox="0 0 60 60" aria-hidden="true">
       <defs>
         <linearGradient id="furG" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#A37047"/><stop offset="1" stop-color="#8C5C38"/>
@@ -185,55 +211,74 @@ footer { text-align: center; font-size: 11.5px; color: var(--faint); padding-top
           <stop offset="0" stop-color="#1A8C94"/><stop offset="1" stop-color="#17828A"/>
         </linearGradient>
       </defs>
-      <g id="zzz"><text x="84" y="26">z</text><text x="91" y="17">z</text><text x="97" y="9">z</text></g>
-      <ellipse cx="24" cy="69" rx="6.5" ry="9" fill="#8C5C38"/>
-      <ellipse cx="76" cy="69" rx="6.5" ry="9" fill="#8C5C38"/>
-      <rect x="26" y="51" width="48" height="44" rx="16" fill="url(#furG)"/>
-      <ellipse cx="50" cy="77" rx="14" ry="15" fill="#EBD1AD" opacity=".8"/>
-      <ellipse cx="40" cy="93" rx="8" ry="5" fill="#6B4529"/>
-      <ellipse cx="60" cy="93" rx="8" ry="5" fill="#6B4529"/>
-      <circle cx="21" cy="23" r="9" fill="#8C5C38"/><circle cx="21" cy="23" r="4.3" fill="#6B4529"/>
-      <circle cx="79" cy="23" r="9" fill="#8C5C38"/><circle cx="79" cy="23" r="4.3" fill="#6B4529"/>
-      <ellipse cx="50" cy="37" rx="29" ry="27" fill="url(#furG)"
-               stroke="#4D301C" stroke-opacity=".25" stroke-width="1.2"/>
-      <rect x="14" y="24" width="72" height="12" rx="5" fill="#0F5C63"/>
-      <path d="M20 31.5 A30 30 0 0 1 80 31.5 A4 4 0 0 1 76 35.5 H24 A4 4 0 0 1 20 31.5 Z"
-            fill="url(#capG)"/>
-      <circle cx="50" cy="2.6" r="2.2" fill="#0F5C63"/>
-      <text x="50" y="21" text-anchor="middle" font-size="14" font-weight="800"
-            fill="#fff" font-family="inherit">bob</text>
-      <ellipse cx="32" cy="46" rx="6.5" ry="4.3" fill="#ED8C7A" opacity=".45"/>
-      <ellipse cx="68" cy="46" rx="6.5" ry="4.3" fill="#ED8C7A" opacity=".45"/>
-      <g transform="translate(39,35)"><g class="eyeb">
-        <circle r="7.5" fill="#fff" stroke="#4D301C" stroke-opacity=".18" stroke-width=".6"/>
-        <circle cy="3" r="3.75" fill="#291A12"/>
-        <circle class="glint" cx="-1.8" cy="1.2" r="1.2" fill="#fff" opacity=".9"/>
-      </g></g>
-      <g transform="translate(61,35)"><g class="eyeb">
-        <circle r="7.5" fill="#fff" stroke="#4D301C" stroke-opacity=".18" stroke-width=".6"/>
-        <circle cy="3" r="3.75" fill="#291A12"/>
-        <circle class="glint" cx="-1.8" cy="1.2" r="1.2" fill="#fff" opacity=".9"/>
-      </g></g>
-      <ellipse cx="50" cy="48" rx="20" ry="15" fill="#EBD1AD"/>
-      <rect x="44" y="38.5" width="12" height="8" rx="3" fill="#472E21"/>
-      <rect x="43.5" y="48" width="6.2" height="12" rx="1.4" fill="#FCFAED"
-            stroke="#4D301C" stroke-opacity=".18" stroke-width=".5"/>
-      <rect x="50.3" y="48" width="6.2" height="12" rx="1.4" fill="#FCFAED"
-            stroke="#4D301C" stroke-opacity=".18" stroke-width=".5"/>
-      <g id="mug" transform="translate(80,60) rotate(8)">
-        <path d="M2 -8 q1.6 -4 0 -7 M7 -8 q1.6 -4 0 -7" stroke="#a1a1aa"
-              stroke-width="1.8" fill="none" stroke-linecap="round"/>
-        <rect x="-3" y="-6" width="15" height="15" rx="3" fill="#bf5721"/>
-        <path d="M12 -3 q7 4 0 9" stroke="#bf5721" stroke-width="3" fill="none"/>
+      <g id="zzz"><text x="40" y="16">z</text><text x="47" y="10">z</text><text x="54" y="5">z</text></g>
+      <g transform="translate(5,3) scale(0.5)">
+        <!-- Whole Bob behind: his body sits inside the ring. -->
+        <ellipse cx="24" cy="69" rx="6.5" ry="9" fill="#8C5C38"/>
+        <ellipse cx="76" cy="69" rx="6.5" ry="9" fill="#8C5C38"/>
+        <rect x="26" y="51" width="48" height="44" rx="16" fill="url(#furG)"/>
+        <ellipse cx="50" cy="77" rx="14" ry="15" fill="#EBD1AD" opacity=".8"/>
+        <ellipse class="feet" cx="40" cy="93" rx="8" ry="5" fill="#6B4529"/>
+        <ellipse class="feet" cx="60" cy="93" rx="8" ry="5" fill="#6B4529"/>
+        <!-- Chunky ring over the body, around his waist — feet stick out
+             below its bottom arc. Hidden while he sits dry on the edge. -->
+        <ellipse class="ring" cx="50" cy="58" rx="46" ry="24" fill="none"
+                 stroke="#F07048" stroke-width="20"/>
+        <ellipse class="ring" cx="50" cy="58" rx="46" ry="24" fill="none" opacity=".92"
+                 stroke="#fff" stroke-width="20" stroke-dasharray="28.2 28.2"/>
+        <!-- Head and face again, in front of the ring's top arc. -->
+        <circle cx="21" cy="23" r="9" fill="#8C5C38"/><circle cx="21" cy="23" r="4.3" fill="#6B4529"/>
+        <circle cx="79" cy="23" r="9" fill="#8C5C38"/><circle cx="79" cy="23" r="4.3" fill="#6B4529"/>
+        <ellipse cx="50" cy="37" rx="29" ry="27" fill="url(#furG)"
+                 stroke="#4D301C" stroke-opacity=".25" stroke-width="1.2"/>
+        <rect x="14" y="24" width="72" height="12" rx="5" fill="#0F5C63"/>
+        <path d="M20 31.5 A30 30 0 0 1 80 31.5 A4 4 0 0 1 76 35.5 H24 A4 4 0 0 1 20 31.5 Z"
+              fill="url(#capG)"/>
+        <circle cx="50" cy="2.6" r="2.2" fill="#0F5C63"/>
+        <text x="50" y="21" text-anchor="middle" font-size="14" font-weight="800"
+              fill="#fff" font-family="inherit">bob</text>
+        <ellipse cx="32" cy="46" rx="6.5" ry="4.3" fill="#ED8C7A" opacity=".45"/>
+        <ellipse cx="68" cy="46" rx="6.5" ry="4.3" fill="#ED8C7A" opacity=".45"/>
+        <g transform="translate(39,35)"><g class="eyeb">
+          <circle r="7.5" fill="#fff" stroke="#4D301C" stroke-opacity=".18" stroke-width=".6"/>
+          <circle cy="3" r="3.75" fill="#291A12"/>
+          <circle class="glint" cx="-1.8" cy="1.2" r="1.2" fill="#fff" opacity=".9"/>
+        </g></g>
+        <g transform="translate(61,35)"><g class="eyeb">
+          <circle r="7.5" fill="#fff" stroke="#4D301C" stroke-opacity=".18" stroke-width=".6"/>
+          <circle cy="3" r="3.75" fill="#291A12"/>
+          <circle class="glint" cx="-1.8" cy="1.2" r="1.2" fill="#fff" opacity=".9"/>
+        </g></g>
+        <ellipse cx="50" cy="48" rx="20" ry="15" fill="#EBD1AD"/>
+        <rect x="44" y="38.5" width="12" height="8" rx="3" fill="#472E21"/>
+        <rect x="43.5" y="48" width="6.2" height="12" rx="1.4" fill="#FCFAED"
+              stroke="#4D301C" stroke-opacity=".18" stroke-width=".5"/>
+        <rect x="50.3" y="48" width="6.2" height="12" rx="1.4" fill="#FCFAED"
+              stroke="#4D301C" stroke-opacity=".18" stroke-width=".5"/>
       </g>
   </svg>
-  <div class="hc">
-    <p id="hlabel">Hello</p>
-    <p id="big" class="mono">–</p>
-    <p id="line2" class="mono"></p>
-    <p id="line3" class="mono"></p>
-  </div>
-</section>
+  <svg id="sleeper" viewBox="0 0 64 40" aria-hidden="true">
+    <g class="zs"><text x="46" y="10">z</text><text x="52" y="6">z</text><text x="58" y="3">z</text></g>
+    <ellipse cx="8" cy="33" rx="8" ry="4" fill="#6B4529" transform="rotate(-10 8 33)"/>
+    <g class="chest">
+      <ellipse cx="26" cy="29" rx="17" ry="10" fill="url(#furG)"/>
+      <ellipse cx="24" cy="32" rx="9" ry="5" fill="#EBD1AD" opacity=".8"/>
+    </g>
+    <ellipse cx="15" cy="36.5" rx="4.5" ry="2.5" fill="#6B4529"/>
+    <circle cx="45" cy="27" r="11" fill="url(#furG)"/>
+    <circle cx="42" cy="17" r="3.2" fill="#8C5C38"/><circle cx="42" cy="17" r="1.6" fill="#6B4529"/>
+    <g transform="rotate(-22 41 15)">
+      <rect x="33" y="10" width="16" height="9" rx="4" fill="url(#capG)"/>
+      <rect x="45" y="15.5" width="9" height="3" rx="1.5" fill="#0F5C63"/>
+    </g>
+    <path d="M47.5 25 q2.2 1.8 4.4 0" stroke="#291A12" stroke-width="1.4"
+          fill="none" stroke-linecap="round"/>
+    <ellipse cx="46" cy="30" rx="2.4" ry="1.5" fill="#ED8C7A" opacity=".45"/>
+    <ellipse cx="54" cy="29" rx="5.5" ry="4.5" fill="#EBD1AD"/>
+    <rect x="56" y="24.5" width="3.4" height="2.6" rx="1" fill="#472E21"/>
+    <rect x="53" y="31.5" width="2.4" height="3.8" rx="0.8" fill="#FCFAED"/>
+  </svg>
+</div>
 
 <section class="grid3">
   <div class="stat"><p class="k">Worked</p><p class="v mono" id="sworked">–</p></div>
@@ -281,12 +326,15 @@ const PAL = {
 };
 // Fresh wave character on every load, so no two sloshes look alike.
 const SEED = { p0: Math.random() * Math.PI * 2, freq: 1.9 + Math.random() * 0.7,
-               ap: Math.random() * Math.PI * 2 };
+               ap: Math.random() * Math.PI * 2,
+               o2: Math.random() * Math.PI * 2, o3: Math.random() * Math.PI * 2 };
 const lerp = (a, b, f) => a + (b - a) * f;
 const mixc = (a, b, f) =>
   "rgb(" + a.map((v, i) => Math.round(lerp(v, b[i], f))).join(",") + ")";
 const levelFrac = () => snap && snap.target > 0 ? Math.min(1, workedNow() / snap.target) : 0;
 let waveStarted = false, waveDone = reduceMotion, heroT0 = 0, lastFrame = 0;
+// Displayed level chases the live one, so entry edits glide instead of snap.
+let shown = 0;
 
 function paintWater(level, amp, phase, asym) {
   asym = asym || 0;
@@ -295,26 +343,49 @@ function paintWater(level, amp, phase, asym) {
   for (let i = 0; i < 3; i++)
     $("ws" + i).setAttribute("stop-color", mixc(pal.blue[i], pal.teal[i], f));
   const l = level * 100;
-  // `asym` blends in a second harmonic so the arrival slosh leans to one
-  // side instead of being a clean symmetric sine.
-  const wave = th => amp * (Math.sin(th) + asym * Math.sin(2 * th + SEED.ap));
-  let d = "M0 0 Z";
+  // Three sine components with incommensurate wavelengths and speeds sum
+  // into an organic, never-quite-repeating edge; `asym` adds the lopsided
+  // slosh harmonic during the arrival.
+  const wave = u => {
+    const th = u * Math.PI * SEED.freq + phase;
+    let v = Math.sin(th)
+      + 0.55 * Math.sin(u * Math.PI * SEED.freq * 1.83 + phase * 1.31 + SEED.o2)
+      + 0.30 * Math.sin(u * Math.PI * SEED.freq * 3.10 + phase * 0.57 + SEED.o3);
+    v *= 0.54;
+    v += asym * Math.sin(2 * th + SEED.ap);
+    return amp * v;
+  };
+  let d = "M0 0 Z", edge = "";
   if (l > 0.1) {
-    d = "M0 0 L" + (l + wave(phase)).toFixed(2) + " 0";
-    for (let y = 5; y <= 100; y += 5)
-      d += " L" + (l + wave(y / 100 * Math.PI * SEED.freq + phase)).toFixed(2) + " " + y;
-    d += " L0 100 Z";
+    let pts = (l + wave(0)).toFixed(2) + " 0";
+    for (let y = 2.5; y <= 100; y += 2.5)
+      pts += " L" + (l + wave(y / 100)).toFixed(2) + " " + y;
+    d = "M0 0 L" + pts + " L0 100 Z";
+    edge = "M" + pts;
   }
   $("wpath").setAttribute("d", d);
-  // Edge light: same shape, a tight eased ramp into the waterline (a wide
-  // linear ramp reads as a hard band reaching too far into the water).
+  // Edge light: a tight, sharp gradient hugging the waterline plus a crisp
+  // rim stroked exactly along the edge — specular, not a soft blur.
   $("epath").setAttribute("d", d);
+  $("rim").setAttribute("d", edge);
   const glow = mixc(pal.gblue, pal.gteal, f);
-  const offs = [l - 10, l - 5, l - 2, l];
-  ["es0", "es1", "es2", "es3"].forEach((id, i) => {
+  $("rim").setAttribute("stroke", glow);
+  const offs = [l - 5, l - 1.4, l];
+  ["es0", "es1", "es2"].forEach((id, i) => {
     $(id).setAttribute("offset", (Math.max(0, offs[i]) / 100).toFixed(3));
     $(id).setAttribute("stop-color", glow);
   });
+  // Bob floats top-left, bobbing with the swell — until then he sits dry
+  // on the card's edge without the ring (not enough water to swim).
+  const dry = f < 0.15;
+  const asleepDry = dry && document.body.classList.contains("st-out");
+  $("buoy").classList.toggle("dry", dry);
+  $("buoy").style.display = asleepDry ? "none" : "block";
+  $("sleeper").style.display = asleepDry ? "block" : "none";
+  $("buoy").style.transform = dry
+    ? "none"
+    : "translateY(" + (Math.sin(phase * 1.2) * 2.5 + 6).toFixed(1) + "px) rotate("
+      + (Math.sin(phase * 0.9) * 5).toFixed(1) + "deg)";
 }
 
 function waveFrame(nowMs) {
@@ -329,8 +400,11 @@ function waveFrame(nowMs) {
   const sustain = levelFrac() < 1 ? 1.1 : 0;
   const amp = sustain + (3.4 - sustain) * decay * (0.3 + 0.7 * eased);
   const phase = SEED.p0 + 1.5 * t + (3.3 - 1.5) * 3 * (1 - decay);
-  paintWater(levelFrac() * eased, amp, phase, 0.55 * Math.exp(-t / 2.5));
-  if (sustain > 0 || amp > 0.04) requestAnimationFrame(waveFrame);
+  const target = levelFrac() * eased;
+  shown += (target - shown) * 0.12;
+  if (Math.abs(target - shown) < 0.0006) shown = target;
+  paintWater(shown, amp, phase, 0.55 * Math.exp(-t / 2.5));
+  if (sustain > 0 || amp > 0.04 || shown !== target) requestAnimationFrame(waveFrame);
   else waveDone = true;
 }
 // Repaint the settled water when the phone flips light/dark.
@@ -438,12 +512,14 @@ function tick() {
     $("sleft").textContent = "–";
   }
   if (waveDone) {
-    if (levelFrac() < 1 && !reduceMotion) {
-      // Dropped back under 100% (e.g. target changed) — resume the swell.
+    if ((levelFrac() < 1 || Math.abs(levelFrac() - shown) > 0.002) && !reduceMotion) {
+      // Under 100% again or the level moved (entry edit) — resume the wave
+      // loop, which glides `shown` toward the live level.
       waveDone = false;
       requestAnimationFrame(waveFrame);
     } else {
-      paintWater(levelFrac(), 0, 0);
+      shown = levelFrac();
+      paintWater(shown, 0, 0);
     }
   }
   const bl = $("breakline");

@@ -18,15 +18,31 @@ enum AttendanceLogic {
         return .clockedOut
     }
 
+    /// A clocked-out gap this long between work entries interrupts the
+    /// uninterrupted-work stretch, exactly like a logged break — clocking out
+    /// at 11:00 and back in at 23:00 starts a fresh run. Short accidental
+    /// out/in blips (under 15 min) don't reset the counter. (This is only
+    /// about the continuity counter; whether a pause satisfies the break
+    /// guideline is `breakShortfall`'s stricter `required` minimum.)
+    static let gapResets: TimeInterval = 15 * 60
+
     /// Start of the current uninterrupted work stretch: the end of the most
-    /// recent completed break, or — if there were no breaks — the first
-    /// clock-in of the day. (The caller decides *whether* we're working;
-    /// this only answers *since when*.)
+    /// recent completed break, the far side of the most recent clocked-out
+    /// gap, or — failing both — the first clock-in of the day. (The caller
+    /// decides *whether* we're working; this only answers *since when*.)
     static func stretchStart(entries: [AttendanceEntry]) -> Date? {
-        let works = entries.filter { $0.kind == .work }
-        guard let firstWork = works.map(\.start).min() else { return nil }
+        let works = entries.filter { $0.kind == .work }.sorted { $0.start < $1.start }
+        guard let first = works.first else { return nil }
+        var runStart = first.start
+        var runEnd = first.end ?? .distantFuture
+        for w in works.dropFirst() {
+            if w.start.timeIntervalSince(runEnd) >= gapResets {
+                runStart = w.start
+            }
+            runEnd = max(runEnd, w.end ?? .distantFuture)
+        }
         let lastBreakEnd = entries.compactMap { $0.kind == .breakTime ? $0.end : nil }.max()
-        return max(firstWork, lastBreakEnd ?? firstWork)
+        return max(runStart, lastBreakEnd ?? runStart)
     }
 
     /// Total time worked today: work periods minus any overlapping breaks.
@@ -103,14 +119,81 @@ enum AttendanceLogic {
         for entry in sorted {
             if entry.kind == .work {
                 let end = entry.end ?? now
-                if runStart == nil { runStart = entry.start; runEnd = end }
-                else { runEnd = max(runEnd, end) }
+                if runStart == nil {
+                    runStart = entry.start; runEnd = end
+                } else if entry.start.timeIntervalSince(runEnd) >= gapResets {
+                    // A clocked-out gap interrupts the run like a break does.
+                    consider(); runStart = entry.start; runEnd = end
+                } else {
+                    runEnd = max(runEnd, end)
+                }
             } else {
                 consider(); runStart = nil
             }
         }
         consider()
         return best
+    }
+
+    /// HiBob's "Break not taken or doesn't meet guidelines": once the day's
+    /// worked time passes `threshold`, at least `required` of pause has to be
+    /// logged — and a single pause only counts if it is itself at least
+    /// `required` long (the tenant's minimum break, the same value as the
+    /// break-length setting), so two 15-minute breaks don't satisfy a
+    /// 30-minute rule. Clocked-out gaps qualify like breaks. Returns how much
+    /// pause is missing, or nil when the day complies (or hasn't reached the
+    /// threshold yet).
+    static func breakShortfall(entries: [AttendanceEntry], threshold: TimeInterval,
+                               required: TimeInterval, now: Date) -> TimeInterval? {
+        guard required > 0,
+              workedToday(entries: entries, now: now) > threshold else { return nil }
+        let sorted = entries.sorted { $0.start < $1.start }
+        var pause: TimeInterval = 0
+        var lastEnd: Date?
+        for e in sorted {
+            if let le = lastEnd, e.start.timeIntervalSince(le) >= required {
+                pause += e.start.timeIntervalSince(le)
+            }
+            if e.kind == .breakTime {
+                let len = (e.end ?? now).timeIntervalSince(e.start)
+                if len >= required { pause += len }
+            }
+            lastEnd = max(lastEnd ?? .distantPast, e.end ?? now)
+        }
+        return pause >= required ? nil : required - pause
+    }
+
+    /// Fix a break-guideline shortfall: grow the day's longest closed break by
+    /// the missing amount (later entries stay put — `normalized` with the
+    /// break as anchor reflows the neighbours), or, with no closed break to
+    /// grow, splice a fresh `required`-long break into the middle of the
+    /// longest work entry. Returns nil when the day already complies.
+    static func meetingBreakGuideline(entries: [AttendanceEntry], threshold: TimeInterval,
+                                      required: TimeInterval, now: Date) -> [AttendanceEntry]? {
+        guard let missing = breakShortfall(entries: entries, threshold: threshold,
+                                           required: required, now: now) else { return nil }
+        var out = entries.sorted { $0.start < $1.start }
+        if let idx = out.indices
+            .filter({ out[$0].kind == .breakTime && out[$0].end != nil })
+            .max(by: { out[$0].end!.timeIntervalSince(out[$0].start)
+                     < out[$1].end!.timeIntervalSince(out[$1].start) }) {
+            // A break that already qualifies just grows by the shortfall. A
+            // too-short one contributed nothing, so its whole new length must
+            // cover the shortfall — and be at least `required` to count.
+            let len = out[idx].end!.timeIntervalSince(out[idx].start)
+            let targetLen = len >= required ? len + missing : max(missing, required)
+            out[idx].end = out[idx].start.addingTimeInterval(targetLen)
+            return normalized(out, anchor: out[idx].id)
+        }
+        guard let longest = out.indices
+            .filter({ out[$0].kind == .work })
+            .max(by: { (out[$0].end ?? now).timeIntervalSince(out[$0].start)
+                     < (out[$1].end ?? now).timeIntervalSince(out[$1].start) })
+        else { return nil }
+        let w = out[longest]
+        let mid = w.start.addingTimeInterval(((w.end ?? now).timeIntervalSince(w.start) - required) / 2)
+        guard mid > w.start else { return nil }
+        return insertingBreak(into: out, start: mid, end: mid.addingTimeInterval(required))
     }
 
     /// Rebuild the day's entries with a break spliced into the work entry that

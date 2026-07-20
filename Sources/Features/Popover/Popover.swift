@@ -31,6 +31,9 @@ struct PopoverRootView: View {
                         actionButtons(now: context.date)
                         if prefs.popoverShowWarnings {
                             if state.overMaxNonBreak { missingBreakWarning }
+                            if !state.overMaxNonBreak, let short = state.breakGuidelineShortfall {
+                                shortBreakWarning(short)
+                            }
                             if state.overDailyMax { overDailyMaxWarning }
                         }
                         if prefs.popoverShowTimeline, !state.entries.isEmpty {
@@ -49,6 +52,7 @@ struct PopoverRootView: View {
                     .padding(.vertical, 12)
                     .animation(Motion.standard, value: state.entries)
                     .animation(Motion.standard, value: state.overMaxNonBreak)
+                    .animation(Motion.standard, value: state.breakGuidelineShortfall)
                     .animation(Motion.standard, value: state.overDailyMax)
                     .animation(Motion.standard, value: state.queue)
                 }
@@ -293,6 +297,41 @@ struct PopoverRootView: View {
         .transition(.bobBanner)
     }
 
+    /// Breaks logged but too short to count ("doesn't meet guidelines").
+    private func shortBreakWarning(_ short: TimeInterval) -> some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10))
+                Text("Breaks too short — \(Fmt.hm(short)) more needed")
+                    .font(.system(size: 11, weight: .semibold))
+                Spacer()
+            }
+            .foregroundStyle(Color.bobOrange)
+            Button {
+                state.fixBreakGuideline()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "wand.and.stars").font(.system(size: 11, weight: .bold))
+                    Text("Extend break to \(Prefs.shared.breakMinutes) min")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(Color.bobOrange)
+                .frame(maxWidth: .infinity).frame(height: 30)
+                .background(Capsule().fill(Color.bobOrange.opacity(0.14)))
+                .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.4), lineWidth: 0.7))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(state.busy)
+            .fastTooltip("Only breaks of \(Prefs.shared.breakMinutes) min or more count toward the guideline.")
+        }
+        .padding(9)
+        .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.bobOrange.opacity(0.28), lineWidth: 0.7))
+        .transition(.bobBanner)
+    }
+
     /// Red and actionless (you can't un-work hours) — a nudge to clock out.
     private var overDailyMaxWarning: some View {
         HStack(spacing: 6) {
@@ -311,12 +350,39 @@ struct PopoverRootView: View {
 
     // MARK: - Worked total (prominent, above the buttons)
 
-    /// The same liquid hero as the dashboard, sized for the popover.
+    /// The same liquid hero as the dashboard, sized for the popover — with
+    /// a smaller Bob straddling its top edge in his swim ring.
     private func workedHeader(now: Date) -> some View {
         let v = TodayVals(state, now: now)
-        return LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                          compact: true)
-            .frame(height: 100)
+        return ZStack(alignment: .topLeading) {
+            LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
+                       compact: true)
+                .frame(height: 100)
+                .padding(.top, 30)
+                .overlay(alignment: .bottomTrailing) {
+                    // Dry land: Bob stands bottom-right inside the hero —
+                    // or lies asleep in profile when clocked out.
+                    if v.fraction < 0.15 {
+                        Group {
+                            if state.clockState == .clockedOut {
+                                SleepingBob().frame(width: 62, height: 39)
+                            } else {
+                                AnimatedBob().frame(width: 40, height: 40)
+                            }
+                        }
+                        .padding(.trailing, 12)
+                        .padding(.bottom, 8)
+                        .transition(.bobReplace)
+                    }
+                }
+            // Swimming once the water is ~15% deep, slightly submerged.
+            if v.fraction >= 0.15 {
+                BuoyBob(sleeping: state.clockState == .clockedOut, size: 44)
+                    .padding(.top, 12)
+                    .padding(.leading, 14)
+                    .transition(.bobReplace)
+            }
+        }
     }
 
     // MARK: - Today's timeline

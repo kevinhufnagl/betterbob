@@ -29,8 +29,12 @@ struct WindowVisibility: NSViewRepresentable {
             super.viewDidMoveToWindow()
             observers.forEach(NotificationCenter.default.removeObserver)
             observers = []
-            report()
+            // Detached: report nothing. SwiftUI transitions spawn duplicate
+            // backing views, and a dying copy detaching last must not veto
+            // the live, attached one — CPU safety is covered by the window
+            // close/occlusion events on the attached tracker.
             guard let window else { return }
+            report()
             let names: [Notification.Name] = [
                 NSWindow.didChangeOcclusionStateNotification,
                 NSWindow.didMiniaturizeNotification,

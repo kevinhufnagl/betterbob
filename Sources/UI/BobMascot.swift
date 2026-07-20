@@ -198,15 +198,15 @@ struct AnimatedBob: View {
     var lookAt: CGSize? = nil
     var sleeping = false
     var palette = BobPalette()
-    // Only animate while on screen — a retained-but-hidden view (a closed
-    // popover, but also a closed-yet-retained window) would otherwise keep
-    // the 24fps clock running and burn CPU idle.
-    @State private var active = false
+    // Only animate while the window is really visible — a retained-but-
+    // hidden view (closed popover or closed-yet-retained window) must not
+    // keep the 24fps clock running. Gated on the window tracker alone:
+    // onAppear/onDisappear misfire during pane transitions.
     @State private var windowVisible = true
 
     var body: some View {
         Group {
-            if active && windowVisible {
+            if windowVisible {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
                     let t = ctx.date.timeIntervalSinceReferenceDate
                     if sleeping {
@@ -232,8 +232,6 @@ struct AnimatedBob: View {
             }
         }
         .trackWindowVisibility { windowVisible = $0 }
-        .onAppear { active = true }
-        .onDisappear { active = false }
     }
 
     /// Three z's drifting up-right on staggered phases of one shared cycle.
@@ -253,6 +251,111 @@ struct AnimatedBob: View {
     }
 }
 
+/// Bob asleep on his side, in profile: lying flat with his tail out the
+/// back, cap still on, one closed eye — perfectly still except his chest
+/// slowly rising and falling. Draw in a 1.6:1 frame.
+struct SleepingBob: View {
+    var palette = BobPalette()
+    @State private var windowVisible = true
+
+    var body: some View {
+        Group {
+            if windowVisible && !Motion.reduce {
+                TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { ctx in
+                    let t = ctx.date.timeIntervalSinceReferenceDate
+                    content(breathe: 1 + 0.05 * (0.5 + 0.5 * sin(t * 0.75)))
+                        .overlay(alignment: .topTrailing) { DriftingZs().offset(x: 0, y: 4) }
+                }
+            } else {
+                content(breathe: 1)
+            }
+        }
+        .trackWindowVisibility { windowVisible = $0 }
+    }
+
+    private func content(breathe: Double) -> some View {
+        GeometryReader { g in
+            let s = min(g.size.width / 1.6, g.size.height)
+            let w = s * 1.6
+            ZStack {
+                // Paddle tail, flat on the ground behind him.
+                Ellipse().fill(palette.furDark)
+                    .frame(width: w * 0.24, height: s * 0.14)
+                    .rotationEffect(.degrees(-10))
+                    .position(x: w * 0.10, y: s * 0.86)
+                // Body and belly breathe together, anchored at the ground so
+                // only the chest rises.
+                ZStack {
+                    Ellipse().fill(LinearGradient(colors: [palette.furLight, palette.fur],
+                                                  startPoint: .top, endPoint: .bottom))
+                        .frame(width: w * 0.54, height: s * 0.54)
+                    Ellipse().fill(palette.muzzle.opacity(0.8))
+                        .frame(width: w * 0.28, height: s * 0.26)
+                        .offset(x: -w * 0.02, y: s * 0.10)
+                }
+                .scaleEffect(x: 1, y: breathe, anchor: .bottom)
+                .position(x: w * 0.40, y: s * 0.70)
+                // Rear foot poking out front.
+                Ellipse().fill(palette.furDark)
+                    .frame(width: w * 0.13, height: s * 0.10)
+                    .position(x: w * 0.24, y: s * 0.92)
+                // Head resting on the ground.
+                Circle().fill(LinearGradient(colors: [palette.furLight, palette.fur],
+                                             startPoint: .top, endPoint: .bottom))
+                    .frame(width: s * 0.58, height: s * 0.58)
+                    .position(x: w * 0.72, y: s * 0.66)
+                // Ear.
+                ZStack {
+                    Circle().fill(palette.fur)
+                    Circle().fill(palette.furDark)
+                        .frame(width: s * 0.08, height: s * 0.08)
+                }
+                .frame(width: s * 0.17, height: s * 0.17)
+                .position(x: w * 0.66, y: s * 0.40)
+                // Cap, slid back on the resting head.
+                ZStack {
+                    UnevenRoundedRectangle(topLeadingRadius: s * 0.14, bottomLeadingRadius: s * 0.03,
+                                           bottomTrailingRadius: s * 0.03, topTrailingRadius: s * 0.14,
+                                           style: .continuous)
+                        .fill(LinearGradient(colors: [palette.capBlue, palette.capBlue.opacity(0.88)],
+                                             startPoint: .top, endPoint: .bottom))
+                        .frame(width: s * 0.42, height: s * 0.22)
+                    RoundedRectangle(cornerRadius: s * 0.03, style: .continuous)
+                        .fill(palette.capDark)
+                        .frame(width: s * 0.30, height: s * 0.07)
+                        .offset(x: s * 0.14, y: s * 0.13)
+                }
+                .rotationEffect(.degrees(-22))
+                .position(x: w * 0.63, y: s * 0.36)
+                // Closed eye — a gentle downward curve.
+                Capsule().fill(palette.pupil)
+                    .frame(width: s * 0.14, height: s * 0.030)
+                    .rotationEffect(.degrees(8))
+                    .position(x: w * 0.76, y: s * 0.60)
+                // Blush.
+                Ellipse().fill(palette.blush.opacity(0.45))
+                    .frame(width: w * 0.09, height: s * 0.07)
+                    .position(x: w * 0.72, y: s * 0.72)
+                // Muzzle in profile, nose up front, one tooth.
+                Ellipse().fill(palette.muzzle)
+                    .frame(width: w * 0.16, height: s * 0.22)
+                    .position(x: w * 0.84, y: s * 0.72)
+                RoundedRectangle(cornerRadius: s * 0.02, style: .continuous)
+                    .fill(palette.nose)
+                    .frame(width: w * 0.05, height: s * 0.07)
+                    .position(x: w * 0.885, y: s * 0.62)
+                RoundedRectangle(cornerRadius: s * 0.012, style: .continuous)
+                    .fill(palette.teeth)
+                    .frame(width: w * 0.035, height: s * 0.10)
+                    .position(x: w * 0.845, y: s * 0.84)
+            }
+            .frame(width: w, height: s)
+            .position(x: g.size.width / 2, y: g.size.height / 2)
+        }
+        .aspectRatio(1.6, contentMode: .fit)
+    }
+}
+
 /// A friendly full-pane placeholder: a gently bouncing Bob with a title and a
 /// rotating playful caption, plus optional trailing content (buttons/spinner).
 struct BobPlaceholder<Trailing: View>: View {
@@ -262,7 +365,6 @@ struct BobPlaceholder<Trailing: View>: View {
     let sleeping: Bool
     let trailing: Trailing
 
-    @State private var active = false
     @State private var windowVisible = true
 
     init(title: String, lines: [String] = [], size: CGFloat = 96, sleeping: Bool = false,
@@ -273,7 +375,7 @@ struct BobPlaceholder<Trailing: View>: View {
 
     var body: some View {
         Group {
-            if active && windowVisible {
+            if windowVisible {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
                     let t = ctx.date.timeIntervalSinceReferenceDate
                     content(bounce: CGFloat(sin(t * 2.0)) * 4,
@@ -284,8 +386,6 @@ struct BobPlaceholder<Trailing: View>: View {
             }
         }
         .trackWindowVisibility { windowVisible = $0 }
-        .onAppear { active = true }
-        .onDisappear { active = false }
     }
 
     private func content(bounce: CGFloat, idx: Int) -> some View {

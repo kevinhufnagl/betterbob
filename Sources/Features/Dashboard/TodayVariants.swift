@@ -292,46 +292,54 @@ func slimBar(_ fraction: Double, tint: Color, height: CGFloat = 8) -> some View 
 
 // MARK: - Today (to-scale timeline)
 
-private struct BobCenterKey: PreferenceKey {
-    static var defaultValue: CGPoint = .zero
-    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) { value = nextValue() }
-}
-
 struct TodayTimeline: View {
     @ObservedObject var state: BobState
     @Environment(\.colorScheme) private var scheme
-    @State private var cursor: CGPoint? = nil
-    @State private var bobCenter: CGPoint = .zero
-
-    /// Where Bob's eyes should point, from the cursor relative to his face.
-    private var lookAt: CGSize? {
-        guard let c = cursor else { return nil }
-        let dx = c.x - bobCenter.x, dy = c.y - bobCenter.y
-        let d = max(1, hypot(dx, dy))
-        let m = min(1, d / 140)
-        return CGSize(width: dx / d * m, height: dy / d * m)
-    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let v = TodayVals(state, now: ctx.date)
             VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    AnimatedBob(lookAt: lookAt, sleeping: state.clockState == .clockedOut)
-                        .frame(width: 60, height: 60)
-                        .background(GeometryReader { g in
-                            let f = g.frame(in: .named("today"))
-                            Color.clear.preference(key: BobCenterKey.self,
-                                                   value: CGPoint(x: f.midX, y: f.midY))
-                        })
-                    Text(greetingText(state)).font(.system(size: 23, weight: .bold))
-                    Spacer()
-                    StatusPill(state: state)
+                // Bob straddles the hero's top edge: the ring floats on the
+                // waterline (the card's boundary), his head is out of the
+                // water above it, his body inside.
+                ZStack(alignment: .topLeading) {
+                    LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
+                               greeting: greetingText(state)) {
+                        HStack {
+                            Spacer()
+                            StatusPill(state: state)
+                        }
+                    } bottom: {
+                        EmptyView()
+                    }
+                    .frame(height: 200)
+                    .padding(.top, 48)
+                    .overlay(alignment: .bottomTrailing) {
+                        // Not enough water to swim — Bob stands bottom-right
+                        // on dry land inside the hero.
+                        if v.fraction < 0.15 {
+                            Group {
+                                if state.clockState == .clockedOut {
+                                    SleepingBob().frame(width: 86, height: 54)
+                                } else {
+                                    AnimatedBob().frame(width: 64, height: 64)
+                                }
+                            }
+                            .padding(.trailing, 18)
+                            .padding(.bottom, 12)
+                            .transition(.bobReplace)
+                        }
+                    }
+                    // Swimming once it's ~15% deep, straddling the top edge —
+                    // sitting a touch lower so he reads properly submerged.
+                    if v.fraction >= 0.15 {
+                        BuoyBob(sleeping: state.clockState == .clockedOut)
+                            .padding(.top, 14)
+                            .padding(.leading, 24)
+                            .transition(.bobReplace)
+                    }
                 }
-
-                LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                           saving: state.busy || !state.deletingEntries.isEmpty)
-                    .frame(height: 176)
 
                 Card {
                     VStack(alignment: .leading, spacing: 16) {
@@ -365,17 +373,18 @@ struct TodayTimeline: View {
 
                 if case .onBreak = state.clockState { breakBanner(ctx.date).transition(.bobBanner) }
                 if state.overMaxNonBreak { missingBreakBanner.transition(.bobBanner) }
+                if !state.overMaxNonBreak, let short = state.breakGuidelineShortfall {
+                    shortBreakBanner(short).transition(.bobBanner)
+                }
                 if state.overDailyMax { overDailyMaxBanner.transition(.bobBanner) }
 
                 EntriesTable(state: state)
             }
             .animation(Motion.standard, value: state.clockState)
             .animation(Motion.standard, value: state.overMaxNonBreak)
+            .animation(Motion.standard, value: state.breakGuidelineShortfall)
             .animation(Motion.standard, value: state.overDailyMax)
             .animation(Motion.standard, value: state.entries)
-            .coordinateSpace(name: "today")
-            .background(MouseTracker { cursor = $0 })
-            .onPreferenceChange(BobCenterKey.self) { bobCenter = $0 }
         }
     }
 
@@ -418,6 +427,33 @@ struct TodayTimeline: View {
             Spacer()
             Button { state.addMissingBreak() } label: {
                 Label("Add break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Capsule().fill(Color.bobOrange.opacity(0.18)))
+                    .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.45), lineWidth: 0.8))
+                    .foregroundStyle(Color.bobOrange)
+            }.buttonStyle(.plain).disabled(state.busy)
+        }
+        .padding(14)
+        .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.bobOrange.opacity(0.30), lineWidth: 0.8))
+    }
+
+    /// HiBob would flag this day as "Break not taken or doesn't meet
+    /// guidelines": breaks exist but are too short to count.
+    private func shortBreakBanner(_ short: TimeInterval) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars").font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.bobOrange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Breaks too short — \(Fmt.hm(short)) more needed")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Only breaks of \(Prefs.shared.breakMinutes) min or more count toward the guideline. Extend a break — clock-in/out stay the same.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { state.fixBreakGuideline() } label: {
+                Label("Extend break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 12).frame(height: 30)
                     .background(Capsule().fill(Color.bobOrange.opacity(0.18)))
                     .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.45), lineWidth: 0.8))
@@ -499,21 +535,22 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     let worked: TimeInterval
     let target: TimeInterval
     var breakTotal: TimeInterval = 0
-    var saving = false
     /// Smaller type and padding for the popover.
     var compact = false
+    /// Shown above the numbers, like the phone page's greeting line.
+    var greeting: String?
     var cornerRadius: CGFloat = 16
     let top: Top
     let bottom: Bottom
 
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
-         saving: Bool = false, compact: Bool = false, cornerRadius: CGFloat = 16,
+         compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
         self.worked = worked
         self.target = target
         self.breakTotal = breakTotal
-        self.saving = saving
         self.compact = compact
+        self.greeting = greeting
         self.cornerRadius = cornerRadius
         self.top = top()
         self.bottom = bottom()
@@ -529,9 +566,25 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     @State private var seedPhase = Double.random(in: 0..<(2 * .pi))
     @State private var seedFreq = Double.random(in: 1.9...2.6)
     @State private var seedAsymPhase = Double.random(in: 0..<(2 * .pi))
+    @State private var seedDetail2 = Double.random(in: 0..<(2 * .pi))
+    @State private var seedDetail3 = Double.random(in: 0..<(2 * .pi))
+    /// Eases the waterline toward a changed fraction (an entry edit moves the
+    /// level by a lot at once) instead of snapping. Nil while tracking live.
+    @State private var levelAnim: (from: Double, to: Double, start: Date)?
 
     private var fraction: Double { target > 0 ? min(1, worked / target) : 0 }
     private var percent: Int { target > 0 ? Int((worked / target * 100).rounded()) : 0 }
+
+    /// The level to draw: mid-animation it eases from→to; otherwise the live
+    /// fraction (also after an animation finishes, so second-by-second creep
+    /// never drifts behind).
+    private func displayedFraction(at date: Date) -> Double {
+        guard let anim = levelAnim else { return fraction }
+        let p = date.timeIntervalSince(anim.start) / 0.9
+        guard p < 1 else { return fraction }
+        let eased = 1 - pow(1 - max(0, p), 3)
+        return anim.from + (anim.to - anim.from) * eased
+    }
 
     // The water starts cold blue and settles into the brand teal as the day
     // fills — a slow shift driven by the fraction. Dark mode is deep and
@@ -562,26 +615,22 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     private var ink: Color { dark ? .white : Color(red: 0.06, green: 0.20, blue: 0.24) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 8 : 14) {
+        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             top.foregroundStyle(ink)
             Spacer(minLength: compact ? 4 : 8)
             VStack(alignment: .leading, spacing: 2) {
-                // Worked time is the headline; the percentage sits under it.
-                HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    Text(Fmt.hm(worked))
-                        .font(.system(size: compact ? 30 : 44, weight: .heavy, design: .rounded))
-                        .contentTransition(.numericText())
-                        .animation(Motion.numeric, value: Fmt.hm(worked))
-                        .foregroundStyle(ink)
-                    if saving {
-                        HStack(spacing: 5) {
-                            ProgressView().controlSize(.small).scaleEffect(0.7).tint(ink)
-                            Text("Saving…").font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(ink.opacity(0.8))
-                        }
-                        .transition(.opacity)
-                    }
+                if let greeting, !compact {
+                    Text(greeting)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(ink.opacity(0.75))
+                        .padding(.bottom, 2)
                 }
+                // Worked time is the headline; the percentage sits under it.
+                Text(Fmt.hm(worked))
+                    .font(.system(size: compact ? 30 : 44, weight: .heavy, design: .rounded))
+                    .contentTransition(.numericText())
+                    .animation(Motion.numeric, value: Fmt.hm(worked))
+                    .foregroundStyle(ink)
                 Text(target > 0 ? "\(percent)% of \(Fmt.hm(target))" : "worked today")
                     .font(.system(size: compact ? 11.5 : 13, weight: .semibold))
                     .foregroundStyle(ink.opacity(0.92))
@@ -604,7 +653,8 @@ struct LiquidHero<Top: View, Bottom: View>: View {
                     // A finished day settles into a still, straight edge; an
                     // unfinished one keeps a small standing wave going after
                     // the arrival slosh dies down.
-                    let settled = fraction >= 1
+                    let animating = levelAnim.map { Date().timeIntervalSince($0.start) < 0.9 } ?? false
+                    let settled = fraction >= 1 && !animating
                         && (appearedAt.map { Date().timeIntervalSince($0) > 14 } ?? true)
                     if Motion.reduce || settled || !windowVisible {
                         water(level: fraction, amplitude: 0, phase: 0)
@@ -622,20 +672,38 @@ struct LiquidHero<Top: View, Bottom: View>: View {
                             let sustain: CGFloat = fraction < 1 ? 3.5 : 0
                             let amp = sustain + (11 - sustain) * decay * (0.3 + 0.7 * eased)
                             let phase = seedPhase + 1.5 * t + (3.3 - 1.5) * 3.0 * (1 - decay)
-                            water(level: fraction * eased, amplitude: amp, phase: phase,
+                            water(level: displayedFraction(at: ctx.date) * eased,
+                                  amplitude: amp, phase: phase,
                                   asym: 0.55 * exp(-t / 2.5))
                         }
                     }
                 }
             }
         }
-        .animation(Motion.quick, value: saving)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay {
             if cornerRadius > 0 {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(dark ? Color.white.opacity(0.09) : Color.black.opacity(0.08),
                                   lineWidth: 0.6)
+            }
+        }
+        .onChange(of: fraction) { old, new in
+            guard !Motion.reduce else { return }
+            let now = Date()
+            if let anim = levelAnim, now.timeIntervalSince(anim.start) < 0.9 {
+                // Mid-glide: redirect only if the destination itself moved,
+                // continuing from the currently displayed position.
+                guard abs(new - anim.to) > 0.005 else { return }
+                levelAnim = (from: displayedFraction(at: now), to: new, start: now)
+            } else {
+                // No glide (or a finished one, whose displayed value tracks
+                // the live fraction again — comparing against `new` there
+                // would always read as zero delta and skip the ease).
+                // Deadband: the per-second tick creeps invisibly on its own —
+                // only real jumps (entry edits, break changes) get the ease.
+                guard abs(new - old) > 0.005 else { return }
+                levelAnim = (from: old, to: new, start: now)
             }
         }
         .trackWindowVisibility { visible in
@@ -664,30 +732,32 @@ struct LiquidHero<Top: View, Bottom: View>: View {
         }
     }
 
-    /// The fill plus its edge light. The light is a second fill of the same
-    /// wave shape, brightening toward the waterline — clipped by the wave it
-    /// hugs the sloshing edge exactly instead of reading as a blurred oval.
-    /// Explicit ZStack: a bare two-view tuple inside TimelineView stacks
+    /// The fill plus its edge light: a tight, sharp gradient hugging the
+    /// waterline (clipped by the wave itself) and a crisp rim line stroked
+    /// exactly along the edge — a specular highlight, not a soft blur.
+    /// Explicit ZStack: a bare view tuple inside TimelineView stacks
     /// vertically instead of overlapping.
     private func water(level: Double, amplitude: CGFloat, phase: Double,
                        asym: Double = 0) -> some View {
-        let shape = WaterShape(level: level, amplitude: amplitude, phase: phase, asym: asym,
-                               freq: seedFreq, asymPhase: seedAsymPhase)
+        let field = WaveField(level: level, amplitude: amplitude, phase: phase, asym: asym,
+                              freq: seedFreq, asymPhase: seedAsymPhase,
+                              detail2: seedDetail2, detail3: seedDetail3)
+        let shape = WaterShape(field: field)
         return ZStack(alignment: .topLeading) {
             shape.fill(waterGradient)
             if level > 0.02 {
-                // Tight, eased ramp: barely-there until close to the edge,
-                // building smoothly — a wide linear ramp read as a hard band.
                 let edge = min(1, level)
                 shape.fill(LinearGradient(
                     gradient: Gradient(stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: glowColor.opacity(0), location: max(0, edge - 0.10)),
-                        .init(color: glowColor.opacity(0.10), location: max(0.001, edge - 0.05)),
-                        .init(color: glowColor.opacity(0.24), location: max(0.002, edge - 0.02)),
-                        .init(color: glowColor.opacity(0.45), location: max(0.003, edge)),
+                        .init(color: glowColor.opacity(0), location: max(0, edge - 0.05)),
+                        .init(color: glowColor.opacity(0.14), location: max(0.001, edge - 0.014)),
+                        .init(color: glowColor.opacity(0.50), location: max(0.002, edge)),
                     ]),
                     startPoint: .leading, endPoint: .trailing))
+                WaterEdgeShape(field: field)
+                    .stroke(glowColor.opacity(0.9),
+                            style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -709,43 +779,169 @@ struct LiquidHero<Top: View, Bottom: View>: View {
 extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
     /// Slot-less hero — the popover's compact variant.
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
-         saving: Bool = false, compact: Bool = false, cornerRadius: CGFloat = 16) {
-        self.init(worked: worked, target: target, breakTotal: breakTotal, saving: saving,
-                  compact: compact, cornerRadius: cornerRadius,
+         compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16) {
+        self.init(worked: worked, target: target, breakTotal: breakTotal,
+                  compact: compact, greeting: greeting, cornerRadius: cornerRadius,
                   top: { EmptyView() }, bottom: { EmptyView() })
     }
 }
 
-/// Left-anchored fill whose trailing edge is a sine wave — amplitude 0 makes
-/// it a straight vertical line. `asym` blends in a second harmonic so the
-/// slosh leans to one side instead of being a clean symmetric sine.
-private struct WaterShape: Shape {
+/// Bob in a lifebuoy: the ring wraps his waist — body behind the ring's
+/// bottom arc, face in front of its top. Motion is Core-Animation driven
+/// (repeat-forever sway and dip), so it is interpolated by the compositor
+/// instead of sampled per frame; blinks run on a sparse async loop. Pauses
+/// when the window isn't really visible.
+struct BuoyBob: View {
+    var sleeping = false
+    var size: CGFloat = 72
+    @State private var windowVisible = true
+    @State private var sway = false
+    @State private var dip = false
+    @State private var blink: CGFloat = 0
+
+    var body: some View {
+        content(blink: sleeping ? 1 : blink)
+            .rotationEffect(.degrees(sway ? 4.5 : -4.5))
+            .offset(y: dip ? 2.5 : -2.5)
+            .overlay(alignment: .topTrailing) { if sleeping { DriftingZs() } }
+            .frame(width: size, height: size)
+            .trackWindowVisibility { visible in
+                windowVisible = visible
+                applyFloat()
+            }
+            .onAppear { applyFloat() }
+            .task(id: windowVisible && !sleeping && !Motion.reduce) {
+                guard windowVisible, !sleeping, !Motion.reduce else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: UInt64.random(in: 3_200_000_000...5_800_000_000))
+                    if Task.isCancelled { break }
+                    withAnimation(.easeIn(duration: 0.08)) { blink = 1 }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    withAnimation(.easeOut(duration: 0.12)) { blink = 0 }
+                }
+            }
+    }
+
+    private func applyFloat() {
+        if windowVisible && !Motion.reduce {
+            withAnimation(.easeInOut(duration: 2.3).repeatForever(autoreverses: true)) { sway = true }
+            withAnimation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true)) { dip = true }
+        } else {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { sway = false; dip = false }
+        }
+    }
+
+    private func content(blink: CGFloat) -> some View {
+        // Even quarters: dash length = perimeter / 8, so the white segments
+        // tile the ellipse exactly — no visible seam where the path closes.
+        let a = size * 0.47, b = size * 0.24
+        let perimeter = Double.pi * (3 * (a + b) - ((3 * a + b) * (a + 3 * b)).squareRoot())
+        let dash = perimeter / 8
+        return ZStack {
+            // Whole Bob behind — his body sits inside the ring, feet
+            // sticking out below its bottom arc.
+            BobMascot(blink: blink)
+                .frame(width: size, height: size)
+            Ellipse()
+                .stroke(Color(red: 0.95, green: 0.44, blue: 0.30), lineWidth: size * 0.20)
+                .frame(width: size * 0.94, height: size * 0.48)
+                .offset(y: size * 0.08)
+            Ellipse()
+                .stroke(.white.opacity(0.92),
+                        style: StrokeStyle(lineWidth: size * 0.20, dash: [dash, dash]))
+                .frame(width: size * 0.94, height: size * 0.48)
+                .offset(y: size * 0.08)
+            // Head and face again in front of the ring's top arc; the mask's
+            // straight edge hides inside the ring band.
+            BobMascot(blink: blink)
+                .frame(width: size, height: size)
+                .mask(alignment: .top) { Rectangle().frame(height: size * 0.56) }
+        }
+    }
+}
+
+/// Three z's drifting up-right on staggered phases — a tiny 12fps clock.
+struct DriftingZs: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            ZStack(alignment: .bottomLeading) {
+                ForEach(0..<3, id: \.self) { i in
+                    let phase = (t / 2.6 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                    Text("z")
+                        .font(.system(size: 7 + CGFloat(i) * 3, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .opacity(sin(phase * .pi) * 0.9)
+                        .offset(x: CGFloat(i) * 6 + phase * 4, y: -CGFloat(i) * 6 - phase * 5)
+                }
+            }
+            .offset(x: 8, y: 0)
+        }
+    }
+}
+
+/// The waterline as a function: three sine components with incommensurate
+/// wavelengths and speeds sum into an organic, never-quite-repeating edge
+/// (a single sine reads as a rubber band). `asym` adds the lopsided slosh
+/// harmonic during the arrival; amplitude 0 collapses to a straight line.
+private struct WaveField {
     var level: Double       // 0…1 of the width
     var amplitude: CGFloat  // points
     var phase: Double
     var asym: Double = 0
-    /// Wavelength and harmonic offset — seeded per appearance for variety.
+    /// Seeded per appearance for variety.
     var freq: Double = 2.2
     var asymPhase: Double = 1.2
+    var detail2 = 0.0
+    var detail3 = 0.0
+
+    func x(_ y: CGFloat, in rect: CGRect) -> CGFloat {
+        let u = Double(y / rect.height)
+        let theta = u * .pi * freq + phase
+        var w = sin(theta)
+        w += 0.55 * sin(u * .pi * freq * 1.83 + phase * 1.31 + detail2)
+        w += 0.30 * sin(u * .pi * freq * 3.10 + phase * 0.57 + detail3)
+        w *= 0.54  // renormalize the component sum to ~unit amplitude
+        w += asym * sin(2 * theta + asymPhase)
+        let edge = rect.width * min(1, level)
+        return min(rect.width, edge + amplitude * CGFloat(w))
+    }
+}
+
+private struct WaterShape: Shape {
+    var field: WaveField
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        guard level > 0.001, rect.height > 0 else { return p }
-        let edge = rect.width * min(1, level)
-        func waveX(_ y: CGFloat) -> CGFloat {
-            let theta = Double(y / rect.height) * .pi * freq + phase
-            let wave = sin(theta) + asym * sin(2 * theta + asymPhase)
-            return min(rect.width, edge + amplitude * CGFloat(wave))
-        }
+        guard field.level > 0.001, rect.height > 0 else { return p }
         p.move(to: .zero)
-        p.addLine(to: CGPoint(x: waveX(0), y: 0))
+        p.addLine(to: CGPoint(x: field.x(0, in: rect), y: 0))
         var y: CGFloat = 0
         while y < rect.height {
-            y = min(y + 4, rect.height)
-            p.addLine(to: CGPoint(x: waveX(y), y: y))
+            y = min(y + 3, rect.height)
+            p.addLine(to: CGPoint(x: field.x(y, in: rect), y: y))
         }
         p.addLine(to: CGPoint(x: 0, y: rect.height))
         p.closeSubpath()
+        return p
+    }
+}
+
+/// Just the waterline polyline, for stroking the crisp rim highlight.
+private struct WaterEdgeShape: Shape {
+    var field: WaveField
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        guard field.level > 0.001, rect.height > 0 else { return p }
+        p.move(to: CGPoint(x: field.x(0, in: rect), y: 0))
+        var y: CGFloat = 0
+        while y < rect.height {
+            y = min(y + 3, rect.height)
+            p.addLine(to: CGPoint(x: field.x(y, in: rect), y: y))
+        }
         return p
     }
 }

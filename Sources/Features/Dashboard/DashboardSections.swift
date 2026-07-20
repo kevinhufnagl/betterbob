@@ -236,6 +236,10 @@ struct DayDetailSheet: View {
             .animation(.easeInOut(duration: 0.15), value: state.busy)
 
             if let day, state.hasOverLongStretch(day.entries) { wandBanner(day).transition(.bobBanner) }
+            if let day, !state.hasOverLongStretch(day.entries),
+               let short = state.breakShortfall(day.entries) {
+                shortBreakBanner(day, short).transition(.bobBanner)
+            }
             if let day, state.isOverDailyMax(day.entries) { overMaxBanner.transition(.bobBanner) }
 
             if let day, !day.entries.isEmpty {
@@ -286,6 +290,33 @@ struct DayDetailSheet: View {
             .strokeBorder(Color.bobRed.opacity(0.30), lineWidth: 0.8))
     }
 
+    /// Breaks logged but too short to count — HiBob's "doesn't meet
+    /// guidelines" flag, fixable by growing a break.
+    private func shortBreakBanner(_ day: DayEntries, _ short: TimeInterval) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars").font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.bobOrange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Breaks too short — \(Fmt.hm(short)) more needed")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Only breaks of \(Prefs.shared.breakMinutes) min or more count. Extend a break — clock-in/out stay put.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { state.fixBreakGuideline(in: day.entries, on: day.date) } label: {
+                Label("Extend break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Capsule().fill(Color.bobOrange.opacity(0.18)))
+                    .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.45), lineWidth: 0.8))
+                    .foregroundStyle(Color.bobOrange)
+            }.buttonStyle(.plain).disabled(state.busy)
+        }
+        .padding(12)
+        .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(Color.bobOrange.opacity(0.30), lineWidth: 0.8))
+    }
+
     /// Wand to fix a too-long uninterrupted run on this (any) day.
     private func wandBanner(_ day: DayEntries) -> some View {
         HStack(spacing: 12) {
@@ -324,6 +355,10 @@ struct CyclePane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PaneHeader(title: "This month", subtitle: cycleSubtitle)
+            if monthTargetSecs > 0 {
+                LiquidHero(worked: monthWorkedSecs, target: monthTargetSecs)
+                    .frame(height: 150)
+            }
             kpiGrid
             CalendarHeatmap(state: state, onOpenToday: onOpenToday)
             byDayList
@@ -412,6 +447,13 @@ struct CyclePane: View {
         }
     }
 
+    private var monthWorkedSecs: TimeInterval {
+        (state.cycleSummary?.days ?? []).reduce(0) { $0 + $1.worked * 3600 }
+    }
+    private var monthTargetSecs: TimeInterval {
+        (state.cycleSummary?.days ?? []).reduce(0) { $0 + ($1.target ?? 0) * 3600 }
+    }
+
     private var cycleSubtitle: String {
         guard let c = state.cycle else { return "Timesheet cycle" }
         return "\(c.start) → \(c.end)"
@@ -489,7 +531,8 @@ struct CalendarHeatmap: View {
         // past the daily max is red — the harder limit wins over orange.
         let breakIssue = state.monthDays
             .first(where: { $0.dateKey == day.date })
-            .map { state.hasOverLongStretch($0.entries) } ?? false
+            .map { state.hasOverLongStretch($0.entries) || state.breakShortfall($0.entries) != nil }
+            ?? false
         let overMax = state.monthDays
             .first(where: { $0.dateKey == day.date })
             .map { state.isOverDailyMax($0.entries) }

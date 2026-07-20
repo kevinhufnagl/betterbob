@@ -744,6 +744,74 @@ expect(!Updater.isNewer("1.0", than: "1.0"), "equal → not newer")
 expect(!Updater.isNewer("1.0", than: "1.0.1"), "1.0 < 1.0.1")
 expect(!Updater.isNewer("1.9", than: "2.0"), "older → not newer")
 
+// MARK: - Clocked-out gaps interrupt the work stretch
+
+print("AttendanceLogic gaps")
+
+expect(AttendanceLogic.stretchStart(entries: [work(9, 11), work(23, nil)]) == t(23),
+       "clock-out gap resets the stretch start")
+
+expect(st([work(9, 11), work(23, nil)], now: t(23.5)) == .working(since: t(23)),
+       "working since re-clock-in after a gap")
+
+expect(AttendanceLogic.overLongStretch(entries: [work(9, 11), work(23, nil)],
+                                       threshold: sixH, now: t(23.5)) == nil,
+       "out at 11, back at 23 → no over-long stretch")
+
+expect(AttendanceLogic.overLongStretch(entries: [work(9, 11), work(11.1, nil)],
+                                       threshold: sixH, now: t(17.5)) != nil,
+       "a 6-min blip doesn't reset the counter")
+
+expect(AttendanceLogic.insertingAllBreaks(into: [work(9, 11), work(23, nil)],
+                                          threshold: sixH, breakLength: halfH,
+                                          now: t(23.5)) == nil,
+       "wand has nothing to fix on a gap day")
+
+// MARK: - Break guideline (breaks logged but too short)
+
+print("AttendanceLogic.breakShortfall")
+
+expect(AttendanceLogic.breakShortfall(entries: [work(9, 12), brk(12, 12.5), work(12.5, 16.5)],
+                                      threshold: sixH, required: halfH, now: t(17)) == nil,
+       "30-min break on a 7h day → compliant")
+
+expect(AttendanceLogic.breakShortfall(entries: [work(9, 12), brk(12, 12.2), work(12.2, 16.5)],
+                                      threshold: sixH, required: halfH, now: t(17)) == halfH,
+       "12-min break doesn't qualify → full 30 min missing")
+
+expect(AttendanceLogic.breakShortfall(entries: [work(9, 12), work(12.6, 16)],
+                                      threshold: sixH, required: halfH, now: t(17)) == nil,
+       "a 36-min clocked-out gap counts like a break")
+
+expect(AttendanceLogic.breakShortfall(entries: [work(9, 14)],
+                                      threshold: sixH, required: halfH, now: t(14)) == nil,
+       "under the threshold → no requirement yet")
+
+expect(AttendanceLogic.breakShortfall(
+        entries: [work(9, 12), brk(12, 12.25), work(12.25, 15), brk(15, 15.25), work(15.25, 17.5)],
+        threshold: sixH, required: halfH, now: t(18)) == halfH,
+       "two 15-min breaks don't satisfy a 30-min single-break minimum")
+
+expect(AttendanceLogic.breakShortfall(entries: [work(9, 12), work(12.34, 18)],
+                                      threshold: sixH, required: halfH, now: t(18)) == halfH,
+       "a 20-min gap interrupts the stretch but doesn't meet the guideline")
+
+let shortDay = [work(9, 12), brk(12, 12.2), work(12.2, 16.5)]
+if let fixed = AttendanceLogic.meetingBreakGuideline(entries: shortDay, threshold: sixH,
+                                                     required: halfH, now: t(17)) {
+    expect(AttendanceLogic.breakShortfall(entries: fixed, threshold: sixH,
+                                          required: halfH, now: t(17)) == nil,
+           "guideline fix makes the day compliant")
+    expect(fixed.first?.start == t(9) && fixed.compactMap(\.end).max() == t(16.5),
+           "guideline fix keeps clock-in and clock-out")
+} else {
+    expect(false, "guideline fix produces a result for a short-break day")
+}
+
+expect(AttendanceLogic.meetingBreakGuideline(entries: [work(9, 12), brk(12, 12.5), work(12.5, 16.5)],
+                                             threshold: sixH, required: halfH, now: t(17)) == nil,
+       "compliant day → nothing to fix")
+
 // MARK: - StatsHTTP (phone stats page routing + JSON)
 
 print("StatsHTTP.requestLine")
