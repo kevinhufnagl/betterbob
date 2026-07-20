@@ -202,10 +202,10 @@ struct PopoverRootView: View {
         return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
     }
 
-    /// "as In Office" inside the Clock-in button — the reason the new entry
-    /// gets tagged with automatically (Wi-Fi rule or default).
+    /// The reason the new entry gets tagged with automatically (Wi-Fi rule or
+    /// default), shown under the Clock-in / End-break label.
     private var autoTagTrailing: String? {
-        state.currentAutoReason.map { "as \($0)" }
+        state.currentAutoReason
     }
 
     /// "back in 12m" shown under the End-break label during an auto-break,
