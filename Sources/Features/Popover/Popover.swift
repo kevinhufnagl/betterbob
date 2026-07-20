@@ -28,16 +28,6 @@ struct PopoverRootView: View {
                     VStack(spacing: 10) {
                         workedHeader(now: context.date)
                         actionButtons(now: context.date)
-                        // Clocked-out shows the reason inside the Clock-in
-                        // button; while working/on break it goes here.
-                        if state.clockState != .clockedOut, let reason = state.currentAutoReason {
-                            HStack(spacing: 4) {
-                                Image(systemName: "tag").font(.system(size: 8))
-                                Text("Auto-tags as \(reason)").font(.system(size: 10))
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-                        if state.clockState != .clockedOut { statsRow(now: context.date) }
                         if state.overMaxNonBreak { missingBreakWarning }
                         if !state.entries.isEmpty {
                             timeline
@@ -167,11 +157,13 @@ struct PopoverRootView: View {
                 actionButton(label, symbol: "play.fill", tint: .workAccent(scheme)) { state.clockIn() }
             case .working:
                 actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
-                actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme)) {
+                actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
+                             trailing: autoBreakTrailing(now: now)) {
                     state.startManualBreak()
                 }
             case .onBreak:
-                actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme)) { state.endBreak() }
+                actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
+                             trailing: backToWorkTrailing(now: now)) { state.endBreak() }
                 actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
             }
             if !state.queue.isEmpty {
@@ -184,8 +176,21 @@ struct PopoverRootView: View {
 
     /// Full-width tinted capsule — matches the dashboard quick-action style.
     private func actionButton(_ label: String, symbol: String, tint: Color,
+                              trailing: String? = nil,
                               action: @escaping () -> Void) -> some View {
-        PopoverActionButton(label: label, symbol: symbol, tint: tint, action: action)
+        PopoverActionButton(label: label, symbol: symbol, tint: tint, trailing: trailing, action: action)
+    }
+
+    /// "auto in 42m" shown inside the Start-break button while working.
+    private func autoBreakTrailing(now: Date) -> String? {
+        guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
+        return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
+    }
+
+    /// "back in 12m" shown inside the End-break button during an auto-break.
+    private func backToWorkTrailing(now: Date) -> String? {
+        guard let ends = state.autoBreakEnds else { return nil }
+        return ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
     }
 
     // MARK: - Over-max-non-break warning + wand
@@ -242,41 +247,6 @@ struct PopoverRootView: View {
                     .foregroundStyle(tint)
             }
         }
-    }
-
-    // MARK: - Stats
-
-    private func statsRow(now: Date) -> some View {
-        HStack(spacing: 8) {
-            if case .working = state.clockState, let due = state.autoBreakDue {
-                statChip(label: "Auto-break",
-                         value: due <= now ? "now" : "in \(Fmt.hm(due.timeIntervalSince(now)))",
-                         symbol: "pause.circle", tint: .breakAccent(scheme))
-            } else if case .onBreak = state.clockState {
-                if let ends = state.autoBreakEnds {
-                    statChip(label: "Back to work",
-                             value: ends <= now ? "now" : "in \(Fmt.hm(ends.timeIntervalSince(now)))",
-                             symbol: "figure.walk.arrival", tint: .workAccent(scheme))
-                } else {
-                    statChip(label: "Break", value: "manual",
-                             symbol: "hand.raised", tint: .breakAccent(scheme))
-                }
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func statChip(label: String, value: String, symbol: String, tint: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(tint)
-            Text(label).font(.system(size: 10, weight: .medium)).foregroundStyle(.primary)
-            Text(value).font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(tint == .primary ? .primary : tint)
-        }
-        .padding(.horizontal, 9).padding(.vertical, 4)
-        .background(Capsule().fill(tint.opacity(0.14)))
-        .overlay(Capsule().strokeBorder(tint.opacity(0.30), lineWidth: 0.7))
     }
 
     // MARK: - Today's timeline
@@ -426,6 +396,9 @@ struct PopoverRootView: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
+            Text("v\(updater.currentVersion)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
             Button {
                 NSApp.terminate(nil)
             } label: {
@@ -445,6 +418,7 @@ private struct PopoverActionButton: View {
     let label: String
     let symbol: String
     let tint: Color
+    var trailing: String? = nil
     let action: () -> Void
     @State private var hovering = false
 
@@ -453,6 +427,10 @@ private struct PopoverActionButton: View {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 12, weight: .bold))
                 Text(label).font(.system(size: 13, weight: .semibold))
+                if let trailing {
+                    Text("· \(trailing)")
+                        .font(.system(size: 11, weight: .medium)).opacity(0.7)
+                }
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
