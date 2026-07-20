@@ -75,21 +75,17 @@ struct TodayActions: View {
             layout {
                 switch state.projectedClockState {
                 case .clockedOut:
-                    btn(state.currentAutoReason.map { "Clock in · \($0)" } ?? "Clock in",
-                        "play.fill", .workAccent(scheme)) { state.clockIn() }
+                    btn("Clock in", "play.fill", .workAccent(scheme),
+                        trailing: autoTagTrailing) { state.clockIn() }
                 case .working:
                     btn("Clock out", "stop.fill", .outAccent(scheme)) { state.clockOut() }
                     btn("Start break", "pause.circle.fill", .breakAccent(scheme),
                         trailing: autoBreakTrailing) { state.startManualBreak() }
                 case .onBreak:
                     btn("End break", "play.fill", .workAccent(scheme),
-                        trailing: backToWorkTrailing) { state.endBreak() }
+                        trailing: endBreakTrailing) { state.endBreak() }
                     btn("Clock out", "stop.fill", .outAccent(scheme)) { state.clockOut() }
                 }
-            }
-            if state.projectedClockState != .clockedOut, let r = state.currentAutoReason {
-                Label("Auto-tags as \(r)", systemImage: "tag").font(.system(size: 10))
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -105,10 +101,21 @@ struct TodayActions: View {
         return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
     }
 
-    /// "back in 12m" inside the End-break button during an auto-break.
-    private var backToWorkTrailing: String? {
-        guard let ends = state.autoBreakEnds else { return nil }
-        return ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
+    /// "as In Office" inside the Clock-in button — the reason the new entry
+    /// gets tagged with automatically (Wi-Fi rule or default).
+    private var autoTagTrailing: String? {
+        state.currentAutoReason.map { "as \($0)" }
+    }
+
+    /// "back in 12m" inside the End-break button during an auto-break; with an
+    /// auto-tag too it shortens to "12m · as In Office" to keep the pill sane.
+    private var endBreakTrailing: String? {
+        guard let ends = state.autoBreakEnds else { return autoTagTrailing }
+        let time = ends <= now ? "now" : Fmt.hm(ends.timeIntervalSince(now))
+        guard let tag = autoTagTrailing else {
+            return ends <= now ? "back now" : "back in \(time)"
+        }
+        return "\(time) · \(tag)"
     }
 }
 

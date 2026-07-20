@@ -167,8 +167,8 @@ struct PopoverRootView: View {
             layout {
                 switch state.projectedClockState {
                 case .clockedOut:
-                    let label = state.currentAutoReason.map { "Clock in · \($0)" } ?? "Clock in"
-                    actionButton(label, symbol: "play.fill", tint: .workAccent(scheme)) { state.clockIn() }
+                    actionButton("Clock in", symbol: "play.fill", tint: .workAccent(scheme),
+                                 trailing: autoTagTrailing) { state.clockIn() }
                 case .working:
                     actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
                     actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
@@ -177,7 +177,7 @@ struct PopoverRootView: View {
                     }
                 case .onBreak:
                     actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
-                                 trailing: backToWorkTrailing(now: now)) { state.endBreak() }
+                                 trailing: endBreakTrailing(now: now)) { state.endBreak() }
                     actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
                 }
             }
@@ -205,12 +205,22 @@ struct PopoverRootView: View {
         return prefs.popoverCompact ? t : "auto in \(t)"
     }
 
-    /// "back in 12m" shown inside the End-break button during an auto-break.
-    private func backToWorkTrailing(now: Date) -> String? {
-        guard let ends = state.autoBreakEnds else { return nil }
-        if ends <= now { return prefs.popoverCompact ? "now" : "back now" }
-        let t = Fmt.hm(ends.timeIntervalSince(now))
-        return prefs.popoverCompact ? t : "back in \(t)"
+    /// "as In Office" inside the Clock-in button — the reason the new entry
+    /// gets tagged with automatically (Wi-Fi rule or default).
+    private var autoTagTrailing: String? {
+        state.currentAutoReason.map { "as \($0)" }
+    }
+
+    /// "back in 12m" shown inside the End-break button during an auto-break;
+    /// with an auto-tag too (or in compact) it shortens to "12m · as xx".
+    private func endBreakTrailing(now: Date) -> String? {
+        guard let ends = state.autoBreakEnds else { return autoTagTrailing }
+        let t = ends <= now ? "now" : Fmt.hm(ends.timeIntervalSince(now))
+        guard let tag = autoTagTrailing else {
+            if ends <= now { return prefs.popoverCompact ? "now" : "back now" }
+            return prefs.popoverCompact ? t : "back in \(t)"
+        }
+        return "\(t) · \(tag)"
     }
 
     // MARK: - Over-max-non-break warning + wand
