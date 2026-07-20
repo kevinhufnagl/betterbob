@@ -46,7 +46,7 @@ struct PopoverRootView: View {
             Divider().opacity(0.3)
             footer
         }
-        .frame(width: 360)
+        .frame(width: 400)
     }
 
     // MARK: - Update banner
