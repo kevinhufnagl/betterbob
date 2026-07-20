@@ -130,13 +130,16 @@ private struct ActionButton: View {
         Button(action: act) {
             HStack(spacing: 6) {
                 Image(systemName: sym).font(.system(size: 12, weight: .bold))
-                Text(label).font(.system(size: 13, weight: .semibold))
-                if let trailing {
-                    Text("· \(trailing)")
-                        .font(.system(size: 11, weight: .medium)).opacity(0.7)
+                VStack(spacing: 1) {
+                    Text(label).font(.system(size: 13, weight: .semibold))
+                    if let trailing {
+                        // Second line so countdown + auto-tag get full width.
+                        Text(trailing)
+                            .font(.system(size: 9, weight: .medium)).opacity(0.7)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity).frame(height: 34)
+            .frame(maxWidth: .infinity).frame(height: trailing == nil ? 34 : 40)
             .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
             .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
             .foregroundStyle(tint)

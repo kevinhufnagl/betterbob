@@ -196,13 +196,10 @@ struct PopoverRootView: View {
         PopoverActionButton(label: label, symbol: symbol, tint: tint, trailing: trailing, action: action)
     }
 
-    /// "auto in 42m" shown inside the Start-break button while working —
-    /// "auto 42m" in the compact one-row layout, where space is tight.
+    /// "auto in 42m" shown under the Start-break label while working.
     private func autoBreakTrailing(now: Date) -> String? {
         guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
-        if due <= now { return "auto now" }
-        let t = Fmt.hm(due.timeIntervalSince(now))
-        return prefs.popoverCompact ? "auto \(t)" : "auto in \(t)"
+        return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
     }
 
     /// "as In Office" inside the Clock-in button — the reason the new entry
@@ -211,14 +208,11 @@ struct PopoverRootView: View {
         state.currentAutoReason.map { "as \($0)" }
     }
 
-    /// "back in 12m" shown inside the End-break button during an auto-break,
+    /// "back in 12m" shown under the End-break label during an auto-break,
     /// plus the auto-tag when one applies: "back in 12m · as In Office".
-    /// Compact keeps the short "back 12m" so the one-row buttons still fit.
     private func endBreakTrailing(now: Date) -> String? {
         guard let ends = state.autoBreakEnds else { return autoTagTrailing }
-        let back = ends <= now ? "back now"
-            : prefs.popoverCompact ? "back \(Fmt.hm(ends.timeIntervalSince(now)))"
-            : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
+        let back = ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
         guard let tag = autoTagTrailing else { return back }
         return "\(back) · \(tag)"
     }
@@ -468,15 +462,18 @@ private struct PopoverActionButton: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 12, weight: .bold))
-                Text(label).font(.system(size: 13, weight: .semibold))
-                if let trailing {
-                    Text("· \(trailing)")
-                        .font(.system(size: 11, weight: .medium)).opacity(0.7)
+                VStack(spacing: 1) {
+                    Text(label).font(.system(size: 13, weight: .semibold))
+                    if let trailing {
+                        // Second line so countdown + auto-tag get full width.
+                        Text(trailing)
+                            .font(.system(size: 9, weight: .medium)).opacity(0.7)
+                    }
                 }
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
-            .frame(height: 34)
+            .frame(height: trailing == nil ? 34 : 40)
             .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
             .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
             .contentShape(Capsule())
