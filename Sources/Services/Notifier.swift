@@ -1,0 +1,64 @@
+import Foundation
+import UserNotifications
+
+/// Local notifications for the moments that matter: the auto-break firing,
+/// ending, repairs after sleep, and anything that failed.
+enum Notifier {
+    static func requestAuthorization() {
+        UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    static func autoBreakStarted(length: TimeInterval) {
+        guard Prefs.shared.notifyAutoBreak else { return }
+        post(title: "Break time",
+             body: "6 hours of uninterrupted work — a \(Fmt.hm(length)) break just started in HiBob.")
+    }
+
+    static func autoBreakEnded() {
+        guard Prefs.shared.notifyAutoBreak else { return }
+        post(title: "Back to work",
+             body: "Your auto-break is over — you're clocked back in.")
+    }
+
+    static func insertedPastBreak(start: Date, end: Date) {
+        guard Prefs.shared.notifyAutoBreak else { return }
+        post(title: "Break added retroactively",
+             body: "The 6-hour mark passed while your Mac was asleep — a break was recorded from \(Fmt.clock(start)) to \(Fmt.clock(end)).")
+    }
+
+    static func targetReached(_ target: String) {
+        guard Prefs.shared.notifyTargetReached else { return }
+        post(title: "Target reached",
+             body: "You've hit today's \(target) target — anything more is overtime.")
+    }
+
+    static func deadlineApproaching(days: Int) {
+        guard Prefs.shared.notifyDeadline else { return }
+        let when = days <= 0 ? "today" : "in \(days) day\(days == 1 ? "" : "s")"
+        post(title: "Timesheet locks \(when)",
+             body: "Submit your timesheet for approval before it locks.")
+    }
+
+    static func failure(_ message: String) {
+        guard Prefs.shared.notifyFailures else { return }
+        post(title: "BetterBob couldn't reach HiBob", body: message)
+    }
+
+    /// Once per version — a new BetterBob build is available to install.
+    static func updateAvailable(version: String) {
+        guard UserDefaults.standard.string(forKey: "updateNotifiedVersion") != version else { return }
+        UserDefaults.standard.set(version, forKey: "updateNotifiedVersion")
+        post(title: "BetterBob \(version) is available",
+             body: "Open BetterBob to update in one click.")
+    }
+
+    private static func post(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        let request = UNNotificationRequest(identifier: UUID().uuidString,
+                                            content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+}
