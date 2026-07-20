@@ -75,6 +75,8 @@ struct StatTile: View {
             Text(value).font(.system(size: 21, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1).minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+                .animation(Motion.numeric, value: value)
             Text(caption.uppercased()).kerning(0.4)
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)

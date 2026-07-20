@@ -39,8 +39,10 @@ struct DayEntriesList: View {
                 if i > 0 { Divider().opacity(0.15) }
                 EntryRowView(state: state, entry: e, dayEntries: entries, date: date,
                              isLast: e == lastChrono)
+                    .transition(.bobBanner)
             }
         }
+        .animation(Motion.standard, value: entries)
     }
 }
 
@@ -99,14 +101,17 @@ struct EntryRowView: View {
             if let eid = e.id {
                 if state.deletingEntries.contains(eid) {
                     ProgressView().controlSize(.small).frame(width: 16)
+                        .transition(.opacity)
                 } else {
                     Button(role: .destructive) { state.deleteEntry(e, in: dayEntries, on: date) } label: {
                         Image(systemName: "trash").font(.system(size: 11))
                     }.buttonStyle(.plain).foregroundStyle(.secondary).help("Delete entry")
+                        .transition(.opacity)
                 }
             }
         }
         .padding(.vertical, 9)
+        .animation(Motion.quick, value: state.deletingEntries)
     }
 
     private func timeEditor(_ e: AttendanceEntry) -> some View {
@@ -230,8 +235,8 @@ struct DayDetailSheet: View {
             }
             .animation(.easeInOut(duration: 0.15), value: state.busy)
 
-            if let day, state.hasOverLongStretch(day.entries) { wandBanner(day) }
-            if let day, state.isOverDailyMax(day.entries) { overMaxBanner }
+            if let day, state.hasOverLongStretch(day.entries) { wandBanner(day).transition(.bobBanner) }
+            if let day, state.isOverDailyMax(day.entries) { overMaxBanner.transition(.bobBanner) }
 
             if let day, !day.entries.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -258,6 +263,7 @@ struct DayDetailSheet: View {
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(20).frame(width: 560)
+        .animation(Motion.standard, value: day?.entries)
     }
 
     /// Red and actionless — a day past the daily max can only be fixed by
@@ -621,8 +627,10 @@ struct ActivityPane: View {
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 10)
+                            .transition(.bobBanner)
                         }
                     }
+                    .animation(Motion.standard, value: state.activity)
                 }
             }
         }

@@ -22,6 +22,7 @@ struct PopoverRootView: View {
                 BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading, size: 64) {
                     ProgressView().controlSize(.small)
                 }
+                .transition(.bobReplace)
             } else if state.signedIn {
                 // 1s tick keeps worked-time and the countdown live.
                 TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -37,24 +38,37 @@ struct PopoverRootView: View {
                                              height: 28) { updated in
                                 state.saveDay(updated, on: Date())
                             }
+                            .transition(.bobBanner)
                         }
                         if prefs.popoverShowEntries, !state.entries.isEmpty {
                             timeline
+                                .transition(.bobBanner)
                         }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
+                    .animation(Motion.standard, value: state.entries)
+                    .animation(Motion.standard, value: state.overMaxNonBreak)
+                    .animation(Motion.standard, value: state.overDailyMax)
+                    .animation(Motion.standard, value: state.queue)
                 }
+                .transition(.bobReplace)
             } else {
                 signInPrompt
+                    .transition(.bobReplace)
             }
 
             updateBanner
+                .animation(Motion.standard, value: updater.phase)
+                .animation(Motion.standard, value: updater.available)
+                .animation(Motion.standard, value: updater.dismissedVersion)
 
             Divider().opacity(0.3)
             footer
         }
         .frame(width: prefs.popoverWidth.points)
+        .animation(Motion.standard, value: state.signedIn)
+        .animation(Motion.standard, value: state.ready)
     }
 
     // MARK: - Update banner
@@ -102,6 +116,7 @@ struct PopoverRootView: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.accentColor.opacity(0.10))
+        .transition(.bobBanner)
     }
 
     // MARK: - Header
@@ -174,31 +189,48 @@ struct PopoverRootView: View {
         VStack(spacing: 8) {
             // Buttons reflect the state after everything queued; punches fire a
             // minute apart on their own (see the queue in the dashboard footer).
-            layout {
-                switch state.projectedClockState {
-                case .clockedOut:
-                    actionButton("Clock in", symbol: "play.fill", tint: .workAccent(scheme),
-                                 trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
-                case .working:
-                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
-                                 height: rowHeight) { state.clockOut() }
-                    actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
-                                 trailing: autoBreakTrailing(now: now), height: rowHeight) {
-                        state.startManualBreak()
+            // The ZStack lets the outgoing row cross-fade over the incoming one
+            // instead of stacking below it mid-transition.
+            ZStack {
+                layout {
+                    switch state.projectedClockState {
+                    case .clockedOut:
+                        actionButton("Clock in", symbol: "play.fill", tint: .workAccent(scheme),
+                                     trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
+                    case .working:
+                        actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
+                                     height: rowHeight) { state.clockOut() }
+                        actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
+                                     trailing: autoBreakTrailing(now: now), height: rowHeight) {
+                            state.startManualBreak()
+                        }
+                    case .onBreak:
+                        actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
+                                     trailing: endBreakTrailing(now: now), height: rowHeight) { state.endBreak() }
+                        actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
+                                     height: rowHeight) { state.clockOut() }
                     }
-                case .onBreak:
-                    actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
-                                 trailing: endBreakTrailing(now: now), height: rowHeight) { state.endBreak() }
-                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
-                                 height: rowHeight) { state.clockOut() }
                 }
+                .id(clockStateKey)
+                .transition(.bobReplace)
             }
             if !state.queue.isEmpty {
                 Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                    .transition(.bobBanner)
             }
         }
-        .animation(.smooth(duration: 0.2), value: state.projectedClockState)
+        .animation(Motion.standard, value: state.projectedClockState)
+    }
+
+    /// Stable identity per clock state so the whole button row cross-fades.
+    private var clockStateKey: String {
+        switch state.projectedClockState {
+        case .clockedOut: return "out"
+        case .working: return "working"
+        case .onBreak: return "break"
+        }
     }
 
     /// Full-width tinted capsule — matches the dashboard quick-action style.
@@ -263,6 +295,7 @@ struct PopoverRootView: View {
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Color.orange.opacity(0.28), lineWidth: 0.7))
+        .transition(.bobBanner)
     }
 
     /// Red and actionless (you can't un-work hours) — a nudge to clock out.
@@ -278,6 +311,7 @@ struct PopoverRootView: View {
         .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Color.red.opacity(0.28), lineWidth: 0.7))
+        .transition(.bobBanner)
     }
 
     // MARK: - Worked total (prominent, above the buttons)
@@ -291,12 +325,15 @@ struct PopoverRootView: View {
             Text(Fmt.hm(v.worked))
                 .font(.system(size: 40, weight: .bold, design: .rounded))
                 .foregroundStyle(tint).contentTransition(.numericText())
+                .animation(Motion.numeric, value: Fmt.hm(v.worked))
             Text("worked").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             Spacer()
             if v.targetSecs > 0 {
                 Text("\(Int((v.fraction * 100).rounded()))%")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(tint)
+                    .contentTransition(.numericText())
+                    .animation(Motion.numeric, value: Int((v.fraction * 100).rounded()))
             }
         }
     }
@@ -442,10 +479,12 @@ struct PopoverRootView: View {
                     ProgressView().controlSize(.small).scaleEffect(0.7)
                     Text("Saving…").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
+                .transition(.opacity)
             } else if let sync = state.lastSync {
                 Text("Synced \(Fmt.clock(sync))")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
+                    .transition(.opacity)
             }
             Spacer()
             Button {
@@ -458,6 +497,7 @@ struct PopoverRootView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+        .animation(Motion.quick, value: state.busy || !state.deletingEntries.isEmpty)
     }
 }
 
@@ -493,11 +533,11 @@ private struct PopoverActionButton: View {
             .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressablePillStyle())
         .onHover { h in
             hovering = h
             if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(Motion.quick, value: hovering)
     }
 }

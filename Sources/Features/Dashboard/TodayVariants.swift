@@ -56,6 +56,7 @@ struct StatusPill: View {
         .padding(.horizontal, 12).padding(.vertical, 6)
         .background(Capsule().fill(state.clockState.tint.opacity(0.12)))
         .overlay(Capsule().strokeBorder(state.clockState.tint.opacity(0.30), lineWidth: 0.7))
+        .animation(Motion.standard, value: state.clockState)
     }
 }
 
@@ -82,23 +83,39 @@ struct TodayActions: View {
             let rowHeight: CGFloat? = vertical ? nil : (rowTall ? 40 : 34)
             // Buttons offer the state *after* everything queued, so you can line
             // up several punches; they fire a minute apart on their own.
-            layout {
-                switch state.projectedClockState {
-                case .clockedOut:
-                    btn("Clock in", "play.fill", .workAccent(scheme),
-                        trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
-                case .working:
-                    btn("Clock out", "stop.fill", .outAccent(scheme),
-                        height: rowHeight) { state.clockOut() }
-                    btn("Start break", "pause.circle.fill", .breakAccent(scheme),
-                        trailing: autoBreakTrailing, height: rowHeight) { state.startManualBreak() }
-                case .onBreak:
-                    btn("End break", "play.fill", .workAccent(scheme),
-                        trailing: endBreakTrailing, height: rowHeight) { state.endBreak() }
-                    btn("Clock out", "stop.fill", .outAccent(scheme),
-                        height: rowHeight) { state.clockOut() }
+            // The ZStack lets the outgoing row cross-fade over the incoming one
+            // instead of stacking beside it mid-transition.
+            ZStack {
+                layout {
+                    switch state.projectedClockState {
+                    case .clockedOut:
+                        btn("Clock in", "play.fill", .workAccent(scheme),
+                            trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
+                    case .working:
+                        btn("Clock out", "stop.fill", .outAccent(scheme),
+                            height: rowHeight) { state.clockOut() }
+                        btn("Start break", "pause.circle.fill", .breakAccent(scheme),
+                            trailing: autoBreakTrailing, height: rowHeight) { state.startManualBreak() }
+                    case .onBreak:
+                        btn("End break", "play.fill", .workAccent(scheme),
+                            trailing: endBreakTrailing, height: rowHeight) { state.endBreak() }
+                        btn("Clock out", "stop.fill", .outAccent(scheme),
+                            height: rowHeight) { state.clockOut() }
+                    }
                 }
+                .id(clockStateKey)
+                .transition(.bobReplace)
             }
+        }
+        .animation(Motion.standard, value: state.projectedClockState)
+    }
+
+    /// Stable identity per clock state so the whole button row cross-fades.
+    private var clockStateKey: String {
+        switch state.projectedClockState {
+        case .clockedOut: return "out"
+        case .working: return "working"
+        case .onBreak: return "break"
         }
     }
     private func btn(_ label: String, _ sym: String, _ tint: Color,
@@ -159,12 +176,12 @@ private struct ActionButton: View {
             .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
             .foregroundStyle(tint)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressablePillStyle())
         .onHover { h in
             hovering = h
             if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(Motion.quick, value: hovering)
     }
 }
 
@@ -318,6 +335,7 @@ struct TodayTimeline: View {
                         HStack(alignment: .lastTextBaseline, spacing: 10) {
                             Text(Fmt.hm(v.worked)).font(.system(size: 52, weight: .bold, design: .rounded))
                                 .foregroundStyle(tint).contentTransition(.numericText())
+                                .animation(Motion.numeric, value: Fmt.hm(v.worked))
                             Text("worked").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                             Spacer()
                             if state.busy || !state.deletingEntries.isEmpty {
@@ -325,11 +343,14 @@ struct TodayTimeline: View {
                                     ProgressView().controlSize(.small).scaleEffect(0.75)
                                     Text("Saving…").font(.system(size: 11)).foregroundStyle(.secondary)
                                 }
+                                .transition(.opacity)
                             }
                             Text("\(Int((v.fraction * 100).rounded()))%")
                                 .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(tint)
+                                .contentTransition(.numericText())
+                                .animation(Motion.numeric, value: Int((v.fraction * 100).rounded()))
                         }
-                        .animation(.easeInOut(duration: 0.15), value: state.busy)
+                        .animation(Motion.quick, value: state.busy)
 
                         if state.entries.isEmpty {
                             Text("No entries yet today.").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -361,12 +382,16 @@ struct TodayTimeline: View {
                     }
                 }
 
-                if case .onBreak = state.clockState { breakBanner(ctx.date) }
-                if state.overMaxNonBreak { missingBreakBanner }
-                if state.overDailyMax { overDailyMaxBanner }
+                if case .onBreak = state.clockState { breakBanner(ctx.date).transition(.bobBanner) }
+                if state.overMaxNonBreak { missingBreakBanner.transition(.bobBanner) }
+                if state.overDailyMax { overDailyMaxBanner.transition(.bobBanner) }
 
                 EntriesTable(state: state)
             }
+            .animation(Motion.standard, value: state.clockState)
+            .animation(Motion.standard, value: state.overMaxNonBreak)
+            .animation(Motion.standard, value: state.overDailyMax)
+            .animation(Motion.standard, value: state.entries)
             .coordinateSpace(name: "today")
             .background(MouseTracker { cursor = $0 })
             .onPreferenceChange(BobCenterKey.self) { bobCenter = $0 }
@@ -448,6 +473,7 @@ struct TodayTimeline: View {
         HStack(spacing: 6) {
             Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(tint)
                 .contentTransition(.numericText())
+                .animation(Motion.numeric, value: value)
             Text(label.uppercased()).kerning(0.4).font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
         }
     }

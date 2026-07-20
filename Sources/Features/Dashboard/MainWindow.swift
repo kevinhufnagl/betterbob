@@ -84,25 +84,33 @@ struct MainWindow: View {
 
     @ViewBuilder private var detail: some View {
         ScrollView {
-            Group {
-                if tab == .settings {
-                    SettingsPanel(state: state, prefs: prefs)
-                } else if !state.signedIn {
-                    signedOutPlaceholder
-                } else if !state.ready {
-                    BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
-                        ProgressView().controlSize(.small).padding(.top, 2)
-                    }
-                    .padding(.top, 40)
-                } else {
-                    switch tab {
-                    case .cycle:    CyclePane(state: state, onOpenToday: { tab = .today })
-                    case .timeOff:  TimeOffPane(state: state)
-                    case .activity: ActivityPane(state: state)
-                    default:        TodayTimeline(state: state)
+            // ZStack so the outgoing pane cross-fades over the incoming one
+            // (a bare conditional would stack them during the transition).
+            ZStack(alignment: .top) {
+                Group {
+                    if tab == .settings {
+                        SettingsPanel(state: state, prefs: prefs)
+                    } else if !state.signedIn {
+                        signedOutPlaceholder
+                    } else if !state.ready {
+                        BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
+                            ProgressView().controlSize(.small).padding(.top, 2)
+                        }
+                        .padding(.top, 40)
+                    } else {
+                        switch tab {
+                        case .cycle:    CyclePane(state: state, onOpenToday: { tab = .today })
+                        case .timeOff:  TimeOffPane(state: state)
+                        case .activity: ActivityPane(state: state)
+                        default:        TodayTimeline(state: state)
+                        }
                     }
                 }
+                .transition(.bobSection)
             }
+            .animation(Motion.lively, value: tab)
+            .animation(Motion.lively, value: state.signedIn)
+            .animation(Motion.lively, value: state.ready)
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -143,11 +151,14 @@ struct FooterBar: View {
         HStack(spacing: 10) {
             Circle().fill(state.clockState.tint).frame(width: 8, height: 8)
             Text(state.clockState.title).font(.system(size: 11, weight: .medium))
+                .contentTransition(.opacity)
             if state.clockState != .clockedOut {
                 Text("· \(Fmt.hm(state.workedToday)) today")
                     .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                    .transition(.opacity)
             }
-            if !state.queue.isEmpty { QueueChip(state: state) }
+            if !state.queue.isEmpty { QueueChip(state: state).transition(.bobReplace) }
             Spacer()
             if let err = state.lastError {
                 Label(err, systemImage: "exclamationmark.triangle.fill")
@@ -163,6 +174,8 @@ struct FooterBar: View {
         .frame(maxWidth: .infinity, minHeight: 28)
         .background(.thinMaterial)
         .overlay(alignment: .top) { Divider().opacity(0.4) }
+        .animation(Motion.standard, value: state.clockState)
+        .animation(Motion.standard, value: state.queue.isEmpty)
     }
 }
 
@@ -218,6 +231,7 @@ struct QueueChip: View {
                                     .foregroundStyle(.secondary)
                             }.buttonStyle(.plain).help("Remove")
                         }
+                        .transition(.bobBanner)
                     }
                     Text("HiBob allows one punch per minute — queued punches fire automatically.")
                         .font(.system(size: 9)).foregroundStyle(.tertiary)
@@ -225,6 +239,7 @@ struct QueueChip: View {
                 }
             }
             .padding(14).frame(width: 240)
+            .animation(Motion.standard, value: state.queue)
         }
     }
 
