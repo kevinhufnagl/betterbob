@@ -1,130 +1,118 @@
 # BetterBob
 
-A native macOS menu-bar client for HiBob time tracking — clock in, clock
-out, take breaks — with one smart behavior HiBob doesn't have: after **6
-hours of uninterrupted work** it automatically starts a **30-minute break**
-in HiBob and ends it on time. A single-module SwiftUI app compiled with
-plain `swiftc`, no Xcode project. Bob, a cheerful beaver in a blue cap, is
-your mascot throughout.
+A friendly macOS menu-bar app for HiBob time tracking — clock in, clock out,
+and take breaks without ever opening the HiBob website. Its standout trick:
+after a long stretch of uninterrupted work it quietly inserts a break for you
+(you choose how long a stretch and how long a break), so you never blow past
+your company's break rules. Bob, a cheerful beaver in a blue cap, keeps you
+company in the menu bar.
 
-## How it works
+## Install
 
-- Talks to HiBob's **internal web API** (`app.hibob.com/api/...`) — the same
-  calls the website makes — using your own session. No admin API keys needed.
-  A `Bob-TimeZoneOffset` header is sent so the server computes "now" in your
-  timezone (without it, HiBob answers in UTC and misreports your punch state).
-- **HiBob is the source of truth.** Today's entries are re-fetched every
-  minute, on wake, and after every action — clock in from your phone or take
-  a break in the web UI and the app follows along.
-- The **auto-break** fires only after a truly uninterrupted stretch: any
-  break (from anywhere) resets the counter. A precise timer lands the break
-  on the second; if your Mac was asleep at the mark, the break is inserted
-  **retroactively** at the timestamps it should have had.
-- Per-entry **Reason** (In Office / Work from home / … — all your tenant's
-  options, fetched live) can be viewed and changed from the timeline.
-- Optional **Wi-Fi rule**: on a chosen network (e.g. the office SSID) the open
-  work entry is auto-tagged with a reason — but only if you haven't set one
-  yourself. Reading the network name needs macOS Location access (asked once);
-  your location is never used or stored.
+BetterBob is Apple Silicon + macOS 26 (Tahoe).
+
+1. Download the latest **`BetterBob-x.y.zip`** from the
+   [**Releases**](https://github.com/kevinhufnagl/betterbob/releases/latest) page.
+2. Unzip it and drag **BetterBob.app** into your **Applications** folder.
+3. It's ad-hoc signed (not notarized), so the *first* launch needs a one-time
+   Gatekeeper OK: **right-click BetterBob → Open → Open**. (Only the first time.)
+4. Bob appears in your menu bar — click him and sign in to HiBob.
+
+After that, updates are automatic: BetterBob checks GitHub Releases and offers a
+one-click update when a new version is out.
+
+## What it does
+
+- **Clock in, out, and take breaks** right from the menu bar — no need to open
+  HiBob.
+- **Automatic breaks.** Work too long without a break and Bob adds one for you
+  and ends it on time. You set how long a stretch triggers it and how long the
+  break is. If your Mac was asleep when the break was due, Bob still logs it at
+  the right time after the fact.
+- **Always in sync.** HiBob stays the source of truth — clock in on your phone
+  or edit something on the website and BetterBob keeps up within a minute.
+- **Reasons on your entries** (In Office, Work from home, and whatever else your
+  company uses) — set or change them in a click.
+- **Office auto-tagging (optional).** On a Wi-Fi network you choose, work gets
+  tagged with a reason like "In Office" automatically — unless you've set one
+  yourself. It only reads the network name (macOS asks permission once); your
+  location is never used or stored.
 
 ## Signing in
 
-A guided window (shown on first run, or via the **Sign in…** button in the
-popover / Settings) offers two ways in:
+The first time — or any time you're signed out — Bob opens a sign-in window with
+two choices:
 
-- **Automatic** *(recommended)* — save your password + 6-digit authenticator
-  code; Bob signs you in on his own after sleep, restart, or session expiry.
-  Credentials live only in the macOS **Keychain**; the code accepts a bare
-  base32 secret **or** a full `otpauth://` URL. Best for password + TOTP
-  logins (not Okta Verify push).
-- **Browser** — an embedded window opens `app.hibob.com/login`; you log in
-  exactly as usual (Okta Verify push included) and the app captures the
-  session. Quick, but you sign in again each time the session expires.
+- **Automatic** *(recommended)* — save your password and authenticator code once,
+  and Bob signs you back in by himself after sleep, restarts, or when the session
+  expires. Everything is stored only in your Mac's Keychain. Works when your login
+  uses a password plus a 6-digit code (not for Okta Verify "approve on your
+  phone" prompts).
+- **Browser** — sign in through HiBob's normal login page (Okta push included).
+  Quick, but you'll sign in again whenever the session expires.
 
-## Menu-bar popover
+## Around the app
 
-State icon (working / on break / clocked out, optional worked-time label),
-prominent worked-today total, big clock in/out and break buttons, live
-countdown to the auto-break, a "Saving…" hint while writes are in flight, and
-today's timeline with reason pickers.
+**Menu bar** — your status at a glance, how much you've worked today, big clock
+in/out and break buttons (with a live countdown to the next auto-break), and
+today's entries.
 
-## Main window
+**Main window**
+- **Today** — your worked total and a timeline of the day. Drag a break along
+  the timeline to move it; the work around it adjusts and you see where it lands
+  before you drop.
+- **This month** — a calendar of your hours (days that need a break show up in
+  orange), how far over or under you are, and a day-by-day list. Click any past
+  day to fix its entries, or tap the wand to drop in a missing break.
+- **Time off** — balances, upcoming leave, and a calendar to request more.
 
-- **Today** — a big worked total and a to-scale timeline. **Drag a break
-  along the timeline** to move it: it keeps its length, the surrounding work
-  resizes, and a marker + time pill preview where it lands before you drop.
-- **This month** — a calendar heatmap (days with a break-policy issue show
-  **orange**), running over/under, and a by-day list. Click any past day to
-  edit its entries (timeline drag, time/reason edits, delete) or use the
-  **wand** to insert the missing break(s).
-- **Time off** — balances, upcoming leave, a request calendar, and existing
-  requests.
+**Settings** — sign in/out, the auto-break rule, automatic sign-in, office
+Wi-Fi tagging, notifications, launch at login, and more.
 
-## Settings
+**Siri & Shortcuts** — "Clock in", "Clock out", "Take a break" from Spotlight,
+Shortcuts, and the Action Button.
 
-Sign in/out, auto-break threshold + length (default 6h/30m), master
-auto-break switch, **auto-fix gaps & overlaps** on save, automatic sign-in
-(credentials + auto-relogin), Wi-Fi reason rules, notifications, launch at
-login, and the menu-bar label — plus a diagnostics card when something last
-failed.
+## Good to know
 
-## Siri / Shortcuts
+- BetterBob uses the same private HiBob web service the website itself uses, with
+  your own login — no admin access or API keys. Because it's a private service,
+  Bob can occasionally need a nudge if HiBob changes it (see the developer notes).
+- Auto-inserted breaks are still real attendance records — use BetterBob within
+  your company's time-tracking policy.
 
-"Clock in", "Clock out", "Take a break" — from Spotlight, Shortcuts, and the
-Action Button.
+## For developers
 
-## The honest caveats
-
-- The internal API is **unofficial** and can change without notice. All
-  routes sit in one place (`BobAPI`) and the parser is deliberately tolerant;
-  when something changes, re-capture per `Docs/endpoints.md`.
-- Before first use, **verify the routes against your tenant** — see
-  `Docs/endpoints.md`. This is the one manual setup step.
-- The app automates *your own account* doing things you're allowed to do,
-  but auto-inserted breaks are still attendance records — use it within your
-  company's policy.
-
-## Requirements
-
-- macOS **26** (Tahoe) — uses macOS 26 SDK APIs (Liquid Glass)
-- Xcode 17+ toolchain for building (`xcrun --show-sdk-version` → 26.x)
-
-## Build & run
+A single-module SwiftUI app built with plain `swiftc` — no Xcode project.
+Requires an Apple Silicon Mac on **macOS 26** (Tahoe) and the matching toolchain
+(`xcrun --show-sdk-version` → 26.x).
 
 ```sh
-./Scripts/build.sh
-open build/BetterBob.app
-# or install:
-cp -r build/BetterBob.app /Applications/
+./Scripts/build.sh          # build build/BetterBob.app
+./Scripts/test.sh           # run the unit tests
+./Scripts/release.sh 1.3    # bump, build, tag, push, publish a GitHub release
 ```
 
-Unit tests (attendance math, auto-break decisions, JSON parsing, TOTP):
-
-```sh
-./Scripts/test.sh
-```
-
-## Project layout
+The attendance logic lives in `Services/AttendanceLogic` as pure, unit-tested
+functions (auto-break decisions, gap/overlap fixing, moving a break). HiBob's
+routes are all in one place (`BobClient`), the JSON parser is deliberately
+tolerant, and one required header (`Bob-TimeZoneOffset`) makes the server report
+your punch state in your own timezone instead of UTC. The private API is
+unofficial and can change without notice — when it does, re-capture the routes
+per `Docs/endpoints.md`.
 
 ```
 Sources/
-  App/                  BetterBob.swift (@main + AppDelegate + status item)
-  Models/               AttendanceEntry, ClockState, AutoBreakAction, ReasonOption, …
-  Services/             AttendanceLogic (pure decision math: auto-break,
-                        gap/overlap normalise, break move), BobParsing
-                        (tolerant JSON), BobClient (internal API), BobState
-                        (polling engine), Keychain, TOTP, Prefs, WiFiMonitor, Notifier
-  Features/Popover/     menu-bar popover
-  Features/Dashboard/   main window: Today, month heatmap, day editor, time off,
-                        the draggable timeline (EditableDayStrip)
-  Features/Onboarding/  first-run / sign-in window
-  Features/Settings/    settings + SSO sign-in + endpoint capture (dev)
-  Intents/              Siri / Shortcuts App Intents
-  UI/                   Bob mascot + shared Liquid Glass components
-Tests/main.swift        unit tests (run via Scripts/test.sh)
-Docs/endpoints.md       internal API capture guide + route table
-Scripts/                build.sh, test.sh, generate_icon.swift
-Resources/              Info.plist, AppIcon.icns (generated)
+  App/          @main + menu-bar status item
+  Models/       core value types (entries, clock state, …)
+  Services/     AttendanceLogic (pure math), BobClient (API), BobState
+                (polling engine), BobParsing, Keychain, TOTP, Prefs, Updater, …
+  Features/     Popover, Dashboard (today/month/time off + draggable timeline),
+                Onboarding (sign-in), Settings
+  Intents/      Siri / Shortcuts
+  UI/           Bob the mascot + shared components
+Tests/          unit tests (Scripts/test.sh)
+Docs/           internal API capture guide + route table
+Scripts/        build.sh, test.sh, release.sh, generate_icon.swift
 ```
 
 ## License
