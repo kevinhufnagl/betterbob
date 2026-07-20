@@ -118,7 +118,16 @@ final class Updater: ObservableObject {
     }
 
     /// Hide the banner until the next check (this session).
-    func dismissForNow() { available = nil; phase = .idle }
+    /// Version the user dismissed from the popover banner. That exact version
+    /// stays hidden (in the popover — Settings still shows it) until a newer
+    /// release appears or it gets installed.
+    @Published private(set) var dismissedVersion: String? =
+        UserDefaults.standard.string(forKey: "dismissedUpdateVersion")
+
+    func dismiss(_ release: Release) {
+        UserDefaults.standard.set(release.version, forKey: "dismissedUpdateVersion")
+        dismissedVersion = release.version
+    }
 
     private func downloadAndSwap(_ release: Release) async throws {
         let fm = FileManager.default

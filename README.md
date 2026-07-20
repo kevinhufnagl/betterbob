@@ -71,7 +71,8 @@ for big clock in/out and break buttons and today's entries.
 
 **Settings** — sign in/out, the auto-break rule, the daily-hours limit (default
 10h — over it, days flag red and Bob nudges you to clock out), automatic
-sign-in, office Wi-Fi tagging, notifications, launch at login, and more.
+sign-in, office Wi-Fi tagging, notifications, the popover's width, layout and
+sections, launch at login, and more.
 
 **Siri & Shortcuts** — "Clock in", "Clock out", "Take a break" from Spotlight,
 Shortcuts, and the Action Button.

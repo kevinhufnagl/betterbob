@@ -26,11 +26,19 @@ struct PopoverRootView: View {
                 // 1s tick keeps worked-time and the countdown live.
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     VStack(spacing: 10) {
-                        workedHeader(now: context.date)
+                        if prefs.popoverShowHeader { workedHeader(now: context.date) }
                         actionButtons(now: context.date)
-                        if state.overMaxNonBreak { missingBreakWarning }
-                        if state.overDailyMax { overDailyMaxWarning }
-                        if !state.entries.isEmpty {
+                        if prefs.popoverShowWarnings {
+                            if state.overMaxNonBreak { missingBreakWarning }
+                            if state.overDailyMax { overDailyMaxWarning }
+                        }
+                        if prefs.popoverShowTimeline, !state.entries.isEmpty {
+                            EditableDayStrip(entries: state.entries, now: context.date,
+                                             height: 28) { updated in
+                                state.saveDay(updated, on: Date())
+                            }
+                        }
+                        if prefs.popoverShowEntries, !state.entries.isEmpty {
                             timeline
                         }
                     }
@@ -46,7 +54,7 @@ struct PopoverRootView: View {
             Divider().opacity(0.3)
             footer
         }
-        .frame(width: 400)
+        .frame(width: prefs.popoverWidth.points)
     }
 
     // MARK: - Update banner
@@ -64,7 +72,8 @@ struct PopoverRootView: View {
                 }
             }
         default:
-            if let rel = updater.available {
+            // "Later" hides this exact version until the next one shows up.
+            if let rel = updater.available, updater.dismissedVersion != rel.version {
                 banner(icon: "sparkles") {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 0) {
@@ -76,7 +85,7 @@ struct PopoverRootView: View {
                             }
                         }
                         Spacer()
-                        Button("Later") { updater.dismissForNow() }
+                        Button("Later") { updater.dismiss(rel) }
                             .buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary)
                         Button("Update") { updater.install() }
                             .controlSize(.small).buttonStyle(.borderedProminent)
@@ -99,7 +108,7 @@ struct PopoverRootView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(nsImage: BobIcon.menuBar(height: 22).tinted(.systemGreen))
+            Image(nsImage: BobIcon.menuBar(height: 22).tinted(.labelColor))
                 .resizable().frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 0) {
                 Text("BetterBob").font(.system(size: 13, weight: .semibold))
@@ -149,23 +158,28 @@ struct PopoverRootView: View {
 
     @ViewBuilder
     private func actionButtons(now: Date) -> some View {
+        // Compact layout puts both buttons on one row.
+        let layout = prefs.popoverCompact ? AnyLayout(HStackLayout(spacing: 8))
+                                          : AnyLayout(VStackLayout(spacing: 8))
         VStack(spacing: 8) {
             // Buttons reflect the state after everything queued; punches fire a
             // minute apart on their own (see the queue in the dashboard footer).
-            switch state.projectedClockState {
-            case .clockedOut:
-                let label = state.currentAutoReason.map { "Clock in · \($0)" } ?? "Clock in"
-                actionButton(label, symbol: "play.fill", tint: .workAccent(scheme)) { state.clockIn() }
-            case .working:
-                actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
-                actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
-                             trailing: autoBreakTrailing(now: now)) {
-                    state.startManualBreak()
+            layout {
+                switch state.projectedClockState {
+                case .clockedOut:
+                    let label = state.currentAutoReason.map { "Clock in · \($0)" } ?? "Clock in"
+                    actionButton(label, symbol: "play.fill", tint: .workAccent(scheme)) { state.clockIn() }
+                case .working:
+                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
+                    actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
+                                 trailing: autoBreakTrailing(now: now)) {
+                        state.startManualBreak()
+                    }
+                case .onBreak:
+                    actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
+                                 trailing: backToWorkTrailing(now: now)) { state.endBreak() }
+                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
                 }
-            case .onBreak:
-                actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
-                             trailing: backToWorkTrailing(now: now)) { state.endBreak() }
-                actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
             }
             if !state.queue.isEmpty {
                 Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")
@@ -182,16 +196,21 @@ struct PopoverRootView: View {
         PopoverActionButton(label: label, symbol: symbol, tint: tint, trailing: trailing, action: action)
     }
 
-    /// "auto in 42m" shown inside the Start-break button while working.
+    /// "auto in 42m" shown inside the Start-break button while working —
+    /// just "42m" in the compact one-row layout, where space is tight.
     private func autoBreakTrailing(now: Date) -> String? {
         guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
-        return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
+        if due <= now { return prefs.popoverCompact ? "now" : "auto now" }
+        let t = Fmt.hm(due.timeIntervalSince(now))
+        return prefs.popoverCompact ? t : "auto in \(t)"
     }
 
     /// "back in 12m" shown inside the End-break button during an auto-break.
     private func backToWorkTrailing(now: Date) -> String? {
         guard let ends = state.autoBreakEnds else { return nil }
-        return ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
+        if ends <= now { return prefs.popoverCompact ? "now" : "back now" }
+        let t = Fmt.hm(ends.timeIntervalSince(now))
+        return prefs.popoverCompact ? t : "back in \(t)"
     }
 
     // MARK: - Over-max-non-break warning + wand
@@ -295,7 +314,7 @@ struct PopoverRootView: View {
                         .foregroundStyle(.primary.opacity(0.85))
                 }
                 .padding(.horizontal, 8)
-                .frame(minHeight: 30)
+                .frame(minHeight: prefs.popoverCompact ? 24 : 30)
                 .contentShape(Rectangle())
                 .contextMenu {
                     if entry.id != nil {

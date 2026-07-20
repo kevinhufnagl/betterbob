@@ -23,6 +23,7 @@ struct SettingsPanel: View {
             }
             SettingsGroup(title: "Notifications") { notificationsContent }
             SettingsGroup(title: "Menu bar") { menuBarContent }
+            SettingsGroup(title: "Popover") { popoverContent }
             SettingsGroup(title: "General") { generalContent }
             SettingsGroup(title: "Updates") { UpdatesCard() }
             if let err = state.lastError {
@@ -263,6 +264,32 @@ struct SettingsPanel: View {
                 ForEach(options) { Text(title($0)).tag($0) }
             }
             .labelsHidden().frame(maxWidth: 200)
+        }
+    }
+
+    @ViewBuilder
+    private var popoverContent: some View {
+        Group {
+            HStack(spacing: 8) {
+                Text("Width").font(.system(size: 12))
+                Spacer()
+                Picker("", selection: $prefs.popoverWidth) {
+                    ForEach(Prefs.PopoverWidth.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().frame(maxWidth: 160)
+            }
+            Toggle("Compact layout (buttons share one row, tighter list)",
+                   isOn: $prefs.popoverCompact)
+                .font(.system(size: 12))
+            Toggle("Show worked-time header", isOn: $prefs.popoverShowHeader)
+                .font(.system(size: 12))
+            Toggle("Show warnings (missing break, daily max)", isOn: $prefs.popoverShowWarnings)
+                .font(.system(size: 12))
+            Toggle("Show today's entries", isOn: $prefs.popoverShowEntries)
+                .font(.system(size: 12))
+            Toggle("Show mini timeline (drag breaks and edges to edit)",
+                   isOn: $prefs.popoverShowTimeline)
+                .font(.system(size: 12))
         }
     }
 

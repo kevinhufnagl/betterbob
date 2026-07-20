@@ -129,6 +129,49 @@ final class Prefs: ObservableObject {
         }
     }
 
+    /// Popover width presets.
+    enum PopoverWidth: String, CaseIterable, Identifiable {
+        case compact, regular, wide
+        var id: String { rawValue }
+        var points: CGFloat {
+            switch self {
+            case .compact: return 360
+            case .regular: return 400
+            case .wide: return 460
+            }
+        }
+        var label: String {
+            switch self {
+            case .compact: return "Compact (360)"
+            case .regular: return "Regular (400)"
+            case .wide: return "Wide (460)"
+            }
+        }
+    }
+    @Published var popoverWidth: PopoverWidth {
+        didSet { UserDefaults.standard.set(popoverWidth.rawValue, forKey: "popoverWidth") }
+    }
+
+    /// Compact popover: clock/break buttons share one row, tighter entry rows.
+    @Published var popoverCompact: Bool {
+        didSet { UserDefaults.standard.set(popoverCompact, forKey: "popoverCompact") }
+    }
+
+    /// Which popover sections to show.
+    @Published var popoverShowHeader: Bool {
+        didSet { UserDefaults.standard.set(popoverShowHeader, forKey: "popoverShowHeader") }
+    }
+    @Published var popoverShowWarnings: Bool {
+        didSet { UserDefaults.standard.set(popoverShowWarnings, forKey: "popoverShowWarnings") }
+    }
+    @Published var popoverShowEntries: Bool {
+        didSet { UserDefaults.standard.set(popoverShowEntries, forKey: "popoverShowEntries") }
+    }
+    /// Opt-in mini timeline strip (drag breaks / edges right in the popover).
+    @Published var popoverShowTimeline: Bool {
+        didSet { UserDefaults.standard.set(popoverShowTimeline, forKey: "popoverShowTimeline") }
+    }
+
     /// Tint the menu-bar icon by clock state (green working / orange break).
     @Published var colorMenuBarIcon: Bool {
         didSet {
@@ -200,6 +243,13 @@ final class Prefs: ObservableObject {
             .flatMap(MenuBarTextOut.init) ?? seed.2
         self.showStateBadge = d.object(forKey: "showStateBadge") as? Bool ?? true
         self.colorMenuBarIcon = d.object(forKey: "colorMenuBarIcon") as? Bool ?? false
+        self.popoverWidth = d.string(forKey: "popoverWidth")
+            .flatMap(PopoverWidth.init) ?? .regular
+        self.popoverCompact = d.object(forKey: "popoverCompact") as? Bool ?? false
+        self.popoverShowHeader = d.object(forKey: "popoverShowHeader") as? Bool ?? true
+        self.popoverShowWarnings = d.object(forKey: "popoverShowWarnings") as? Bool ?? true
+        self.popoverShowEntries = d.object(forKey: "popoverShowEntries") as? Bool ?? true
+        self.popoverShowTimeline = d.object(forKey: "popoverShowTimeline") as? Bool ?? false
         self.wifiAutoReasonEnabled = d.object(forKey: "wifiAutoReasonEnabled") as? Bool ?? false
         self.defaultReasonName = d.string(forKey: "defaultReasonName") ?? ""
         if let data = d.data(forKey: "wifiRules"),
