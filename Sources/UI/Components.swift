@@ -60,7 +60,7 @@ extension View {
                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
             )
     }
 
@@ -120,22 +120,37 @@ struct SectionCaption: View {
 // These are hand-picked to stay legible in both appearances: deeper and more
 // saturated in light mode, brighter in dark mode.
 extension Color {
+    /// BetterBob's primary accent — the blue-leaning teal the liquid hero
+    /// settles on. Replaces the old work green and the popover's system blue;
+    /// also Bob's cap and the app icon.
+    static func primaryAccent(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(red: 0.30, green: 0.82, blue: 0.85)
+                        : Color(red: 0.04, green: 0.38, blue: 0.40)
+    }
+    /// Fixed mid-teal for contexts that can't read the color scheme
+    /// (menu-bar tint, clock-state dots) — legible on both appearances.
+    static let bobTeal = Color(red: 0.11, green: 0.60, blue: 0.62)
+    /// Fixed warm tones tuned to complement the teal: a coral-leaning orange
+    /// for break/attention and a rose-leaning red for hard warnings.
+    static let bobOrange = Color(red: 0.88, green: 0.47, blue: 0.24)
+    static let bobRed = Color(red: 0.85, green: 0.27, blue: 0.33)
+
     static func workAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.40, green: 0.88, blue: 0.52)
-                        : Color(red: 0.09, green: 0.50, blue: 0.24)
+        primaryAccent(scheme)
     }
     static func breakAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 1.00, green: 0.72, blue: 0.38)
-                        : Color(red: 0.78, green: 0.42, blue: 0.04)
+        scheme == .dark ? Color(red: 1.00, green: 0.63, blue: 0.43)
+                        : Color(red: 0.75, green: 0.34, blue: 0.13)
     }
     static func reasonAccent(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Color(red: 0.45, green: 0.72, blue: 1.00)
                         : Color(red: 0.10, green: 0.42, blue: 0.85)
     }
-    /// Clock-out / stop red — muted in light mode where system red is too hot.
+    /// Clock-out / stop red — rose-leaning to sit well next to the teal,
+    /// muted in light mode where system red is too hot.
     static func outAccent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 1.00, green: 0.45, blue: 0.42)
-                        : Color(red: 0.72, green: 0.16, blue: 0.14)
+        scheme == .dark ? Color(red: 1.00, green: 0.44, blue: 0.50)
+                        : Color(red: 0.72, green: 0.15, blue: 0.23)
     }
 }
 
@@ -145,8 +160,8 @@ extension ClockState {
     var tint: Color {
         switch self {
         case .clockedOut: return .secondary
-        case .working: return .green
-        case .onBreak: return .orange
+        case .working: return .bobTeal
+        case .onBreak: return .bobOrange
         }
     }
 

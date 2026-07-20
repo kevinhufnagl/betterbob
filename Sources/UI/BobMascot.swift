@@ -18,8 +18,8 @@ struct BobPalette {
     var pupil    = Color(red: 0.16, green: 0.10, blue: 0.07)
     var blush    = Color(red: 0.93, green: 0.55, blue: 0.48)
     var outline  = Color(red: 0.30, green: 0.19, blue: 0.11)
-    var capBlue  = Color(red: 0.16, green: 0.42, blue: 0.80)
-    var capDark  = Color(red: 0.10, green: 0.30, blue: 0.62)
+    var capBlue  = Color(red: 0.10, green: 0.55, blue: 0.58)
+    var capDark  = Color(red: 0.06, green: 0.36, blue: 0.39)
 }
 
 /// A single frame of Bob's face. `blink` 0→1 closes the eyes; `tail` -1→1 wags
@@ -191,35 +191,65 @@ struct BobMascot: View {
 
 /// Idle-animated Bob for the app — gentle breathing, an occasional blink, and
 /// a lazy tail wag, all derived deterministically from the clock (no timers).
+/// `sleeping` closes his eyes, slows the breathing, and floats z's — used
+/// wherever the clock is off (same look as the phone page).
 struct AnimatedBob: View {
     /// When set, Bob's eyes point here (−1…1 each axis) instead of idly wandering.
     var lookAt: CGSize? = nil
+    var sleeping = false
     var palette = BobPalette()
-    // Only animate while on screen — a retained-but-hidden view (e.g. the closed
-    // popover) would otherwise keep the 30fps clock running and burn CPU idle.
+    // Only animate while on screen — a retained-but-hidden view (a closed
+    // popover, but also a closed-yet-retained window) would otherwise keep
+    // the 24fps clock running and burn CPU idle.
     @State private var active = false
+    @State private var windowVisible = true
 
     var body: some View {
         Group {
-            if active {
+            if active && windowVisible {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
                     let t = ctx.date.timeIntervalSinceReferenceDate
-                    let breathe = 1 + 0.02 * sin(t * 1.6)
-                    let tail = CGFloat(sin(t * 1.8)) * 0.6
-                    // A quick blink in the first ~0.16s of every 4.2s cycle.
-                    let cycle = t.truncatingRemainder(dividingBy: 4.2)
-                    let blink = cycle < 0.16 ? CGFloat(sin(cycle / 0.16 * .pi)) : 0
-                    let idle = CGSize(width: sin(t * 0.7) * 0.5, height: sin(t * 0.9) * 0.18)
-                    BobMascot(blink: blink, tail: tail, look: lookAt ?? idle, palette: palette)
-                        .scaleEffect(breathe, anchor: .bottom)
-                        .animation(.easeOut(duration: 0.18), value: lookAt)
+                    if sleeping {
+                        // Deep, slow breaths; eyes shut; the cursor can't wake him.
+                        BobMascot(blink: 1, look: .zero, palette: palette)
+                            .scaleEffect(1 + 0.035 * sin(t * 0.9), anchor: .bottom)
+                            .overlay(alignment: .topTrailing) { zzz(t) }
+                    } else {
+                        let breathe = 1 + 0.02 * sin(t * 1.6)
+                        let tail = CGFloat(sin(t * 1.8)) * 0.6
+                        // A quick blink in the first ~0.16s of every 4.2s cycle.
+                        let cycle = t.truncatingRemainder(dividingBy: 4.2)
+                        let blink = cycle < 0.16 ? CGFloat(sin(cycle / 0.16 * .pi)) : 0
+                        let idle = CGSize(width: sin(t * 0.7) * 0.5, height: sin(t * 0.9) * 0.18)
+                        BobMascot(blink: blink, tail: tail, look: lookAt ?? idle, palette: palette)
+                            .scaleEffect(breathe, anchor: .bottom)
+                            .animation(.easeOut(duration: 0.18), value: lookAt)
+                    }
                 }
             } else {
-                BobMascot(look: lookAt ?? .zero, palette: palette)
+                BobMascot(blink: sleeping ? 1 : 0, look: sleeping ? .zero : (lookAt ?? .zero),
+                          palette: palette)
             }
         }
+        .trackWindowVisibility { windowVisible = $0 }
         .onAppear { active = true }
         .onDisappear { active = false }
+    }
+
+    /// Three z's drifting up-right on staggered phases of one shared cycle.
+    private func zzz(_ t: Double) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            ForEach(0..<3, id: \.self) { i in
+                let phase = (t / 2.6 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                Text("z")
+                    .font(.system(size: 8 + CGFloat(i) * 3, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .opacity(sin(phase * .pi) * 0.9)
+                    .offset(x: CGFloat(i) * 7 + phase * 4,
+                            y: -CGFloat(i) * 7 - phase * 6)
+            }
+        }
+        .offset(x: 8, y: 2)
     }
 }
 
@@ -229,18 +259,21 @@ struct BobPlaceholder<Trailing: View>: View {
     let title: String
     let lines: [String]
     let size: CGFloat
+    let sleeping: Bool
     let trailing: Trailing
 
     @State private var active = false
+    @State private var windowVisible = true
 
-    init(title: String, lines: [String] = [], size: CGFloat = 96,
+    init(title: String, lines: [String] = [], size: CGFloat = 96, sleeping: Bool = false,
          @ViewBuilder trailing: () -> Trailing) {
-        self.title = title; self.lines = lines; self.size = size; self.trailing = trailing()
+        self.title = title; self.lines = lines; self.size = size
+        self.sleeping = sleeping; self.trailing = trailing()
     }
 
     var body: some View {
         Group {
-            if active {
+            if active && windowVisible {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
                     let t = ctx.date.timeIntervalSinceReferenceDate
                     content(bounce: CGFloat(sin(t * 2.0)) * 4,
@@ -250,13 +283,15 @@ struct BobPlaceholder<Trailing: View>: View {
                 content(bounce: 0, idx: 0)
             }
         }
+        .trackWindowVisibility { windowVisible = $0 }
         .onAppear { active = true }
         .onDisappear { active = false }
     }
 
     private func content(bounce: CGFloat, idx: Int) -> some View {
         VStack(spacing: 14) {
-            AnimatedBob().frame(width: size, height: size).offset(y: bounce)
+            AnimatedBob(sleeping: sleeping).frame(width: size, height: size)
+                .offset(y: sleeping ? 0 : bounce)
             VStack(spacing: 4) {
                 Text(title).font(.system(size: 15, weight: .semibold))
                 if !lines.isEmpty {
@@ -273,8 +308,8 @@ struct BobPlaceholder<Trailing: View>: View {
 }
 
 extension BobPlaceholder where Trailing == EmptyView {
-    init(title: String, lines: [String] = [], size: CGFloat = 96) {
-        self.init(title: title, lines: lines, size: size) { EmptyView() }
+    init(title: String, lines: [String] = [], size: CGFloat = 96, sleeping: Bool = false) {
+        self.init(title: title, lines: lines, size: size, sleeping: sleeping) { EmptyView() }
     }
 }
 

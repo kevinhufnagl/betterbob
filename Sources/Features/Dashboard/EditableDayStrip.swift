@@ -222,13 +222,13 @@ struct EditableDayStrip: View {
         let text = dur > 0 ? "\(Fmt.clock(when))–\(Fmt.clock(when.addingTimeInterval(dur)))"
                            : Fmt.clock(when)
         return ZStack(alignment: .topLeading) {
-            Rectangle().fill(Color.accentColor).frame(width: 2, height: height)
+            Rectangle().fill(Color.bobTeal).frame(width: 2, height: height)
                 .offset(x: max(0, min(w - 2, x)))
             Text(text)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .padding(.horizontal, 5).padding(.vertical, 2)
                 .background(Capsule().fill(.regularMaterial))
-                .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 0.8))
+                .overlay(Capsule().strokeBorder(Color.bobTeal.opacity(0.6), lineWidth: 0.8))
                 .fixedSize()
                 .offset(x: max(0, min(w - 92, x - (dur > 0 ? 45 : 22))), y: -4)
         }

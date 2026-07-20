@@ -744,6 +744,58 @@ expect(!Updater.isNewer("1.0", than: "1.0"), "equal → not newer")
 expect(!Updater.isNewer("1.0", than: "1.0.1"), "1.0 < 1.0.1")
 expect(!Updater.isNewer("1.9", than: "2.0"), "older → not newer")
 
+// MARK: - StatsHTTP (phone stats page routing + JSON)
+
+print("StatsHTTP.requestLine")
+expect(StatsHTTP.requestLine("GET /abc HTTP/1.1\r\nHost: x\r\n\r\n")! == ("GET", "/abc"),
+       "plain GET → method + path")
+expect(StatsHTTP.requestLine("GET /abc?x=1&y=2 HTTP/1.1\r\n\r\n")! == ("GET", "/abc"),
+       "query string stripped")
+expect(StatsHTTP.requestLine("POST /t/action/clockIn HTTP/1.1\r\n\r\n")! == ("POST", "/t/action/clockIn"),
+       "POST parsed")
+expect(StatsHTTP.requestLine("GARBAGE") == nil, "garbage → nil")
+expect(StatsHTTP.requestLine("GET /abc") == nil, "missing HTTP version → nil")
+
+print("StatsHTTP.route")
+expect(StatsHTTP.route(method: "GET", path: "/tok3n", token: "tok3n") == .page,
+       "token path → page")
+expect(StatsHTTP.route(method: "GET", path: "/tok3n/", token: "tok3n") == .page,
+       "trailing slash → page")
+expect(StatsHTTP.route(method: "GET", path: "/tok3n/stats.json", token: "tok3n") == .json,
+       "stats.json → json")
+expect(StatsHTTP.route(method: "GET", path: "/wrong", token: "tok3n") == .notFound,
+       "wrong token → notFound")
+expect(StatsHTTP.route(method: "GET", path: "/", token: "tok3n") == .notFound,
+       "root → notFound")
+expect(StatsHTTP.route(method: "GET", path: "/tok3n", token: "") == .notFound,
+       "empty token → everything notFound")
+expect(StatsHTTP.route(method: "POST", path: "/tok3n/action/clockIn", token: "tok3n") == .action("clockIn"),
+       "POST action → action(clockIn)")
+expect(StatsHTTP.route(method: "GET", path: "/tok3n/action/clockIn", token: "tok3n") == .notFound,
+       "GET on action route → notFound (POST-only)")
+expect(StatsHTTP.route(method: "POST", path: "/tok3n/action/", token: "tok3n") == .notFound,
+       "empty action name → notFound")
+expect(StatsHTTP.route(method: "POST", path: "/tok3n", token: "tok3n") == .notFound,
+       "POST on page route → notFound")
+
+print("StatsHTTP.json")
+let snap = StatsSnapshot(
+    name: "Kevin \"K\" \\ line\nbreak", state: "working", projected: "break",
+    actionsEnabled: true, workedSeconds: 3600, asOf: 1_784_160_000,
+    targetSeconds: 28_800, breakSeconds: 1800, breakEndsAt: nil,
+    entries: [.init(kind: "work", start: 1_784_160_000, end: 1_784_163_600),
+              .init(kind: "break", start: 1_784_163_600, end: nil)])
+let parsed = (try? JSONSerialization.jsonObject(with: Data(StatsHTTP.json(snap).utf8))) as? [String: Any]
+expect(parsed != nil, "escaped snapshot parses as valid JSON")
+expect(parsed?["name"] as? String == "Kevin \"K\" \\ line\nbreak", "name round-trips through escaping")
+expect(parsed?["worked"] as? Int == 3600, "worked carried over")
+expect(parsed?["projected"] as? String == "break", "projected state carried over")
+expect(parsed?["actions"] as? Bool == true, "actions flag carried over")
+expect(parsed?["breakEndsAt"] is NSNull, "nil breakEndsAt → null")
+let jsonEntries = parsed?["entries"] as? [[String: Any]]
+expect(jsonEntries?.count == 2, "both entries encoded")
+expect(jsonEntries?[1]["end"] is NSNull, "open entry end → null")
+
 // MARK: - Summary
 
 print("")

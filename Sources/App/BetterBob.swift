@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         BobState.shared.start()
         Updater.shared.start()
+        PhoneView.shared.start()
 
         // Throwaway dev scaffold: `--capture-endpoints` opens the attendance
         // page in the signed-in browser and records the API calls so the
@@ -127,7 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         if Prefs.shared.colorMenuBarIcon, state != .clockedOut {
             // Tinted (non-template) Bob by clock state.
-            button.image = bob.tinted(onBreak ? .systemOrange : .systemGreen)
+            button.image = bob.tinted(onBreak
+                ? NSColor(red: 0.88, green: 0.47, blue: 0.24, alpha: 1)
+                : NSColor(red: 0.11, green: 0.60, blue: 0.62, alpha: 1))
         } else {
             button.image = bob
         }

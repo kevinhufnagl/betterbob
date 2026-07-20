@@ -77,8 +77,9 @@ func render(size px: Int) -> Data? {
                        cornerWidth: radius, cornerHeight: radius, transform: nil))
     ctx.clip()
 
+    // Brand ramp — the liquid hero's deep blue → teal, diagonal.
     let bgColors = [
-        c(0.55, 0.10, 0.28), c(0.80, 0.22, 0.25), c(0.95, 0.52, 0.20),
+        c(0.04, 0.12, 0.26), c(0.06, 0.30, 0.36), c(0.12, 0.56, 0.58),
     ] as CFArray
     let bgGrad = CGGradient(colorsSpace: cs, colors: bgColors, locations: [0.0, 0.55, 1.0])!
     ctx.drawLinearGradient(bgGrad, start: CGPoint(x: 0, y: s), end: CGPoint(x: s, y: 0), options: [])
@@ -130,9 +131,10 @@ func render(size px: Int) -> Data? {
                            end: CGPoint(x: 0, y: headRect.minY), options: [])
     ctx.restoreGState()
 
-    // ── Blue cap that says "bob": visor over the brow, a flatter crown, ears
-    //    poking out at the sides.
-    let capBlue = c(0.17, 0.44, 0.82), capDark = c(0.10, 0.30, 0.62)
+    // ── Teal cap that says "bob" (the brand primary): visor over the brow,
+    //    a flatter crown, ears poking out at the sides. A touch brighter than
+    //    the background ramp so it still reads as its own shape.
+    let capBlue = c(0.15, 0.68, 0.70), capDark = c(0.08, 0.44, 0.47)
     // Visor — a wide, thin brim jutting over the brow.
     fillRoundRect(ell(0.5, 0.70, 0.72, 0.12), s * 0.05, capDark)
     // Crown — a rounded dome: fully round on top, flat where it meets the visor

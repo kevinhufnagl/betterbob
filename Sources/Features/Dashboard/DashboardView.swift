@@ -54,8 +54,12 @@ struct Card<Content: View>: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // primary-based border + soft shadow so the card's true extent is
+        // visible in light mode too (a white hairline vanishes there, making
+        // cards read narrower than the hero).
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.6))
+            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6))
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 }
 
@@ -85,7 +89,8 @@ struct StatTile: View {
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.6))
+            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6))
+        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 }
 

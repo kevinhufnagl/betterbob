@@ -271,7 +271,7 @@ struct DayDetailSheet: View {
     private var overMaxBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.octagon.fill")
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.red)
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.bobRed)
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(Fmt.hm(worked)) worked — over the \(Fmt.hm(Prefs.shared.maxDayLimit)) daily max")
                     .font(.system(size: 12, weight: .semibold))
@@ -281,16 +281,16 @@ struct DayDetailSheet: View {
             Spacer()
         }
         .padding(12)
-        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.bobRed.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(Color.red.opacity(0.30), lineWidth: 0.8))
+            .strokeBorder(Color.bobRed.opacity(0.30), lineWidth: 0.8))
     }
 
     /// Wand to fix a too-long uninterrupted run on this (any) day.
     private func wandBanner(_ day: DayEntries) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "wand.and.stars").font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.bobOrange)
             VStack(alignment: .leading, spacing: 1) {
                 Text("A stretch runs past your \(Fmt.hm(Prefs.shared.threshold)) max without a break")
                     .font(.system(size: 12, weight: .semibold))
@@ -301,15 +301,15 @@ struct DayDetailSheet: View {
             Button { state.addMissingBreak(in: day.entries, on: day.date) } label: {
                 Label("Add break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 12).frame(height: 30)
-                    .background(Capsule().fill(Color.orange.opacity(0.18)))
-                    .overlay(Capsule().strokeBorder(Color.orange.opacity(0.45), lineWidth: 0.8))
-                    .foregroundStyle(.orange)
+                    .background(Capsule().fill(Color.bobOrange.opacity(0.18)))
+                    .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.45), lineWidth: 0.8))
+                    .foregroundStyle(Color.bobOrange)
             }.buttonStyle(.plain).disabled(state.busy)
         }
         .padding(12)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(Color.orange.opacity(0.30), lineWidth: 0.8))
+            .strokeBorder(Color.bobOrange.opacity(0.30), lineWidth: 0.8))
     }
 }
 
@@ -369,7 +369,7 @@ struct CyclePane: View {
                         .frame(width: 6, height: 6)
                 }
                 if isToday {
-                    Text("Today").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.accentColor)
+                    Text("Today").font(.system(size: 9, weight: .bold)).foregroundStyle(Color.bobTeal)
                 }
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.tertiary)
@@ -400,7 +400,7 @@ struct CyclePane: View {
         return Card(title: "Break compliance", symbol: "checkmark.shield") {
             HStack(spacing: 10) {
                 Image(systemName: v == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(v == 0 ? .green : .orange).font(.system(size: 18))
+                    .foregroundStyle(v == 0 ? .green : .bobOrange).font(.system(size: 18))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(v == 0 ? "No break violations this cycle" : "\(v) break violation\(v == 1 ? "" : "s")")
                         .font(.system(size: 12, weight: .medium))
@@ -427,9 +427,9 @@ struct CyclePane: View {
                      tint: (s?.overUnderMinutes ?? 0) >= 0 ? .workAccent(scheme) : .breakAccent(scheme),
                      symbol: "plusminus")
             StatTile(value: s.map { "\($0.payableTimePercent)%" } ?? "—", caption: "Progress", symbol: "chart.pie")
-            StatTile(value: deadlineText, caption: "Locks in", tint: .orange, symbol: "lock")
+            StatTile(value: deadlineText, caption: "Locks in", tint: .bobOrange, symbol: "lock")
             StatTile(value: "\(s?.breakViolations ?? 0)", caption: "Break issues",
-                     tint: (s?.breakViolations ?? 0) == 0 ? .green : .orange,
+                     tint: (s?.breakViolations ?? 0) == 0 ? .green : .bobOrange,
                      symbol: (s?.breakViolations ?? 0) == 0 ? "checkmark.shield" : "exclamationmark.shield")
         }
     }
@@ -494,7 +494,7 @@ struct CalendarHeatmap: View {
             .first(where: { $0.dateKey == day.date })
             .map { state.isOverDailyMax($0.entries) }
             ?? (day.worked * 3600 > Prefs.shared.maxDayLimit)
-        let accent = overMax ? Color.red : breakIssue ? Color.orange : Color.workAccent(scheme)
+        let accent = overMax ? Color.bobRed : breakIssue ? Color.bobOrange : Color.workAccent(scheme)
         // Same language as the time-off calendar: subtle tinted fill + strong
         // border + bold tinted text — strengths scale with hours worked. On
         // hover a worked cell stays green, just a stronger tint (same as the
@@ -549,9 +549,9 @@ struct CalendarHeatmap: View {
             }
             Text("More").font(.system(size: 9)).foregroundStyle(.tertiary)
             Spacer()
-            RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity(0.5)).frame(width: 14, height: 10)
+            RoundedRectangle(cornerRadius: 3).fill(Color.bobOrange.opacity(0.5)).frame(width: 14, height: 10)
             Text("Break issue").font(.system(size: 9)).foregroundStyle(.tertiary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.red.opacity(0.5)).frame(width: 14, height: 10)
+            RoundedRectangle(cornerRadius: 3).fill(Color.bobRed.opacity(0.5)).frame(width: 14, height: 10)
             Text("Over daily max").font(.system(size: 9)).foregroundStyle(.tertiary)
         }
     }
@@ -646,9 +646,9 @@ struct ActivityPane: View {
     }
     private func color(_ k: ActivityEvent.Kind) -> Color {
         switch k {
-        case .clockedIn: return .green
-        case .clockedOut: return .red
-        case .addedBreak: return .orange
+        case .clockedIn: return .bobTeal
+        case .clockedOut: return .bobRed
+        case .addedBreak: return .bobOrange
         case .edited: return .blue
         case .other: return .secondary
         }

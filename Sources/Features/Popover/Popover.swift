@@ -105,11 +105,12 @@ struct PopoverRootView: View {
 
     private func banner<Content: View>(icon: String, @ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+            Image(systemName: icon).font(.system(size: 12))
+                .foregroundStyle(Color.primaryAccent(scheme))
             content()
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Color.accentColor.opacity(0.10))
+        .background(Color.primaryAccent(scheme).opacity(0.10))
         .transition(.bobBanner)
     }
 
@@ -266,7 +267,7 @@ struct PopoverRootView: View {
                     .font(.system(size: 11, weight: .semibold))
                 Spacer()
             }
-            .foregroundStyle(.orange)
+            .foregroundStyle(Color.bobOrange)
             Button {
                 state.addMissingBreak()
             } label: {
@@ -275,10 +276,10 @@ struct PopoverRootView: View {
                     Text("Add \(Prefs.shared.breakMinutes)-min break")
                         .font(.system(size: 12, weight: .semibold))
                 }
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.bobOrange)
                 .frame(maxWidth: .infinity).frame(height: 30)
-                .background(Capsule().fill(Color.orange.opacity(0.14)))
-                .overlay(Capsule().strokeBorder(Color.orange.opacity(0.4), lineWidth: 0.7))
+                .background(Capsule().fill(Color.bobOrange.opacity(0.14)))
+                .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.4), lineWidth: 0.7))
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -286,9 +287,9 @@ struct PopoverRootView: View {
             .fastTooltip("Insert a break mid-shift — clock-in/out stay the same.")
         }
         .padding(9)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(Color.orange.opacity(0.28), lineWidth: 0.7))
+            .strokeBorder(Color.bobOrange.opacity(0.28), lineWidth: 0.7))
         .transition(.bobBanner)
     }
 
@@ -300,36 +301,21 @@ struct PopoverRootView: View {
                 .font(.system(size: 11, weight: .semibold))
             Spacer()
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(Color.bobRed)
         .padding(9)
-        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.bobRed.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(Color.red.opacity(0.28), lineWidth: 0.7))
+            .strokeBorder(Color.bobRed.opacity(0.28), lineWidth: 0.7))
         .transition(.bobBanner)
     }
 
     // MARK: - Worked total (prominent, above the buttons)
 
-    /// Big worked figure in the same style as the dashboard's headline number,
-    /// with the day's progress toward target on the right.
+    /// The same liquid hero as the dashboard, sized for the popover.
     private func workedHeader(now: Date) -> some View {
         let v = TodayVals(state, now: now)
-        let tint: Color = v.over ? .workAccent(scheme) : .accentColor
-        return HStack(alignment: .lastTextBaseline, spacing: 8) {
-            Text(Fmt.hm(v.worked))
-                .font(.system(size: 40, weight: .bold, design: .rounded))
-                .foregroundStyle(tint).contentTransition(.numericText())
-                .animation(Motion.numeric, value: Fmt.hm(v.worked))
-            Text("worked").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-            Spacer()
-            if v.targetSecs > 0 {
-                Text("\(Int((v.fraction * 100).rounded()))%")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(tint)
-                    .contentTransition(.numericText())
-                    .animation(Motion.numeric, value: Int((v.fraction * 100).rounded()))
-            }
-        }
+        return LiquidHero(worked: v.worked, target: v.targetSecs, compact: true)
+            .frame(height: 100)
     }
 
     // MARK: - Today's timeline
@@ -433,7 +419,7 @@ struct PopoverRootView: View {
 
     private var signInPrompt: some View {
         VStack(spacing: 8) {
-            AnimatedBob().frame(width: 54, height: 54)
+            AnimatedBob(sleeping: true).frame(width: 54, height: 54)
             Text("Bob's off the clock")
                 .font(.system(size: 12, weight: .semibold))
             Text("Sign in to HiBob to get going")

@@ -117,7 +117,7 @@ struct MainWindow: View {
     }
 
     private var signedOutPlaceholder: some View {
-        BobPlaceholder(title: "Bob's off the clock", lines: BobLines.signedOut) {
+        BobPlaceholder(title: "Bob's off the clock", lines: BobLines.signedOut, sleeping: true) {
             VStack(spacing: 8) {
                 if state.autoLoginInProgress {
                     HStack(spacing: 8) {
@@ -162,7 +162,7 @@ struct FooterBar: View {
             Spacer()
             if let err = state.lastError {
                 Label(err, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10)).foregroundStyle(.orange).lineLimit(1)
+                    .font(.system(size: 10)).foregroundStyle(Color.bobOrange).lineLimit(1)
             } else if let sync = state.lastSync {
                 Text("Synced \(Fmt.clock(sync))")
                     .font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
@@ -187,9 +187,9 @@ struct QueueChip: View {
 
     private func tint(_ a: PunchAction) -> Color {
         switch a {
-        case .clockIn, .endBreak: return .green
-        case .clockOut: return .red
-        case .startBreak: return .orange
+        case .clockIn, .endBreak: return .bobTeal
+        case .clockOut: return .bobRed
+        case .startBreak: return .bobOrange
         }
     }
 
@@ -199,10 +199,10 @@ struct QueueChip: View {
                 Image(systemName: "hourglass").font(.system(size: 9, weight: .bold))
                 Text("\(state.queue.count) queued").font(.system(size: 10, weight: .semibold))
             }
-            .foregroundStyle(.orange)
+            .foregroundStyle(Color.bobOrange)
             .padding(.horizontal, 8).frame(height: 18)
-            .background(Capsule().fill(Color.orange.opacity(0.14)))
-            .overlay(Capsule().strokeBorder(Color.orange.opacity(0.35), lineWidth: 0.7))
+            .background(Capsule().fill(Color.bobOrange.opacity(0.14)))
+            .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.35), lineWidth: 0.7))
         }
         .buttonStyle(.plain)
         .popover(isPresented: $show, arrowEdge: .top) { queuePopover }

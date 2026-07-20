@@ -268,9 +268,9 @@ struct AgendaList: View {
             if state.clockState != .clockedOut {
                 HStack(spacing: 12) {
                     Text("now").font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color.accentColor).frame(width: 48, alignment: .leading)
-                    ZStack { Rectangle().fill(Color.accentColor.opacity(0.4)).frame(width: 2)
-                        Circle().stroke(Color.accentColor, lineWidth: 2).frame(width: 9, height: 9) }.frame(width: 12)
+                        .foregroundStyle(Color.bobTeal).frame(width: 48, alignment: .leading)
+                    ZStack { Rectangle().fill(Color.bobTeal.opacity(0.4)).frame(width: 2)
+                        Circle().stroke(Color.bobTeal, lineWidth: 2).frame(width: 9, height: 9) }.frame(width: 12)
                     Text(state.clockState.title.lowercased() + "…").font(.system(size: 12))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -315,10 +315,10 @@ struct TodayTimeline: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let v = TodayVals(state, now: ctx.date)
-            let tint: Color = v.over ? .workAccent(scheme) : .accentColor
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 12) {
-                    AnimatedBob(lookAt: lookAt).frame(width: 60, height: 60)
+                    AnimatedBob(lookAt: lookAt, sleeping: state.clockState == .clockedOut)
+                        .frame(width: 60, height: 60)
                         .background(GeometryReader { g in
                             let f = g.frame(in: .named("today"))
                             Color.clear.preference(key: BobCenterKey.self,
@@ -329,29 +329,12 @@ struct TodayTimeline: View {
                     StatusPill(state: state)
                 }
 
+                LiquidHero(worked: v.worked, target: v.targetSecs,
+                           saving: state.busy || !state.deletingEntries.isEmpty)
+                    .frame(height: 176)
+
                 Card {
                     VStack(alignment: .leading, spacing: 16) {
-                        // Prominent worked total.
-                        HStack(alignment: .lastTextBaseline, spacing: 10) {
-                            Text(Fmt.hm(v.worked)).font(.system(size: 52, weight: .bold, design: .rounded))
-                                .foregroundStyle(tint).contentTransition(.numericText())
-                                .animation(Motion.numeric, value: Fmt.hm(v.worked))
-                            Text("worked").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
-                            Spacer()
-                            if state.busy || !state.deletingEntries.isEmpty {
-                                HStack(spacing: 5) {
-                                    ProgressView().controlSize(.small).scaleEffect(0.75)
-                                    Text("Saving…").font(.system(size: 11)).foregroundStyle(.secondary)
-                                }
-                                .transition(.opacity)
-                            }
-                            Text("\(Int((v.fraction * 100).rounded()))%")
-                                .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(tint)
-                                .contentTransition(.numericText())
-                                .animation(Motion.numeric, value: Int((v.fraction * 100).rounded()))
-                        }
-                        .animation(Motion.quick, value: state.busy)
-
                         if state.entries.isEmpty {
                             Text("No entries yet today.").font(.system(size: 12)).foregroundStyle(.secondary)
                         } else {
@@ -363,8 +346,15 @@ struct TodayTimeline: View {
                                     Text(state.entries.map(\.start).min().map(Fmt.clock) ?? "")
                                         .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
                                     Spacer()
-                                    Text(Fmt.clock(ctx.date) + " now")
-                                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                    // "now" only while an entry is open — a
+                                    // clocked-out day ends at its last entry.
+                                    if state.entries.contains(where: { $0.end == nil }) {
+                                        Text(Fmt.clock(ctx.date) + " now")
+                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                    } else {
+                                        Text(state.entries.compactMap(\.end).max().map(Fmt.clock) ?? "")
+                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                    }
                                 }
                             }
                         }
@@ -427,7 +417,7 @@ struct TodayTimeline: View {
 
     private var missingBreakBanner: some View {
         HStack(spacing: 12) {
-            Image(systemName: "wand.and.stars").font(.system(size: 16, weight: .semibold)).foregroundStyle(.orange)
+            Image(systemName: "wand.and.stars").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.bobOrange)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Over your \(Fmt.hm(Prefs.shared.threshold)) max without a break")
                     .font(.system(size: 12, weight: .semibold))
@@ -438,15 +428,15 @@ struct TodayTimeline: View {
             Button { state.addMissingBreak() } label: {
                 Label("Add break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 12).frame(height: 30)
-                    .background(Capsule().fill(Color.orange.opacity(0.18)))
-                    .overlay(Capsule().strokeBorder(Color.orange.opacity(0.45), lineWidth: 0.8))
-                    .foregroundStyle(.orange)
+                    .background(Capsule().fill(Color.bobOrange.opacity(0.18)))
+                    .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.45), lineWidth: 0.8))
+                    .foregroundStyle(Color.bobOrange)
             }.buttonStyle(.plain).disabled(state.busy)
         }
         .padding(14)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(Color.orange.opacity(0.30), lineWidth: 0.8))
+            .strokeBorder(Color.bobOrange.opacity(0.30), lineWidth: 0.8))
     }
 
     /// Red and actionless — you can't un-work hours, so unlike the missing
@@ -454,7 +444,7 @@ struct TodayTimeline: View {
     private var overDailyMaxBanner: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.octagon.fill")
-                .font(.system(size: 16, weight: .semibold)).foregroundStyle(.red)
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.bobRed)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Over your \(Fmt.hm(Prefs.shared.maxDayLimit)) daily max")
                     .font(.system(size: 12, weight: .semibold))
@@ -464,9 +454,9 @@ struct TodayTimeline: View {
             Spacer()
         }
         .padding(14)
-        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.bobRed.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(Color.red.opacity(0.30), lineWidth: 0.8))
+            .strokeBorder(Color.bobRed.opacity(0.30), lineWidth: 0.8))
     }
 
     private func stat(_ value: String, _ label: String, _ tint: Color) -> some View {
@@ -481,5 +471,261 @@ struct TodayTimeline: View {
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 12, height: 8)
             Text(t).font(.system(size: 10)).foregroundStyle(.secondary) }
+    }
+}
+
+/// Outsiders-style liquid progress hero: a dark green card whose water level
+/// is today's fraction of target, with a glowing waterline drifting like a
+/// slow wave. Deliberately dark in both appearances — same as the phone page.
+/// Gate for the dashboard hero's sweep-in: it plays once per "window
+/// session". Closing the main window bumps the generation, so reopening it
+/// (from the popover or an app relaunch) replays the sweep — but tab
+/// switches, focus changes and un-occlusion render the settled water
+/// immediately.
+@MainActor
+final class HeroSweep {
+    static let shared = HeroSweep()
+    private var generation = 0
+    private var played = -1
+    private var observer: NSObjectProtocol?
+
+    private init() {
+        observer = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { note in
+            guard let window = (note.object as? NSWindow),
+                  window.identifier?.rawValue.hasPrefix("main") == true else { return }
+            DispatchQueue.main.async { HeroSweep.shared.generation += 1 }
+        }
+    }
+
+    /// True the first time a hero asks in the current window session.
+    func shouldPlay() -> Bool {
+        guard played != generation else { return false }
+        played = generation
+        return true
+    }
+
+    /// The popover's hero sweeps just once per app run — the very first time
+    /// it's seen; every later popover open renders the settled water.
+    private var popoverPlayed = false
+    func shouldPlayPopover() -> Bool {
+        guard !popoverPlayed else { return false }
+        popoverPlayed = true
+        return true
+    }
+}
+
+struct LiquidHero: View {
+    let worked: TimeInterval
+    let target: TimeInterval
+    var saving = false
+    /// Smaller type and padding for the popover.
+    var compact = false
+    @Environment(\.colorScheme) private var scheme
+    /// Anchor for the sweep-in and the decaying wave.
+    @State private var appearedAt: Date?
+    /// The 30fps wave clock only runs while the window can actually be seen —
+    /// SwiftUI retains closed windows, and an unpaused clock burns CPU forever.
+    @State private var windowVisible = true
+    // Fresh wave character on every appearance, so no two sloshes look alike.
+    @State private var seedPhase = Double.random(in: 0..<(2 * .pi))
+    @State private var seedFreq = Double.random(in: 1.9...2.6)
+    @State private var seedAsymPhase = Double.random(in: 0..<(2 * .pi))
+
+    private var fraction: Double { target > 0 ? min(1, worked / target) : 0 }
+    private var percent: Int { target > 0 ? Int((worked / target * 100).rounded()) : 0 }
+
+    // The water starts cold blue and settles into the brand teal as the day
+    // fills — a slow shift driven by the fraction. Dark mode is deep and
+    // saturated; light mode the same hues as pastels with dark ink on top.
+    private var dark: Bool { scheme == .dark }
+    private func mix(_ a: (Double, Double, Double), _ b: (Double, Double, Double), _ f: Double) -> Color {
+        Color(red: a.0 + (b.0 - a.0) * f, green: a.1 + (b.1 - a.1) * f, blue: a.2 + (b.2 - a.2) * f)
+    }
+    private var waterGradient: LinearGradient {
+        let stops: [((Double, Double, Double), (Double, Double, Double))] = dark
+            ? [((0.075, 0.204, 0.420), (0.066, 0.245, 0.280)),
+               ((0.098, 0.318, 0.620), (0.090, 0.410, 0.440)),
+               ((0.157, 0.451, 0.800), (0.130, 0.570, 0.600))]
+            : [((0.42, 0.58, 0.80), (0.38, 0.68, 0.71)),
+               ((0.49, 0.65, 0.85), (0.45, 0.75, 0.77)),
+               ((0.56, 0.72, 0.90), (0.52, 0.81, 0.83))]
+        return LinearGradient(colors: stops.map { mix($0.0, $0.1, fraction) },
+                              startPoint: .leading, endPoint: .trailing)
+    }
+    private var glowColor: Color {
+        dark ? mix((0.45, 0.72, 1.0), (0.46, 0.83, 0.86), fraction)
+             : mix((0.90, 0.96, 1.0), (0.86, 0.98, 0.98), fraction)
+    }
+    private var baseColor: Color {
+        dark ? mix((0.043, 0.059, 0.090), (0.031, 0.078, 0.086), fraction)
+             : mix((0.88, 0.91, 0.95), (0.86, 0.92, 0.93), fraction)
+    }
+    private var ink: Color { dark ? .white : Color(red: 0.06, green: 0.20, blue: 0.24) }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    baseColor
+                    // A finished day settles into a still, straight edge; an
+                    // unfinished one keeps a small standing wave going after
+                    // the arrival slosh dies down.
+                    let settled = fraction >= 1
+                        && (appearedAt.map { Date().timeIntervalSince($0) > 14 } ?? true)
+                    if Motion.reduce || settled || !windowVisible {
+                        water(level: fraction, amplitude: 0, phase: 0)
+                    } else {
+                        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
+                            // Clamped: the anchor sits slightly in the future
+                            // so the sweep starts after the pane transition
+                            // has finished, instead of stuttering through it.
+                            let t = max(0, appearedAt.map { ctx.date.timeIntervalSince($0) } ?? 0)
+                            let eased = 1 - pow(1 - min(1, t / 1.5), 3)
+                            // The arrival slosh is bigger, faster and lopsided
+                            // (second harmonic); all three fade slowly toward
+                            // the small, slow, symmetric standing wave.
+                            let decay = exp(-t / 3.0)
+                            let sustain: CGFloat = fraction < 1 ? 3.5 : 0
+                            let amp = sustain + (11 - sustain) * decay * (0.3 + 0.7 * eased)
+                            let phase = seedPhase + 1.5 * t + (3.3 - 1.5) * 3.0 * (1 - decay)
+                            water(level: fraction * eased, amplitude: amp, phase: phase,
+                                  asym: 0.55 * exp(-t / 2.5))
+                        }
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(target > 0 ? "\(percent)" : Fmt.hm(worked))
+                        .font(.system(size: compact ? 30 : 44, weight: .heavy, design: .rounded))
+                        .contentTransition(.numericText())
+                        .animation(Motion.numeric, value: target > 0 ? "\(percent)" : Fmt.hm(worked))
+                    if target > 0 {
+                        Text("%").font(.system(size: compact ? 16 : 23, weight: .bold, design: .rounded))
+                            .opacity(0.9)
+                    }
+                }
+                .foregroundStyle(ink)
+                Text(target > 0 ? "\(Fmt.hm(worked)) worked" : "worked today")
+                    .font(.system(size: compact ? 11.5 : 13, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.92))
+                Text(subline)
+                    .font(.system(size: compact ? 10 : 11))
+                    .foregroundStyle(ink.opacity(0.66))
+            }
+            .padding(compact ? 12 : 16)
+        }
+        .overlay(alignment: .topTrailing) {
+            if saving {
+                HStack(spacing: 5) {
+                    ProgressView().controlSize(.small).scaleEffect(0.7).tint(ink)
+                    Text("Saving…").font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(ink.opacity(0.8))
+                }
+                .padding(12)
+                .transition(.opacity)
+            }
+        }
+        .animation(Motion.quick, value: saving)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(dark ? Color.white.opacity(0.09) : Color.black.opacity(0.08),
+                          lineWidth: 0.6))
+        .trackWindowVisibility { visible in
+            // Regaining visibility resumes the standing wave where it was;
+            // the sweep only replays for a fresh window session (reopened
+            // after a close).
+            if visible && !windowVisible && !compact && HeroSweep.shared.shouldPlay() {
+                appearedAt = Date().addingTimeInterval(0.4)
+            }
+            windowVisible = visible
+        }
+        .onAppear {
+            if compact {
+                appearedAt = HeroSweep.shared.shouldPlayPopover()
+                    ? Date()
+                    : Date().addingTimeInterval(-60)
+            } else if HeroSweep.shared.shouldPlay() {
+                appearedAt = Date().addingTimeInterval(0.4)
+            } else {
+                // Same window session (tab switch back, refocus): render the
+                // settled water immediately, standing wave already going.
+                // An anchor safely in the past — but not distantPast, which
+                // would feed astronomically large phases into sin().
+                appearedAt = Date().addingTimeInterval(-60)
+            }
+        }
+    }
+
+    /// The fill plus its edge light. The light is a second fill of the same
+    /// wave shape, brightening toward the waterline — clipped by the wave it
+    /// hugs the sloshing edge exactly instead of reading as a blurred oval.
+    /// Explicit ZStack: a bare two-view tuple inside TimelineView stacks
+    /// vertically instead of overlapping.
+    private func water(level: Double, amplitude: CGFloat, phase: Double,
+                       asym: Double = 0) -> some View {
+        let shape = WaterShape(level: level, amplitude: amplitude, phase: phase, asym: asym,
+                               freq: seedFreq, asymPhase: seedAsymPhase)
+        return ZStack(alignment: .topLeading) {
+            shape.fill(waterGradient)
+            if level > 0.02 {
+                // Tight, eased ramp: barely-there until close to the edge,
+                // building smoothly — a wide linear ramp read as a hard band.
+                let edge = min(1, level)
+                shape.fill(LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: glowColor.opacity(0), location: max(0, edge - 0.10)),
+                        .init(color: glowColor.opacity(0.10), location: max(0.001, edge - 0.05)),
+                        .init(color: glowColor.opacity(0.24), location: max(0.002, edge - 0.02)),
+                        .init(color: glowColor.opacity(0.45), location: max(0.003, edge)),
+                    ]),
+                    startPoint: .leading, endPoint: .trailing))
+            }
+        }
+    }
+
+    private var subline: String {
+        guard target > 0 else { return "No target today" }
+        let over = worked - target
+        return over >= 0 ? "+\(Fmt.hm(over)) over your \(Fmt.hm(target)) target"
+                         : "\(Fmt.hm(-over)) left of \(Fmt.hm(target))"
+    }
+}
+
+/// Left-anchored fill whose trailing edge is a sine wave — amplitude 0 makes
+/// it a straight vertical line. `asym` blends in a second harmonic so the
+/// slosh leans to one side instead of being a clean symmetric sine.
+private struct WaterShape: Shape {
+    var level: Double       // 0…1 of the width
+    var amplitude: CGFloat  // points
+    var phase: Double
+    var asym: Double = 0
+    /// Wavelength and harmonic offset — seeded per appearance for variety.
+    var freq: Double = 2.2
+    var asymPhase: Double = 1.2
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        guard level > 0.001, rect.height > 0 else { return p }
+        let edge = rect.width * min(1, level)
+        func waveX(_ y: CGFloat) -> CGFloat {
+            let theta = Double(y / rect.height) * .pi * freq + phase
+            let wave = sin(theta) + asym * sin(2 * theta + asymPhase)
+            return min(rect.width, edge + amplitude * CGFloat(wave))
+        }
+        p.move(to: .zero)
+        p.addLine(to: CGPoint(x: waveX(0), y: 0))
+        var y: CGFloat = 0
+        while y < rect.height {
+            y = min(y + 4, rect.height)
+            p.addLine(to: CGPoint(x: waveX(y), y: y))
+        }
+        p.addLine(to: CGPoint(x: 0, y: rect.height))
+        p.closeSubpath()
+        return p
     }
 }

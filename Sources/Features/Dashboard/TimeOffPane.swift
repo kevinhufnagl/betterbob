@@ -109,7 +109,7 @@ struct TimeOffPane: View {
             Spacer()
             if pending {
                 Text("Pending").font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.bobOrange)
             }
             Text(countdown(r))
                 .font(.system(size: hero ? 12 : 10, weight: .bold))
@@ -219,8 +219,8 @@ struct TimeOffPane: View {
 
     private func statusDot(_ status: String) -> some View {
         let color: Color = status.lowercased().contains("approv") ? .green
-            : status.lowercased().contains("declin") || status.lowercased().contains("reject") ? .red
-            : .orange
+            : status.lowercased().contains("declin") || status.lowercased().contains("reject") ? .bobRed
+            : .bobOrange
         return Circle().fill(color).frame(width: 8, height: 8)
     }
 }
@@ -374,7 +374,7 @@ struct TimeOffCalendar: View {
         let req = requestFor(date)
         let selected = inDrag(index)
         let reserved = req != nil && !selected
-        let reqColor: Color = req.map { $0.status.lowercased().contains("approv") ? .green : .orange } ?? .clear
+        let reqColor: Color = req.map { $0.status.lowercased().contains("approv") ? .green : .bobOrange } ?? .clear
         let dayColor: Color = reserved ? reqColor : .primary
 
         return VStack(alignment: .leading, spacing: 2) {
@@ -402,7 +402,7 @@ struct TimeOffCalendar: View {
     }
 
     private func cellFill(selected: Bool, reserved: Bool, reqColor: Color, index: Int) -> Color {
-        if selected { return Color.accentColor.opacity(0.22) }
+        if selected { return Color.bobTeal.opacity(0.22) }
         // A reserved cell stays its own colour on hover — just a stronger tint.
         if reserved { return reqColor.opacity(hovered == index ? 0.28 : 0.16) }
         if hovered == index { return Color.primary.opacity(0.09) }
@@ -411,7 +411,7 @@ struct TimeOffCalendar: View {
 
     private func cellBorder(selected: Bool, reserved: Bool, reqColor: Color,
                             isToday: Bool, index: Int) -> Color {
-        if selected { return Color.accentColor }
+        if selected { return Color.bobTeal }
         if reserved { return reqColor.opacity(hovered == index ? 0.78 : 0.5) }
         if isToday { return Color.primary.opacity(0.55) }
         if hovered == index { return Color.primary.opacity(0.2) }
@@ -489,7 +489,7 @@ struct TimeOffBookingSheet: View {
 
             if let error {
                 Label(error, systemImage: "xmark.octagon.fill")
-                    .font(.system(size: 11)).foregroundStyle(.red)
+                    .font(.system(size: 11)).foregroundStyle(Color.bobRed)
             }
 
             HStack {
@@ -564,7 +564,7 @@ struct TimeOffBookingSheet: View {
             HStack(spacing: 8) { ProgressView().controlSize(.small)
                 Text("Calculating…").font(.system(size: 11)).foregroundStyle(.secondary) }
         } else if let msg = calcError {
-            noticeCard(msg, tint: .red, icon: "xmark.octagon.fill")
+            noticeCard(msg, tint: .bobRed, icon: "xmark.octagon.fill")
         } else if let calc {
             let blocker = calc.rejectReason ?? calc.validation
             if !calc.submittable {
@@ -579,10 +579,10 @@ struct TimeOffBookingSheet: View {
                             .font(.system(size: 10))
                     }
                 }
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.bobOrange)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Color.bobOrange.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 VStack(alignment: .leading, spacing: 4) {
