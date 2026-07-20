@@ -23,6 +23,11 @@ toolchain (`xcrun --show-sdk-version` → 26.x).
 3. Nothing else to do: users get the update through the in-app updater, which
    watches GitHub Releases. **Never reinstall or relaunch the locally installed
    app** — the user updates via the updater.
+4. Releases must be cut on a Mac holding the self-signed **"BetterBob
+   Signing"** certificate (one-time: `./Scripts/make-signing-cert.sh`, run by
+   the user — it needs their password). build.sh signs with it so Keychain +
+   Location grants survive updates; without it, it falls back to ad-hoc and
+   every update re-prompts users for those permissions.
 
 ## Gotchas
 

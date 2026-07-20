@@ -101,10 +101,20 @@ xcrun appintentsmetadataprocessor \
 echo "==> Copying Info.plist"
 cp Resources/Info.plist "$CONTENTS/Info.plist"
 
-echo "==> Ad-hoc code signing"
-# Pin the signing identifier to the bundle ID so it stays stable across
-# rebuilds — TCC and Keychain grants key off the signing identifier.
-codesign --force --deep --sign - --identifier k3n.betterbob "$APP_BUNDLE"
+# Sign with the self-signed "BetterBob Signing" certificate when it exists
+# (Scripts/make-signing-cert.sh, one-time): a stable certificate keeps the
+# code-signing requirement identical across builds, so users' Keychain and
+# Location grants survive updates. An ad-hoc signature has no certificate, so
+# the recorded requirement is tied to each build's hash — grants reset on
+# every release. Ad-hoc remains the fallback so anyone can still build.
+IDENTITY="BetterBob Signing"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+  echo "==> Code signing as '$IDENTITY'"
+  codesign --force --deep --sign "$IDENTITY" --identifier k3n.betterbob "$APP_BUNDLE"
+else
+  echo "==> Ad-hoc code signing ('$IDENTITY' cert not found — permission grants will reset each update)"
+  codesign --force --deep --sign - --identifier k3n.betterbob "$APP_BUNDLE"
+fi
 
 echo "==> Nudging macOS icon cache"
 touch "$APP_BUNDLE"
