@@ -161,6 +161,16 @@ struct PopoverRootView: View {
         // Compact layout puts both buttons on one row.
         let layout = prefs.popoverCompact ? AnyLayout(HStackLayout(spacing: 8))
                                           : AnyLayout(VStackLayout(spacing: 8))
+        // Side-by-side buttons share one height: the info line would make
+        // just one of them taller, so the whole row grows together.
+        let rowTall: Bool = {
+            switch state.projectedClockState {
+            case .clockedOut: return autoTagTrailing != nil
+            case .working: return autoBreakTrailing(now: now) != nil
+            case .onBreak: return endBreakTrailing(now: now) != nil
+            }
+        }()
+        let rowHeight: CGFloat? = prefs.popoverCompact ? (rowTall ? 40 : 34) : nil
         VStack(spacing: 8) {
             // Buttons reflect the state after everything queued; punches fire a
             // minute apart on their own (see the queue in the dashboard footer).
@@ -168,17 +178,19 @@ struct PopoverRootView: View {
                 switch state.projectedClockState {
                 case .clockedOut:
                     actionButton("Clock in", symbol: "play.fill", tint: .workAccent(scheme),
-                                 trailing: autoTagTrailing) { state.clockIn() }
+                                 trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
                 case .working:
-                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
+                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
+                                 height: rowHeight) { state.clockOut() }
                     actionButton("Start break", symbol: "pause.circle.fill", tint: .breakAccent(scheme),
-                                 trailing: autoBreakTrailing(now: now)) {
+                                 trailing: autoBreakTrailing(now: now), height: rowHeight) {
                         state.startManualBreak()
                     }
                 case .onBreak:
                     actionButton("End break", symbol: "play.fill", tint: .workAccent(scheme),
-                                 trailing: endBreakTrailing(now: now)) { state.endBreak() }
-                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme)) { state.clockOut() }
+                                 trailing: endBreakTrailing(now: now), height: rowHeight) { state.endBreak() }
+                    actionButton("Clock out", symbol: "stop.fill", tint: .outAccent(scheme),
+                                 height: rowHeight) { state.clockOut() }
                 }
             }
             if !state.queue.isEmpty {
@@ -191,9 +203,10 @@ struct PopoverRootView: View {
 
     /// Full-width tinted capsule — matches the dashboard quick-action style.
     private func actionButton(_ label: String, symbol: String, tint: Color,
-                              trailing: String? = nil,
+                              trailing: String? = nil, height: CGFloat? = nil,
                               action: @escaping () -> Void) -> some View {
-        PopoverActionButton(label: label, symbol: symbol, tint: tint, trailing: trailing, action: action)
+        PopoverActionButton(label: label, symbol: symbol, tint: tint, trailing: trailing,
+                            height: height, action: action)
     }
 
     /// "auto in 42m" shown under the Start-break label while working.
@@ -455,6 +468,8 @@ private struct PopoverActionButton: View {
     let symbol: String
     let tint: Color
     var trailing: String? = nil
+    /// Explicit height so row-mates match; nil sizes to the content.
+    var height: CGFloat? = nil
     let action: () -> Void
     @State private var hovering = false
 
@@ -473,7 +488,7 @@ private struct PopoverActionButton: View {
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
-            .frame(height: trailing == nil ? 34 : 40)
+            .frame(height: height ?? (trailing == nil ? 34 : 40))
             .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
             .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
             .contentShape(Capsule())

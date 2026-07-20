@@ -70,29 +70,42 @@ struct TodayActions: View {
         VStack(alignment: .leading, spacing: 8) {
             let layout = vertical ? AnyLayout(VStackLayout(spacing: 8))
                                   : AnyLayout(HStackLayout(spacing: 8))
+            // Side-by-side buttons share one height: the info line would make
+            // just one of them taller, so the whole row grows together.
+            let rowTall: Bool = {
+                switch state.projectedClockState {
+                case .clockedOut: return autoTagTrailing != nil
+                case .working: return autoBreakTrailing != nil
+                case .onBreak: return endBreakTrailing != nil
+                }
+            }()
+            let rowHeight: CGFloat? = vertical ? nil : (rowTall ? 40 : 34)
             // Buttons offer the state *after* everything queued, so you can line
             // up several punches; they fire a minute apart on their own.
             layout {
                 switch state.projectedClockState {
                 case .clockedOut:
                     btn("Clock in", "play.fill", .workAccent(scheme),
-                        trailing: autoTagTrailing) { state.clockIn() }
+                        trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
                 case .working:
-                    btn("Clock out", "stop.fill", .outAccent(scheme)) { state.clockOut() }
+                    btn("Clock out", "stop.fill", .outAccent(scheme),
+                        height: rowHeight) { state.clockOut() }
                     btn("Start break", "pause.circle.fill", .breakAccent(scheme),
-                        trailing: autoBreakTrailing) { state.startManualBreak() }
+                        trailing: autoBreakTrailing, height: rowHeight) { state.startManualBreak() }
                 case .onBreak:
                     btn("End break", "play.fill", .workAccent(scheme),
-                        trailing: endBreakTrailing) { state.endBreak() }
-                    btn("Clock out", "stop.fill", .outAccent(scheme)) { state.clockOut() }
+                        trailing: endBreakTrailing, height: rowHeight) { state.endBreak() }
+                    btn("Clock out", "stop.fill", .outAccent(scheme),
+                        height: rowHeight) { state.clockOut() }
                 }
             }
         }
     }
     private func btn(_ label: String, _ sym: String, _ tint: Color,
-                     trailing: String? = nil,
+                     trailing: String? = nil, height: CGFloat? = nil,
                      _ act: @escaping () -> Void) -> some View {
-        ActionButton(label: label, sym: sym, tint: tint, trailing: trailing, act: act)
+        ActionButton(label: label, sym: sym, tint: tint, trailing: trailing,
+                     height: height, act: act)
     }
 
     /// "auto in 42m" inside the Start-break button — same as the popover.
@@ -123,6 +136,8 @@ private struct ActionButton: View {
     let sym: String
     let tint: Color
     var trailing: String? = nil
+    /// Explicit height so row-mates match; nil sizes to the content.
+    var height: CGFloat? = nil
     let act: () -> Void
     @State private var hovering = false
 
@@ -139,7 +154,7 @@ private struct ActionButton: View {
                         .font(.system(size: 9, weight: .medium)).opacity(0.7)
                 }
             }
-            .frame(maxWidth: .infinity).frame(height: trailing == nil ? 34 : 40)
+            .frame(maxWidth: .infinity).frame(height: height ?? (trailing == nil ? 34 : 40))
             .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
             .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
             .foregroundStyle(tint)
