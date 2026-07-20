@@ -465,7 +465,7 @@ private struct AutoSignInCard: View {
     }
 }
 
-/// Version + one-click update check against GitHub Releases.
+/// Version + background-update status against GitHub Releases.
 private struct UpdatesCard: View {
     @ObservedObject var updater = Updater.shared
 
@@ -481,7 +481,7 @@ private struct UpdatesCard: View {
                         Text("Checking…").font(.system(size: 11)).foregroundStyle(.secondary) }
                 case .downloading, .installing:
                     HStack(spacing: 6) { ProgressView().controlSize(.small).scaleEffect(0.7)
-                        Text(updater.phase == .installing ? "Updating…" : "Downloading…")
+                        Text(updater.phase == .installing ? "Installing…" : "Downloading…")
                             .font(.system(size: 11)).foregroundStyle(.secondary) }
                 default:
                     Button("Check for updates") { Task { await updater.checkNow() } }
@@ -489,13 +489,14 @@ private struct UpdatesCard: View {
                 }
             }
 
-            if let rel = updater.available {
+            if let rel = updater.installed {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
-                    Text("\(rel.version) is available").font(.system(size: 12, weight: .semibold))
+                    Text("\(rel.version) installed — applies on the next start")
+                        .font(.system(size: 12, weight: .semibold))
                     Spacer()
                     Button("Release notes") { updater.openReleasePage() }.controlSize(.small)
-                    Button("Update now") { updater.install() }
+                    Button("Restart now") { updater.relaunch() }
                         .controlSize(.small).buttonStyle(.borderedProminent)
                 }
             } else if case .upToDate = updater.phase {
@@ -507,7 +508,7 @@ private struct UpdatesCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("Updates download and install the latest build from GitHub, then relaunch Bob.")
+            Text("Updates download and install automatically in the background, and take effect the next time Bob starts.")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }

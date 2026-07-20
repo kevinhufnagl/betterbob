@@ -2,10 +2,11 @@ import Foundation
 import AppKit
 
 /// Dead-simple auto-update against GitHub Releases: check the latest release,
-/// and if it's newer than this build, offer a one-click download-and-swap. No
-/// Sparkle, no appcast, no signing infrastructure — the app downloads the
-/// prebuilt `.app` zip itself (so macOS doesn't quarantine it) and a tiny
-/// detached script swaps it in after we quit.
+/// and if it's newer than this build, silently download it and swap the new
+/// bundle onto disk while we keep running — the running process keeps its
+/// loaded image, so nothing restarts and the new version simply runs on the
+/// next launch. No Sparkle, no appcast, no signing infrastructure — the app
+/// downloads the prebuilt `.app` zip itself (so macOS doesn't quarantine it).
 @MainActor
 final class Updater: ObservableObject {
     static let shared = Updater()
@@ -24,7 +25,8 @@ final class Updater: ObservableObject {
         case failed(String)
     }
 
-    @Published private(set) var available: Release?
+    /// The release that has been swapped onto disk and applies on next launch.
+    @Published private(set) var installed: Release?
     @Published private(set) var phase: Phase = .idle
 
     private var timer: Timer?
@@ -54,8 +56,9 @@ final class Updater: ObservableObject {
 
     func start() {
         Task { await checkNow() }
-        // A daily check is plenty; the unauthenticated GitHub API allows 60/hr.
-        timer = Timer.scheduledTimer(withTimeInterval: 24 * 3600, repeats: true) { [weak self] _ in
+        // Every 2 hours — 12 checks/day, well inside the unauthenticated
+        // GitHub API limit of 60/hr.
+        timer = Timer.scheduledTimer(withTimeInterval: 2 * 3600, repeats: true) { [weak self] _ in
             Task { await self?.checkNow() }
         }
     }
@@ -67,11 +70,16 @@ final class Updater: ObservableObject {
         do {
             let release = try await fetchLatest()
             if let release, Self.isNewer(release.version, than: currentVersion) {
-                available = release
-                phase = .idle
-                Notifier.updateAvailable(version: release.version)
+                // Already swapped onto disk? Nothing to redo until something newer.
+                if let installed, !Self.isNewer(release.version, than: installed.version) {
+                    phase = .upToDate
+                    return
+                }
+                try await downloadAndInstall(release)
+                installed = release
+                phase = .upToDate
+                Notifier.updateInstalled(version: release.version)
             } else {
-                available = nil
                 phase = .upToDate
             }
         } catch {
@@ -98,29 +106,15 @@ final class Updater: ObservableObject {
         return Release(version: tag, notes: root["body"] as? String ?? "", zipURL: zip, pageURL: page)
     }
 
-    // MARK: - Install (download → unzip → swap → relaunch)
-
-    func install() {
-        guard let release = available else { return }
-        phase = .downloading
-        Task {
-            do {
-                try await downloadAndSwap(release)
-                // downloadAndSwap terminates the app on success; we won't get here.
-            } catch {
-                phase = .failed(error.localizedDescription)
-            }
-        }
-    }
+    // MARK: - Install (download → unzip → swap in place)
 
     func openReleasePage() {
-        if let url = available?.pageURL { NSWorkspace.shared.open(url) }
+        if let url = installed?.pageURL { NSWorkspace.shared.open(url) }
     }
 
-    /// Hide the banner until the next check (this session).
-    /// Version the user dismissed from the popover banner. That exact version
-    /// stays hidden (in the popover — Settings still shows it) until a newer
-    /// release appears or it gets installed.
+    /// Version whose "restart to apply" banner the user dismissed from the
+    /// popover. That exact version stays hidden (in the popover — Settings
+    /// still shows it) until a newer release lands or the app restarts.
     @Published private(set) var dismissedVersion: String? =
         UserDefaults.standard.string(forKey: "dismissedUpdateVersion")
 
@@ -129,8 +123,36 @@ final class Updater: ObservableObject {
         dismissedVersion = release.version
     }
 
-    private func downloadAndSwap(_ release: Release) async throws {
+    /// Quit and reopen the (already swapped) bundle so the new version starts.
+    func relaunch() {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("betterbob-relaunch.sh")
+        let body = """
+        #!/bin/bash
+        trap '' HUP
+        PID="$1"; TARGET="$2"
+        while /bin/kill -0 "$PID" 2>/dev/null; do sleep 0.3; done
+        sleep 0.3
+        /usr/bin/open "$TARGET"
+        """
+        do {
+            try body.write(to: script, atomically: true, encoding: .utf8)
+            try run("/bin/chmod", ["+x", script.path])
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/bin/bash")
+            p.arguments = [script.path,
+                           String(ProcessInfo.processInfo.processIdentifier),
+                           Bundle.main.bundlePath]
+            try p.run()   // survives our termination (reparented to launchd)
+            NSApp.terminate(nil)
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
+    }
+
+    private func downloadAndInstall(_ release: Release) async throws {
         let fm = FileManager.default
+        phase = .downloading
         // 1. Download the zip.
         let (tmpZip, _) = try await URLSession.shared.download(from: release.zipURL)
         let work = fm.temporaryDirectory.appendingPathComponent("betterbob-update-\(release.version)", isDirectory: true)
@@ -140,7 +162,8 @@ final class Updater: ObservableObject {
         try fm.moveItem(at: tmpZip, to: zip)
 
         phase = .installing
-        // 2. Unzip with ditto (preserves the bundle + its ad-hoc signature).
+        // 2. Unzip with ditto (preserves the bundle + its signature — that
+        //    signature stability is what keeps Keychain/Location grants alive).
         try run("/usr/bin/ditto", ["-x", "-k", zip.path, work.path])
         guard let newApp = try fm.contentsOfDirectory(at: work, includingPropertiesForKeys: nil)
             .first(where: { $0.pathExtension == "app" }) else {
@@ -148,32 +171,22 @@ final class Updater: ObservableObject {
                           userInfo: [NSLocalizedDescriptionKey: "No .app found in the update."])
         }
 
-        // 3. Write a detached swap script that waits for us to quit, replaces the
-        //    installed bundle, and relaunches it.
-        let target = Bundle.main.bundlePath
-        let script = work.appendingPathComponent("swap.sh")
-        let body = """
-        #!/bin/bash
-        trap '' HUP
-        PID="$1"; NEW="$2"; TARGET="$3"
-        while /bin/kill -0 "$PID" 2>/dev/null; do sleep 0.3; done
-        sleep 0.3
-        /bin/rm -rf "$TARGET"
-        /usr/bin/ditto "$NEW" "$TARGET"
-        /usr/bin/xattr -dr com.apple.quarantine "$TARGET" 2>/dev/null
-        /usr/bin/open "$TARGET"
-        """
-        try body.write(to: script, atomically: true, encoding: .utf8)
-        try run("/bin/chmod", ["+x", script.path])
-
-        let pid = String(ProcessInfo.processInfo.processIdentifier)
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/bash")
-        p.arguments = [script.path, pid, newApp.path, target]
-        try p.run()   // survives our termination (reparented to launchd)
-
-        // 4. Quit so the script can replace us.
-        NSApp.terminate(nil)
+        // 3. Swap the bundle on disk while we keep running: move the current
+        //    bundle aside, move the new one into its place, and roll back if
+        //    that second move fails so the app never vanishes from disk.
+        let target = URL(fileURLWithPath: Bundle.main.bundlePath)
+        let old = work.appendingPathComponent("old.app")
+        try fm.moveItem(at: target, to: old)
+        do {
+            try fm.moveItem(at: newApp, to: target)
+        } catch {
+            try? fm.moveItem(at: old, to: target)
+            throw error
+        }
+        try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", target.path])
+        // Keep old.app around (the running process may still fault in pages
+        // from it); the system clears the temp dir on its own. Just drop the zip.
+        try? fm.removeItem(at: zip)
     }
 
     private func run(_ launchPath: String, _ args: [String]) throws {

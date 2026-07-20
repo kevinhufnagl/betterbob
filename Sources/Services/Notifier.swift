@@ -51,12 +51,12 @@ enum Notifier {
         post(title: "BetterBob couldn't reach HiBob", body: message)
     }
 
-    /// Once per version — a new BetterBob build is available to install.
-    static func updateAvailable(version: String) {
+    /// Once per version — a new BetterBob build was installed in the background.
+    static func updateInstalled(version: String) {
         guard UserDefaults.standard.string(forKey: "updateNotifiedVersion") != version else { return }
         UserDefaults.standard.set(version, forKey: "updateNotifiedVersion")
-        post(title: "BetterBob \(version) is available",
-             body: "Open BetterBob to update in one click.")
+        post(title: "BetterBob \(version) installed",
+             body: "The update applies the next time BetterBob starts.")
     }
 
     private static func post(title: String, body: String) {

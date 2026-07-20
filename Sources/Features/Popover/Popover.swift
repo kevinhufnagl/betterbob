@@ -60,7 +60,7 @@ struct PopoverRootView: View {
 
             updateBanner
                 .animation(Motion.standard, value: updater.phase)
-                .animation(Motion.standard, value: updater.available)
+                .animation(Motion.standard, value: updater.installed)
                 .animation(Motion.standard, value: updater.dismissedVersion)
 
             Divider().opacity(0.3)
@@ -80,28 +80,22 @@ struct PopoverRootView: View {
             banner(icon: "arrow.down.circle") {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small).scaleEffect(0.7)
-                    Text(updater.phase == .installing ? "Updating — Bob will restart…" : "Downloading update…")
+                    Text(updater.phase == .installing ? "Installing update…" : "Downloading update…")
                         .font(.system(size: 11, weight: .medium))
                     Spacer()
                 }
             }
         default:
-            // "Later" hides this exact version until the next one shows up.
-            if let rel = updater.available, updater.dismissedVersion != rel.version {
+            // "Later" hides this exact version's banner (Settings still shows it).
+            if let rel = updater.installed, updater.dismissedVersion != rel.version {
                 banner(icon: "sparkles") {
                     HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Update available · \(rel.version)")
-                                .font(.system(size: 11, weight: .semibold))
-                            if case .failed = updater.phase {
-                                Text("Update failed — try the release page")
-                                    .font(.system(size: 9)).foregroundStyle(.orange)
-                            }
-                        }
+                        Text("Updated to \(rel.version) — applies on next start")
+                            .font(.system(size: 11, weight: .semibold))
                         Spacer()
                         Button("Later") { updater.dismiss(rel) }
                             .buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary)
-                        Button("Update") { updater.install() }
+                        Button("Restart") { updater.relaunch() }
                             .controlSize(.small).buttonStyle(.borderedProminent)
                     }
                 }
