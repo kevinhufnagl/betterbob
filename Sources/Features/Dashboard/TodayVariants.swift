@@ -128,15 +128,15 @@ private struct ActionButton: View {
 
     var body: some View {
         Button(action: act) {
-            HStack(spacing: 6) {
-                Image(systemName: sym).font(.system(size: 12, weight: .bold))
-                VStack(spacing: 1) {
+            VStack(spacing: 1) {
+                HStack(spacing: 6) {
+                    Image(systemName: sym).font(.system(size: 12, weight: .bold))
                     Text(label).font(.system(size: 13, weight: .semibold))
-                    if let trailing {
-                        // Second line so countdown + auto-tag get full width.
-                        Text(trailing)
-                            .font(.system(size: 9, weight: .medium)).opacity(0.7)
-                    }
+                }
+                if let trailing {
+                    // Second line so countdown + auto-tag get full width.
+                    Text(trailing)
+                        .font(.system(size: 9, weight: .medium)).opacity(0.7)
                 }
             }
             .frame(maxWidth: .infinity).frame(height: trailing == nil ? 34 : 40)
