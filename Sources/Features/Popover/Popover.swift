@@ -396,9 +396,6 @@ struct PopoverRootView: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
-            Text("v\(updater.currentVersion)")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
             Button {
                 NSApp.terminate(nil)
             } label: {

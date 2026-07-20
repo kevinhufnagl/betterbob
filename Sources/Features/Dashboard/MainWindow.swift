@@ -156,6 +156,8 @@ struct FooterBar: View {
                 Text("Synced \(Fmt.clock(sync))")
                     .font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
             }
+            Text("v\(Updater.shared.currentVersion)")
+                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14).padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 28)
