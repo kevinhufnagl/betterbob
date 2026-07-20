@@ -435,6 +435,15 @@ final class BobState: ObservableObject {
     /// True when today has an uninterrupted run past the max non-break time.
     var overMaxNonBreak: Bool { hasOverLongStretch(entries) }
 
+    /// Whether a day's total worked time is past the daily max (default 10h).
+    func isOverDailyMax(_ dayEntries: [AttendanceEntry]) -> Bool {
+        AttendanceLogic.overDailyMax(entries: dayEntries,
+                                     max: Prefs.shared.maxDayLimit, now: now)
+    }
+
+    /// True when today's total worked time is past the daily max.
+    var overDailyMax: Bool { isOverDailyMax(entries) }
+
     /// Magic-wand fix for a too-long stretch on `date`: carve a break out of the
     /// middle of the offending run. Clock-in/out stay put, so this *reduces*
     /// worked time by the break length rather than extending the day.
@@ -766,6 +775,13 @@ final class BobState: ObservableObject {
             Notifier.targetReached(Fmt.hm(target * 3600))
         }
 
+        // Crossed the daily max while the clock is still running, once per day.
+        if case .working = clockState, workedToday > Prefs.shared.maxDayLimit,
+           UserDefaults.standard.string(forKey: "overMaxNotifiedDay") != today {
+            UserDefaults.standard.set(today, forKey: "overMaxNotifiedDay")
+            Notifier.overDailyMax(Fmt.hm(Prefs.shared.maxDayLimit))
+        }
+
         // Timesheet deadline approaching (within 3 days), once per cycle.
         if let cycle, let lock = cycle.lockAt {
             let days = Calendar.current.dateComponents([.day], from: now, to: lock).day ?? 99
@@ -815,33 +831,42 @@ final class BobState: ObservableObject {
         return since.addingTimeInterval(Prefs.shared.threshold)
     }
 
-    /// The label to show next to the menu-bar icon for the chosen mode.
-    func menuBarText(_ mode: Prefs.MenuBarDisplay) -> String? {
-        switch mode {
-        case .none:
-            return nil
-        case .workedTime:
-            // Show today's total even after clocking out — it's still today's
-            // worked time; only hide it when nothing has been logged yet.
-            return workedToday > 0 ? Fmt.hm(workedToday) : (clockState == .clockedOut ? "0m" : Fmt.hm(0))
-        case .untilBreak:
-            // While on a break the countdown doesn't apply — show how long the
-            // break has run so far instead.
-            if case .onBreak(let since) = clockState {
+    /// The label to show next to the menu-bar icon — each clock state has its
+    /// own choice of what (if anything) to show.
+    func menuBarText() -> String? {
+        let prefs = Prefs.shared
+        switch clockState {
+        case .working:
+            switch prefs.menuBarTextWorking {
+            case .none: return nil
+            case .workedTime: return Fmt.hm(workedToday)
+            case .untilBreak:
+                guard let due = autoBreakDue else {
+                    // No countdown (auto-break off) — fall back to the day's
+                    // total so the slot still shows something useful.
+                    return workedToday > 0 ? Fmt.hm(workedToday) : nil
+                }
+                let r = due.timeIntervalSinceNow
+                return r > 0 ? Fmt.hm(r) : "break"
+            case .status: return "Working"
+            }
+        case .onBreak(let since):
+            switch prefs.menuBarTextBreak {
+            case .none: return nil
+            case .breakElapsed: return Fmt.hm(now.timeIntervalSince(since))
+            case .breakRemaining:
+                // Only an auto-break has a known end — a manual break falls
+                // back to how long it has run.
+                if let ends = autoBreakEnds, ends > now { return Fmt.hm(ends.timeIntervalSince(now)) }
                 return Fmt.hm(now.timeIntervalSince(since))
+            case .workedTime: return Fmt.hm(workedToday)
+            case .status: return "Break"
             }
-            guard let due = autoBreakDue else {
-                // No active countdown (e.g. clocked out) — fall back to the
-                // day's total so the slot still shows something useful.
-                return workedToday > 0 ? Fmt.hm(workedToday) : nil
-            }
-            let r = due.timeIntervalSinceNow
-            return r > 0 ? Fmt.hm(r) : "break"
-        case .status:
-            switch clockState {
-            case .clockedOut: return "Out"
-            case .working: return "Working"
-            case .onBreak: return "Break"
+        case .clockedOut:
+            switch prefs.menuBarTextOut {
+            case .none: return nil
+            case .workedTime: return Fmt.hm(workedToday)
+            case .status: return "Out"
             }
         }
     }

@@ -33,6 +33,12 @@ enum Notifier {
              body: "You've hit today's \(target) target — anything more is overtime.")
     }
 
+    static func overDailyMax(_ max: String) {
+        guard Prefs.shared.notifyOverMax else { return }
+        post(title: "Over \(max) worked today",
+             body: "You're past your daily maximum — consider clocking out.")
+    }
+
     static func deadlineApproaching(days: Int) {
         guard Prefs.shared.notifyDeadline else { return }
         let when = days <= 0 ? "today" : "in \(days) day\(days == 1 ? "" : "s")"

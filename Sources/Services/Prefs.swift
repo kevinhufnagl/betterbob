@@ -52,22 +52,79 @@ final class Prefs: ObservableObject {
         didSet { UserDefaults.standard.set(notifyDeadline, forKey: "notifyDeadline") }
     }
 
-    /// What to show next to the menu-bar icon.
-    enum MenuBarDisplay: String, CaseIterable, Identifiable {
+    /// Notify once when today's total crosses the daily max.
+    @Published var notifyOverMax: Bool {
+        didSet { UserDefaults.standard.set(notifyOverMax, forKey: "notifyOverMax") }
+    }
+
+    /// Total worked time per day past which the day is flagged red. Warning
+    /// only — unlike a missing break there is nothing to auto-fix. Default 10h.
+    @Published var maxDayMinutes: Int {
+        didSet { UserDefaults.standard.set(maxDayMinutes, forKey: "maxDayMinutes") }
+    }
+
+    /// What to show next to the menu-bar icon — a separate choice per clock
+    /// state, so e.g. working shows the auto-break countdown while a break
+    /// shows how long it has run.
+    enum MenuBarTextWorking: String, CaseIterable, Identifiable {
         case none, workedTime, untilBreak, status
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .none: return "Icon only"
+            case .none: return "Nothing"
             case .workedTime: return "Worked time today"
             case .untilBreak: return "Time until auto-break"
-            case .status: return "Status (Working / Break)"
+            case .status: return "“Working”"
             }
         }
     }
-    @Published var menuBarDisplay: MenuBarDisplay {
+    enum MenuBarTextBreak: String, CaseIterable, Identifiable {
+        case none, breakElapsed, breakRemaining, workedTime, status
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .none: return "Nothing"
+            case .breakElapsed: return "Break time so far"
+            case .breakRemaining: return "Break time remaining"
+            case .workedTime: return "Worked time today"
+            case .status: return "“Break”"
+            }
+        }
+    }
+    enum MenuBarTextOut: String, CaseIterable, Identifiable {
+        case none, workedTime, status
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .none: return "Nothing"
+            case .workedTime: return "Worked time today"
+            case .status: return "“Out”"
+            }
+        }
+    }
+    @Published var menuBarTextWorking: MenuBarTextWorking {
         didSet {
-            UserDefaults.standard.set(menuBarDisplay.rawValue, forKey: "menuBarDisplay")
+            UserDefaults.standard.set(menuBarTextWorking.rawValue, forKey: "menuBarTextWorking")
+            NotificationCenter.default.post(name: .updateStatusItem, object: nil)
+        }
+    }
+    @Published var menuBarTextBreak: MenuBarTextBreak {
+        didSet {
+            UserDefaults.standard.set(menuBarTextBreak.rawValue, forKey: "menuBarTextBreak")
+            NotificationCenter.default.post(name: .updateStatusItem, object: nil)
+        }
+    }
+    @Published var menuBarTextOut: MenuBarTextOut {
+        didSet {
+            UserDefaults.standard.set(menuBarTextOut.rawValue, forKey: "menuBarTextOut")
+            NotificationCenter.default.post(name: .updateStatusItem, object: nil)
+        }
+    }
+
+    /// Play/pause badge on the menu-bar icon by clock state.
+    @Published var showStateBadge: Bool {
+        didSet {
+            UserDefaults.standard.set(showStateBadge, forKey: "showStateBadge")
             NotificationCenter.default.post(name: .updateStatusItem, object: nil)
         }
     }
@@ -107,6 +164,7 @@ final class Prefs: ObservableObject {
 
     var threshold: TimeInterval { TimeInterval(thresholdMinutes * 60) }
     var breakLength: TimeInterval { TimeInterval(breakMinutes * 60) }
+    var maxDayLimit: TimeInterval { TimeInterval(maxDayMinutes * 60) }
 
     private init() {
         let d = UserDefaults.standard
@@ -120,13 +178,27 @@ final class Prefs: ObservableObject {
         self.notifyFailures = d.object(forKey: "notifyFailures") as? Bool ?? true
         self.notifyTargetReached = d.object(forKey: "notifyTargetReached") as? Bool ?? true
         self.notifyDeadline = d.object(forKey: "notifyDeadline") as? Bool ?? true
-        // Migrate the old boolean into the new display enum.
-        if let raw = d.string(forKey: "menuBarDisplay"), let m = MenuBarDisplay(rawValue: raw) {
-            self.menuBarDisplay = m
-        } else {
-            self.menuBarDisplay = (d.object(forKey: "showTimeInMenuBar") as? Bool ?? false)
-                ? .workedTime : .none
+        self.notifyOverMax = d.object(forKey: "notifyOverMax") as? Bool ?? true
+        self.maxDayMinutes = d.object(forKey: "maxDayMinutes") as? Int ?? 600
+        // Per-state menu-bar text. Seed from the old single choice (or the even
+        // older boolean) so the menu bar looks the same after updating: the old
+        // modes already behaved per-state, this just makes that explicit.
+        let legacy = d.string(forKey: "menuBarDisplay")
+            ?? ((d.object(forKey: "showTimeInMenuBar") as? Bool ?? false) ? "workedTime" : "none")
+        let seed: (MenuBarTextWorking, MenuBarTextBreak, MenuBarTextOut)
+        switch legacy {
+        case "workedTime": seed = (.workedTime, .workedTime, .workedTime)
+        case "untilBreak": seed = (.untilBreak, .breakElapsed, .workedTime)
+        case "status":     seed = (.status, .status, .status)
+        default:           seed = (.none, .none, .none)
         }
+        self.menuBarTextWorking = d.string(forKey: "menuBarTextWorking")
+            .flatMap(MenuBarTextWorking.init) ?? seed.0
+        self.menuBarTextBreak = d.string(forKey: "menuBarTextBreak")
+            .flatMap(MenuBarTextBreak.init) ?? seed.1
+        self.menuBarTextOut = d.string(forKey: "menuBarTextOut")
+            .flatMap(MenuBarTextOut.init) ?? seed.2
+        self.showStateBadge = d.object(forKey: "showStateBadge") as? Bool ?? true
         self.colorMenuBarIcon = d.object(forKey: "colorMenuBarIcon") as? Bool ?? false
         self.wifiAutoReasonEnabled = d.object(forKey: "wifiAutoReasonEnabled") as? Bool ?? false
         self.defaultReasonName = d.string(forKey: "defaultReasonName") ?? ""

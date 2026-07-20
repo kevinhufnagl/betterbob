@@ -29,6 +29,7 @@ struct PopoverRootView: View {
                         workedHeader(now: context.date)
                         actionButtons(now: context.date)
                         if state.overMaxNonBreak { missingBreakWarning }
+                        if state.overDailyMax { overDailyMaxWarning }
                         if !state.entries.isEmpty {
                             timeline
                         }
@@ -226,6 +227,21 @@ struct PopoverRootView: View {
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Color.orange.opacity(0.28), lineWidth: 0.7))
+    }
+
+    /// Red and actionless (you can't un-work hours) — a nudge to clock out.
+    private var overDailyMaxWarning: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.octagon.fill").font(.system(size: 10))
+            Text("Over your \(Fmt.hm(Prefs.shared.maxDayLimit)) daily max — time to clock out")
+                .font(.system(size: 11, weight: .semibold))
+            Spacer()
+        }
+        .foregroundStyle(.red)
+        .padding(9)
+        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.red.opacity(0.28), lineWidth: 0.7))
     }
 
     // MARK: - Worked total (prominent, above the buttons)

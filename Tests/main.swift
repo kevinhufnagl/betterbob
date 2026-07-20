@@ -86,6 +86,19 @@ expect(AttendanceLogic.workedToday(entries: [work(9, nil), brk(12, nil)], now: t
        == 3 * 3600,
        "open break stops the clock")
 
+// MARK: - overDailyMax
+
+print("AttendanceLogic.overDailyMax")
+
+expect(!AttendanceLogic.overDailyMax(entries: [work(9, 19)], max: 10 * 3600, now: t(20)),
+       "exactly at the max is not over it")
+
+expect(AttendanceLogic.overDailyMax(entries: [work(9, nil)], max: 10 * 3600, now: t(19.5)),
+       "open work entry counted to now crosses the max")
+
+expect(!AttendanceLogic.overDailyMax(entries: [work(8, 19), brk(12, 13)], max: 10 * 3600, now: t(20)),
+       "breaks don't count toward the daily max")
+
 // MARK: - Auto-break actions
 
 print("AttendanceLogic.action")

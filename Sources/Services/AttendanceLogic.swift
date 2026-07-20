@@ -77,6 +77,13 @@ enum AttendanceLogic {
         }
     }
 
+    /// True when the day's total worked time (breaks excluded, an open entry
+    /// counted to `now`) is past the daily maximum. Warning only — unlike a
+    /// missing break there is nothing to auto-fix.
+    static func overDailyMax(entries: [AttendanceEntry], max: TimeInterval, now: Date) -> Bool {
+        workedToday(entries: entries, now: now) > max
+    }
+
     /// The longest uninterrupted work run (consecutive work with no break in
     /// between) whose duration exceeds `threshold`, as `[start, end]` — or nil if
     /// every run is within the max. Works for any day: an open run is measured to

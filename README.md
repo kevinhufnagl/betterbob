@@ -53,21 +53,24 @@ two choices:
 
 ## Around the app
 
-**Menu bar** — your status at a glance, how much you've worked today, big clock
-in/out and break buttons (with a live countdown to the next auto-break), and
-today's entries.
+**Menu bar** — your status at a glance: Bob wears a little play or pause badge
+while the clock runs, and the text next to him is your choice — per status —
+of worked time, the auto-break countdown, break time left, and more. Click him
+for big clock in/out and break buttons and today's entries.
 
 **Main window**
 - **Today** — your worked total and a timeline of the day. Drag a break along
   the timeline to move it; the work around it adjusts and you see where it lands
   before you drop.
 - **This month** — a calendar of your hours (days that need a break show up in
-  orange), how far over or under you are, and a day-by-day list. Click any past
-  day to fix its entries, or tap the wand to drop in a missing break.
+  orange, days over your daily max in red), how far over or under you are, and
+  a day-by-day list. Click any past day to fix its entries, or tap the wand to
+  drop in a missing break.
 - **Time off** — balances, upcoming leave, and a calendar to request more.
 
-**Settings** — sign in/out, the auto-break rule, automatic sign-in, office
-Wi-Fi tagging, notifications, launch at login, and more.
+**Settings** — sign in/out, the auto-break rule, the daily-hours limit (default
+10h — over it, days flag red and Bob nudges you to clock out), automatic
+sign-in, office Wi-Fi tagging, notifications, launch at login, and more.
 
 **Siri & Shortcuts** — "Clock in", "Clock out", "Take a break" from Spotlight,
 Shortcuts, and the Action Button.

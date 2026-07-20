@@ -118,18 +118,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let button = statusItem.button else { return }
         let state = BobState.shared.clockState
 
-        // Bob himself, as a template silhouette (auto-adapts to the menu bar).
-        let bob = BobIcon.menuBar(height: 18)
+        // Bob himself, as a template silhouette (auto-adapts to the menu bar),
+        // with an optional play/pause corner badge while the clock is running.
+        let onBreak: Bool = { if case .onBreak = state { return true }; return false }()
+        let badge: BobIcon.StateBadge = !Prefs.shared.showStateBadge || state == .clockedOut
+            ? .none : (onBreak ? .pause : .play)
+        let bob = BobIcon.menuBar(height: 18, badge: badge)
 
         if Prefs.shared.colorMenuBarIcon, state != .clockedOut {
             // Tinted (non-template) Bob by clock state.
-            let onBreak: Bool = { if case .onBreak = state { return true }; return false }()
             button.image = bob.tinted(onBreak ? .systemOrange : .systemGreen)
         } else {
             button.image = bob
         }
 
-        if let text = BobState.shared.menuBarText(Prefs.shared.menuBarDisplay) {
+        if let text = BobState.shared.menuBarText() {
             button.title = " " + text
             button.imagePosition = .imageLeft
             button.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)

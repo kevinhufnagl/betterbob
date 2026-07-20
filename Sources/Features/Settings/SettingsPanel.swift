@@ -13,6 +13,7 @@ struct SettingsPanel: View {
             SettingsGroup(title: "Account") { accountContent }
             SettingsGroup(title: "Automatic sign-in") { AutoSignInCard(state: state, prefs: prefs) }
             SettingsGroup(title: "Automatic break") { autoBreakContent }
+            SettingsGroup(title: "Daily limit") { dailyLimitContent }
             if state.signedIn {
                 SettingsGroup(title: "Reasons") {
                     defaultReasonContent
@@ -96,6 +97,25 @@ struct SettingsPanel: View {
             .disabled(!prefs.autoBreakEnabled)
 
             Text("A break you take yourself resets the counter — the auto-break only fires after truly uninterrupted work. If your Mac was asleep at the mark, the break is inserted retroactively at the right time.")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Daily limit
+
+    @ViewBuilder
+    private var dailyLimitContent: some View {
+        Group {
+            HStack {
+                Text("Warn when a day tops").font(.system(size: 12))
+                Spacer()
+                PillStepper(value: $prefs.maxDayMinutes, range: 360...960, step: 30) {
+                    Fmt.hm(TimeInterval($0 * 60))
+                }
+            }
+            Text("Days over the limit show up red on Today and the month calendar, and Bob notifies you the moment you cross it while clocked in. Unlike a missing break there's nothing to auto-fix — only clocking out earlier helps.")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -203,6 +223,8 @@ struct SettingsPanel: View {
                 .font(.system(size: 12))
             Toggle("Daily target reached", isOn: $prefs.notifyTargetReached)
                 .font(.system(size: 12))
+            Toggle("Worked past the daily max", isOn: $prefs.notifyOverMax)
+                .font(.system(size: 12))
             Toggle("Timesheet deadline approaching", isOn: $prefs.notifyDeadline)
                 .font(.system(size: 12))
             Toggle("Something failed (sign-in, HiBob unreachable)", isOn: $prefs.notifyFailures)
@@ -213,19 +235,34 @@ struct SettingsPanel: View {
     @ViewBuilder
     private var menuBarContent: some View {
         Group {
-            HStack(spacing: 8) {
-                Text("Show next to the icon").font(.system(size: 12))
-                Picker("", selection: $prefs.menuBarDisplay) {
-                    ForEach(Prefs.MenuBarDisplay.allCases) { m in
-                        Text(m.label).tag(m)
-                    }
-                }
-                .labelsHidden().frame(maxWidth: 220)
-                Spacer()
-            }
+            Text("Show next to the icon").font(.system(size: 12, weight: .semibold))
+            menuTextRow("While working", $prefs.menuBarTextWorking,
+                        Prefs.MenuBarTextWorking.allCases) { $0.label }
+            menuTextRow("While on a break", $prefs.menuBarTextBreak,
+                        Prefs.MenuBarTextBreak.allCases) { $0.label }
+            menuTextRow("While clocked out", $prefs.menuBarTextOut,
+                        Prefs.MenuBarTextOut.allCases) { $0.label }
+            Divider().opacity(0.12)
+            Toggle("Show a play/pause badge on the icon while clocked in",
+                   isOn: $prefs.showStateBadge)
+                .font(.system(size: 12))
             Toggle("Tint the icon by status (green working / orange break)",
                    isOn: $prefs.colorMenuBarIcon)
                 .font(.system(size: 12))
+        }
+    }
+
+    private func menuTextRow<M: Identifiable & Hashable>(
+        _ label: String, _ selection: Binding<M>, _ options: [M],
+        _ title: @escaping (M) -> String
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(.system(size: 12))
+            Spacer()
+            Picker("", selection: selection) {
+                ForEach(options) { Text(title($0)).tag($0) }
+            }
+            .labelsHidden().frame(maxWidth: 200)
         }
     }
 

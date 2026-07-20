@@ -290,15 +290,21 @@ enum BobLines {
 
 @MainActor
 enum BobIcon {
+    /// Corner badge showing the clock state: play while working, pause while
+    /// on a break, none when clocked out (plain Bob).
+    enum StateBadge: String {
+        case none, play, pause
+    }
+
     /// Cached template image of Bob for the menu bar.
-    private static var cache: [Int: NSImage] = [:]
+    private static var cache: [String: NSImage] = [:]
 
     /// A one-colour full-body Bob silhouette (arms, body, feet, ears,
     /// head) with the eyes and tooth gap punched out — drawn in Core Graphics so
     /// overlapping parts union cleanly (non-zero) and the holes are cut with a
     /// clear blend. Marked as a template so the menu bar tints it automatically.
-    static func menuBar(height: CGFloat = 18) -> NSImage {
-        let key = Int(height * 4)
+    static func menuBar(height: CGFloat = 18, badge: StateBadge = .none) -> NSImage {
+        let key = "\(Int(height * 4))-\(badge.rawValue)"
         if let img = cache[key] { return img }
 
         // Draw in points — AppKit renders the closure at the display's scale,
@@ -332,6 +338,37 @@ enum BobIcon {
             ctx.addRect(ell(0.5, 0.45, 0.02, 0.10))
             ctx.fillPath()
             ctx.setBlendMode(.normal)
+
+            // State badge in the bottom-right corner: a filled disc with the
+            // glyph punched out, and a clear ring around it so it reads as its
+            // own glyph where it overlaps Bob.
+            if badge != .none {
+                let cx: CGFloat = 0.78, cy: CGFloat = 0.22
+                ctx.setBlendMode(.clear)
+                ctx.addEllipse(in: ell(cx, cy, 0.56, 0.56))
+                ctx.fillPath()
+                ctx.setBlendMode(.normal)
+                ctx.setFillColor(CGColor(gray: 0, alpha: 1))
+                ctx.addEllipse(in: ell(cx, cy, 0.44, 0.44))
+                ctx.fillPath()
+                ctx.setBlendMode(.clear)
+                switch badge {
+                case .play:
+                    let tri = CGMutablePath()
+                    tri.move(to: CGPoint(x: (cx - 0.075) * s, y: (cy - 0.10) * s))
+                    tri.addLine(to: CGPoint(x: (cx - 0.075) * s, y: (cy + 0.10) * s))
+                    tri.addLine(to: CGPoint(x: (cx + 0.115) * s, y: cy * s))
+                    tri.closeSubpath()
+                    ctx.addPath(tri)
+                case .pause:
+                    ctx.addPath(round(ell(cx - 0.055, cy, 0.05, 0.20), s * 0.015))
+                    ctx.addPath(round(ell(cx + 0.055, cy, 0.05, 0.20), s * 0.015))
+                case .none:
+                    break
+                }
+                ctx.fillPath()
+                ctx.setBlendMode(.normal)
+            }
             return true
         }
         img.isTemplate = true

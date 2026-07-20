@@ -231,6 +231,7 @@ struct DayDetailSheet: View {
             .animation(.easeInOut(duration: 0.15), value: state.busy)
 
             if let day, state.hasOverLongStretch(day.entries) { wandBanner(day) }
+            if let day, state.isOverDailyMax(day.entries) { overMaxBanner }
 
             if let day, !day.entries.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -257,6 +258,26 @@ struct DayDetailSheet: View {
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(20).frame(width: 560)
+    }
+
+    /// Red and actionless — a day past the daily max can only be fixed by
+    /// editing its entries, not by an automatic action.
+    private var overMaxBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.octagon.fill")
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(Fmt.hm(worked)) worked — over the \(Fmt.hm(Prefs.shared.maxDayLimit)) daily max")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Nothing to auto-fix here — shorten an entry below if this day is wrong.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(Color.red.opacity(0.30), lineWidth: 0.8))
     }
 
     /// Wand to fix a too-long uninterrupted run on this (any) day.
@@ -458,11 +479,16 @@ struct CalendarHeatmap: View {
         // A day with an uninterrupted run past the max is flagged orange right
         // here, so the break issue is visible without opening the cell — the
         // wand inside fixes it. The whole cell just swaps its green accent for
-        // orange, so the same tint/border/text language carries over.
+        // orange, so the same tint/border/text language carries over. A day
+        // past the daily max is red — the harder limit wins over orange.
         let breakIssue = state.monthDays
             .first(where: { $0.dateKey == day.date })
             .map { state.hasOverLongStretch($0.entries) } ?? false
-        let accent = breakIssue ? Color.orange : Color.workAccent(scheme)
+        let overMax = state.monthDays
+            .first(where: { $0.dateKey == day.date })
+            .map { state.isOverDailyMax($0.entries) }
+            ?? (day.worked * 3600 > Prefs.shared.maxDayLimit)
+        let accent = overMax ? Color.red : breakIssue ? Color.orange : Color.workAccent(scheme)
         // Same language as the time-off calendar: subtle tinted fill + strong
         // border + bold tinted text — strengths scale with hours worked. On
         // hover a worked cell stays green, just a stronger tint (same as the
@@ -504,7 +530,8 @@ struct CalendarHeatmap: View {
                 DayDetailSheet(state: state, dateKey: day.date)
             }
             .help("\(day.date): \(hoursText(day.worked))" + (hasTarget ? " / \(hoursText(day.target!)) target" : "")
-                  + (breakIssue ? " · break issue — needs a break" : ""))
+                  + (breakIssue ? " · break issue — needs a break" : "")
+                  + (overMax ? " · over the daily max" : ""))
     }
     private func dayNum(_ s: String) -> String { String(s.suffix(2)).drop(while: { $0 == "0" }).description }
 
@@ -518,6 +545,8 @@ struct CalendarHeatmap: View {
             Spacer()
             RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity(0.5)).frame(width: 14, height: 10)
             Text("Break issue").font(.system(size: 9)).foregroundStyle(.tertiary)
+            RoundedRectangle(cornerRadius: 3).fill(Color.red.opacity(0.5)).frame(width: 14, height: 10)
+            Text("Over daily max").font(.system(size: 9)).foregroundStyle(.tertiary)
         }
     }
 }

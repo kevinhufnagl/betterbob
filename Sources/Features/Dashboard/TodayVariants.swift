@@ -320,6 +320,7 @@ struct TodayTimeline: View {
 
                 if case .onBreak = state.clockState { breakBanner(ctx.date) }
                 if state.overMaxNonBreak { missingBreakBanner }
+                if state.overDailyMax { overDailyMaxBanner }
 
                 EntriesTable(state: state)
             }
@@ -378,6 +379,26 @@ struct TodayTimeline: View {
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(Color.orange.opacity(0.30), lineWidth: 0.8))
+    }
+
+    /// Red and actionless — you can't un-work hours, so unlike the missing
+    /// break there's no fix button.
+    private var overDailyMaxBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.octagon.fill")
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Over your \(Fmt.hm(Prefs.shared.maxDayLimit)) daily max")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("\(Fmt.hm(state.workedToday)) worked today — time to clock out.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.red.opacity(0.30), lineWidth: 0.8))
     }
 
     private func stat(_ value: String, _ label: String, _ tint: Color) -> some View {
