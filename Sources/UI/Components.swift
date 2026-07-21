@@ -171,6 +171,9 @@ extension Color {
     /// for break/attention and a rose-leaning red for hard warnings.
     static let bobOrange = Color(red: 0.88, green: 0.47, blue: 0.24)
     static let bobRed = Color(red: 0.85, green: 0.27, blue: 0.33)
+    /// A cool violet, distinct from teal/orange/red — flags a past day whose
+    /// work entries carry no reason (untagged).
+    static let bobViolet = Color(red: 0.58, green: 0.44, blue: 0.86)
 
     static func workAccent(_ scheme: ColorScheme) -> Color {
         primaryAccent(scheme)

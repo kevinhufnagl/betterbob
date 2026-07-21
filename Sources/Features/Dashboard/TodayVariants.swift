@@ -47,10 +47,13 @@ private func greetingText(_ state: BobState) -> String {
 
 struct StatusPill: View {
     @ObservedObject var state: BobState
+    /// Match the water: the over-limit tint when past a limit, else the
+    /// clock-state color (which already tracks the accent water).
+    private var tint: Color { state.heroLimitTint ?? state.clockState.tint }
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(state.clockState.tint).frame(width: 8, height: 8)
-                .shadow(color: state.clockState.tint.opacity(0.6), radius: 3)
+            Circle().fill(tint).frame(width: 8, height: 8)
+                .shadow(color: tint.opacity(0.6), radius: 3)
             Text(state.clockState.title).font(.system(size: 12, weight: .semibold))
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
@@ -58,10 +61,11 @@ struct StatusPill: View {
         // hero — a bare translucent tint washed out against the water.
         .background {
             Capsule().fill(.regularMaterial)
-            Capsule().fill(state.clockState.tint.opacity(0.16))
+            Capsule().fill(tint.opacity(0.16))
         }
-        .overlay(Capsule().strokeBorder(state.clockState.tint.opacity(0.40), lineWidth: 0.8))
+        .overlay(Capsule().strokeBorder(tint.opacity(0.40), lineWidth: 0.8))
         .animation(Motion.standard, value: state.clockState)
+        .animation(Motion.standard, value: state.heroLimitTint)
     }
 }
 
@@ -403,11 +407,9 @@ struct TodayTimeline: View {
                         EmptyView()
                     }
                     // Water turns orange/red on the same limits as the month
-                    // cells: red past the daily max, orange for an over-long
-                    // uninterrupted run or a break shortfall.
-                    .statusTint(state.overDailyMax ? .bobRed
-                                : (state.overMaxNonBreak || state.breakGuidelineShortfall != nil)
-                                    ? .bobOrange : nil)
+                    // cells (red past the daily max, orange for an over-long run
+                    // or break shortfall).
+                    .statusTint(state.heroLimitTint)
                     // Content-sized: a fixed frame smaller than the content
                     // makes the hero spill past it top and bottom (SwiftUI
                     // doesn't clip), eating the gap to the next card.
@@ -515,7 +517,7 @@ struct TodayTimeline: View {
             }
             Spacer()
             Button { state.addMissingBreak() } label: {
-                Label("Add break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
+                Label("Add \(Prefs.shared.breakMinutes)-min break", systemImage: "wand.and.stars").font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 12).frame(height: 30)
                     .background(Capsule().fill(Color.bobOrange.opacity(0.18)))
                     .overlay(Capsule().strokeBorder(Color.bobOrange.opacity(0.45), lineWidth: 0.8))

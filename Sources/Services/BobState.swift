@@ -495,6 +495,13 @@ final class BobState: ObservableObject {
     /// True when today has an uninterrupted run past the max non-break time.
     var overMaxNonBreak: Bool { hasOverLongStretch(entries) }
 
+    /// A day with work logged but no reason on any of its work entries — i.e.
+    /// untagged time. Used to flag past days in the month grid.
+    func missingReason(_ dayEntries: [AttendanceEntry]) -> Bool {
+        let work = dayEntries.filter { $0.kind == .work }
+        return !work.isEmpty && work.allSatisfy { ($0.reason ?? "").isEmpty }
+    }
+
     /// Whether a day's total worked time is past the daily max (default 10h).
     func isOverDailyMax(_ dayEntries: [AttendanceEntry]) -> Bool {
         AttendanceLogic.overDailyMax(entries: dayEntries,
@@ -503,6 +510,15 @@ final class BobState: ObservableObject {
 
     /// True when today's total worked time is past the daily max.
     var overDailyMax: Bool { isOverDailyMax(entries) }
+
+    /// The over-limit tint for today, matching the month cells: red past the
+    /// daily max, orange for an over-long uninterrupted run or a break
+    /// shortfall, nil otherwise. Drives the hero water and the status pill.
+    var heroLimitTint: Color? {
+        if overDailyMax { return .bobRed }
+        if overMaxNonBreak || breakGuidelineShortfall != nil { return .bobOrange }
+        return nil
+    }
 
     /// Magic-wand fix for a too-long stretch on `date`: carve a break out of the
     /// middle of the offending run. Clock-in/out stay put, so this *reduces*

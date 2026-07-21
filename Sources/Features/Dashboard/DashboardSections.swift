@@ -593,7 +593,15 @@ struct CalendarHeatmap: View {
             .first(where: { $0.dateKey == day.date })
             .map { state.isOverDailyMax($0.entries) }
             ?? (day.worked * 3600 > Prefs.shared.maxDayLimit)
-        let accent = overMax ? Color.bobRed : breakIssue ? Color.bobOrange : Color.workAccent(scheme)
+        // A past day whose work entries carry no reason (untagged) — violet, the
+        // mildest flag, so a real break/max issue still wins the cell color.
+        let missingReason = day.date < DayFmt.today()
+            && (state.monthDays.first(where: { $0.dateKey == day.date })
+                .map { state.missingReason($0.entries) } ?? false)
+        let accent = overMax ? Color.bobRed
+                   : breakIssue ? Color.bobOrange
+                   : missingReason ? Color.bobViolet
+                   : Color.workAccent(scheme)
         // Same language as the time-off calendar: subtle tinted fill + strong
         // border + bold tinted text — strengths scale with hours worked. On
         // hover a worked cell stays green, just a stronger tint (same as the
@@ -605,6 +613,12 @@ struct CalendarHeatmap: View {
                      : isToday ? accent.opacity(0.55)
                      : hov ? Color.primary.opacity(0.2)
                      : Color.clear
+        // Built as a plain string — a 4-way inline concat trips the type-checker.
+        var helpText = "\(day.date): \(hoursText(day.worked))"
+        if hasTarget { helpText += " / \(hoursText(day.target!)) target" }
+        if breakIssue { helpText += " · break issue — needs a break" }
+        if overMax { helpText += " · over the daily max" }
+        if missingReason { helpText += " · no reason set on the work entries" }
         return RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(fill)
             .frame(height: 40)
@@ -634,9 +648,7 @@ struct CalendarHeatmap: View {
                      arrowEdge: .bottom) {
                 DayDetailSheet(state: state, dateKey: day.date)
             }
-            .help("\(day.date): \(hoursText(day.worked))" + (hasTarget ? " / \(hoursText(day.target!)) target" : "")
-                  + (breakIssue ? " · break issue — needs a break" : "")
-                  + (overMax ? " · over the daily max" : ""))
+            .help(helpText)
     }
     private func dayNum(_ s: String) -> String { String(s.suffix(2)).drop(while: { $0 == "0" }).description }
 
@@ -648,6 +660,8 @@ struct CalendarHeatmap: View {
             }
             Text("More").font(.system(size: 9)).foregroundStyle(.secondary)
             Spacer()
+            RoundedRectangle(cornerRadius: 3).fill(Color.bobViolet.opacity(0.6)).frame(width: 14, height: 10)
+            Text("No reason").font(.system(size: 9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.bobOrange.opacity(0.5)).frame(width: 14, height: 10)
             Text("Break issue").font(.system(size: 9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.bobRed.opacity(0.5)).frame(width: 14, height: 10)

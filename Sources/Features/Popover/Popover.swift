@@ -283,6 +283,7 @@ struct PopoverRootView: View {
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                        compact: true, bottomInset: 20)
+                .statusTint(state.heroLimitTint)
                 .frame(height: 112)
                 .padding(.top, dryAwake ? 28 : 21)
                 .overlay(alignment: .bottomTrailing) {
