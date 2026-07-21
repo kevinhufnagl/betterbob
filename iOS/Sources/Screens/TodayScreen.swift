@@ -72,21 +72,22 @@ struct TodayScreen: View {
                 }
             }
             .overlay(alignment: .top) {
-                // Too little water to swim, but still on the clock: he hangs
-                // behind the card, paws on the lip, peeking over the middle
-                // (the corners hold the status pill and worked-time text).
+                // Too little water to swim, but still on the clock: he pokes
+                // up over the section's top edge (middle — the corners hold
+                // the status pill and worked-time text).
                 if v.fraction < 0.15, state.clockState != .clockedOut {
                     PeekingBob(size: 64, onBreak: v.onBreak)
-                        .offset(y: -2)
+                        .offset(y: -30)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                // Dry and clocked out: asleep in the corner.
+                // Dry and clocked out: asleep at the bottom of the section
+                // (clear of the centered clock-in dock).
                 if v.fraction < 0.15, state.clockState == .clockedOut {
                     SleepingBob()
                         .frame(width: 86, height: 54)
                         .padding(.trailing, 18)
-                        .padding(.bottom, 40)
+                        .padding(.bottom, 8)
                 }
             }
             .overlay(alignment: .topTrailing) {
