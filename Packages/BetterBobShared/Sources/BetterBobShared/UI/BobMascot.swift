@@ -433,6 +433,47 @@ enum BobLines {
                             "Rise and grind? Sign in first"]
 }
 
+/// Bob's face silhouette — the Mac menu-bar glyph's geometry as a
+/// resolution-independent SwiftUI mark, so widgets and small chrome can use
+/// Bob where an SF Symbol would go. Same unit coordinates as `BobIcon`,
+/// flipped into SwiftUI's y-down space.
+public struct BobFaceMark: View {
+    var color: Color
+
+    public init(color: Color = .primary) { self.color = color }
+
+    public var body: some View {
+        Canvas { ctx, size in
+            let s = min(size.width, size.height)
+            func ell(_ ux: CGFloat, _ uy: CGFloat, _ uw: CGFloat, _ uh: CGFloat) -> CGRect {
+                CGRect(x: (ux - uw / 2) * s, y: (1 - uy - uh / 2) * s,
+                       width: uw * s, height: uh * s)
+            }
+            // Zoom around the face bundle's centre so ears/head/teeth fill
+            // the canvas — mirrors the menu-bar glyph's transform.
+            ctx.translateBy(x: 0.5 * s, y: 0.5 * s)
+            ctx.scaleBy(x: 1.35, y: 1.35)
+            ctx.translateBy(x: -0.5 * s, y: -(1 - 0.6575) * s)
+
+            var face = Path()
+            face.addEllipse(in: ell(0.24, 0.82, 0.17, 0.17))
+            face.addEllipse(in: ell(0.76, 0.82, 0.17, 0.17))
+            face.addEllipse(in: ell(0.5, 0.63, 0.58, 0.54))
+            face.addRoundedRect(in: ell(0.5, 0.47, 0.16, 0.12),
+                                cornerSize: CGSize(width: 0.02 * s, height: 0.02 * s))
+            ctx.fill(face, with: .color(color))
+
+            // Punch holes: two eyes and the vertical tooth gap.
+            ctx.blendMode = .clear
+            var holes = Path()
+            holes.addEllipse(in: ell(0.39, 0.69, 0.15, 0.15))
+            holes.addEllipse(in: ell(0.61, 0.69, 0.15, 0.15))
+            holes.addRect(ell(0.5, 0.45, 0.02, 0.10))
+            ctx.fill(holes, with: .color(color))
+        }
+    }
+}
+
 #if os(macOS)
 @MainActor
 enum BobIcon {

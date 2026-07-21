@@ -20,9 +20,12 @@ final class WidgetBridge {
 
     func push() {
         let state = BobState.shared
+        // The day's real target (from the cycle summary, like the app hero) —
+        // NOT Prefs.threshold, which is the auto-break threshold.
+        let target = TodayVals(state, now: Date()).targetSecs
         let snapshot = AttendanceLogic.widgetSnapshot(
             entries: state.entries, signedIn: state.signedIn,
-            target: Prefs.shared.threshold, breakEnds: state.autoBreakEnds,
+            target: target, breakEnds: state.autoBreakEnds,
             now: Date())
         SharedStore.save(snapshot)
         LiveActivityController.shared.sync(snapshot)

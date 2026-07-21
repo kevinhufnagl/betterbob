@@ -55,20 +55,28 @@ struct TodayWidgetView: View {
             switch family {
             case .accessoryCircular:
                 Gauge(value: min(1, snap.workedTotal(now: entry.date) / max(snap.target, 1))) {
-                    Image(systemName: symbol(snap.state))
+                    BobFaceMark()
+                        .frame(width: 20, height: 20)
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
+            case .accessoryRectangular:
+                // Tight three-liner — the lock screen slot clips anything
+                // taller, and expanding frames spread the content apart.
+                VStack(alignment: .leading, spacing: 0) {
+                    Label(title(snap.state), systemImage: symbol(snap.state))
+                        .font(.caption2.weight(.semibold))
+                    timerText(snap)
+                        .font(.headline.monospacedDigit())
+                    Text("of \(hm(snap.target))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             default:
                 VStack(alignment: .leading, spacing: 4) {
                     Label(title(snap.state), systemImage: symbol(snap.state))
                         .font(.caption.weight(.semibold))
-                    if snap.state == .working, let start = snap.stretchStart {
-                        Text(timerInterval: start...Date.distantFuture, countsDown: false)
-                            .font(.title2.monospacedDigit().weight(.medium))
-                    } else {
-                        Text(hm(snap.workedTotal(now: entry.date)))
-                            .font(.title2.monospacedDigit().weight(.medium))
-                    }
+                    timerText(snap)
+                        .font(.title2.monospacedDigit().weight(.medium))
                     Text("of \(hm(snap.target)) today")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -78,6 +86,14 @@ struct TodayWidgetView: View {
         } else {
             Label("Open BetterBob", systemImage: "clock")
                 .font(.caption)
+        }
+    }
+
+    @ViewBuilder private func timerText(_ snap: WidgetSnapshot) -> some View {
+        if snap.state == .working, let start = snap.stretchStart {
+            Text(timerInterval: start...Date.distantFuture, countsDown: false)
+        } else {
+            Text(hm(snap.workedTotal(now: entry.date)))
         }
     }
 
