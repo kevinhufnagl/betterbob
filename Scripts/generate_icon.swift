@@ -135,10 +135,11 @@ func render(size px: Int, foregroundOnly: Bool = false) -> Data? {
                            end: CGPoint(x: 0, y: headRect.minY), options: [])
     ctx.restoreGState()
 
-    // ── Teal cap that says "bob" (the brand primary): visor over the brow,
-    //    a flatter crown, ears poking out at the sides. A touch brighter than
-    //    the background ramp so it still reads as its own shape.
-    let capBlue = c(0.15, 0.68, 0.70), capDark = c(0.08, 0.44, 0.47)
+    // ── Cap that says "bob": visor over the brow, a flatter crown, ears
+    //    poking out at the sides. Very dark teal — near-black with a teal
+    //    lean — so the white wordmark carries maximum contrast; it separates
+    //    from the navy background by hue, not brightness.
+    let capBlue = c(0.05, 0.24, 0.28), capDark = c(0.03, 0.14, 0.17)
     // Visor — a wide, thin brim jutting over the brow.
     fillRoundRect(ell(0.5, 0.70, 0.72, 0.12), s * 0.05, capDark)
     // Crown — a rounded dome: fully round on top, flat where it meets the visor
