@@ -50,8 +50,11 @@ native iOS 26 Liquid Glass app:
   `CODE_SIGNING_ALLOWED=NO`; xcodebuild's destination matching is flaky here —
   if `generic/platform=iOS Simulator` errors, retry with a concrete
   `platform=iOS Simulator,name=iPhone 17 Pro,OS=…` destination (or vice versa).
-- No hidden sign-in window on iOS: SSO runs in a visible sheet
-  (`SSOSignInController.sheetWebView` + `SignInSheet.swift`).
+- Sign-in on iOS: manual/browser mode presents a visible sheet
+  (`SSOSignInController.sheetWebView` + `SignInSheet.swift`); assisted mode
+  runs invisibly like the Mac — the WKWebView is parked full-size at the
+  back of the key window, behind all app content, so WebKit keeps driving
+  Okta while only the inline OTP card shows.
 - Background auto-break is best-effort (`BGAppRefreshTask` chained around
   auto-break due times) plus catch-up on foreground; widgets and the Live
   Activity read a `WidgetSnapshot` from the App Group

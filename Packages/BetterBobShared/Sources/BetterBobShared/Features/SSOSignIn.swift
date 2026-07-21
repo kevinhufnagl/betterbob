@@ -1,5 +1,7 @@
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 import WebKit
 import SwiftUI
@@ -92,13 +94,13 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         startAutofill()
     }
 
-    /// Assisted sign-in: the browser auto-fills + advances email and password
-    /// on its own, then stops at the authenticator step and waits. On macOS it
-    /// runs hidden (transparent, off-list) with the one-time code coming from
-    /// the inline field the app shows (driven by `BobState.awaitingOTP`); on
-    /// iOS there is no hidden-window trick, so the same drive runs in a
-    /// visible sheet and the user finishes the OTP right in the page. Generous
-    /// deadline since a human is in the loop.
+    /// Assisted sign-in: the browser runs hidden and auto-fills + advances
+    /// email and password on its own, then stops at the authenticator step
+    /// and waits. The one-time code comes only from the inline field the app
+    /// shows (driven by `BobState.awaitingOTP`). macOS hides the browser in a
+    /// transparent floating window; iOS parks it behind the app's content —
+    /// either way nothing is shown. Generous deadline since a human is in
+    /// the loop.
     public func presentAssisted(factor: SignInFactor, onFinish: @escaping (Bool) -> Void) {
         teardown()
         self.onFinish = onFinish
@@ -135,13 +137,21 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         #if os(iOS)
-        // One hosting strategy for both modes on iOS: a visible sheet. The
-        // autofill timer still drives assisted mode inside it.
         let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 720),
                             configuration: config)
         web.navigationDelegate = self
         webView = web
-        sheetWebView = web
+        if visible {
+            // Manual mode: the sheet the app root presents.
+            sheetWebView = web
+        } else {
+            // Assisted mode: iOS has no transparent floating windows and
+            // WebKit suspends views that aren't in a window at all — so park
+            // the web view full-size INSIDE the app's window, behind all
+            // content. It renders and runs Okta's scripts, but the app's own
+            // UI covers it completely; only the inline OTP card is visible.
+            attachHiddenBehindContent(web)
+        }
         #else
         let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 680), configuration: config)
         web.navigationDelegate = self
@@ -167,6 +177,30 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         #endif
     }
 
+    #if os(iOS)
+    /// Insert the web view at the very back of the app's key window: in the
+    /// hierarchy (so WebKit keeps it alive and executing), laid out full-size
+    /// (so the autofill JS's visibility checks pass), but entirely covered by
+    /// the app's own content.
+    private func attachHiddenBehindContent(_ web: WKWebView) {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .sorted { ($0.activationState == .foregroundActive ? 0 : 1)
+                    < ($1.activationState == .foregroundActive ? 0 : 1) }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow } ??
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first
+        guard let window else { return }
+        web.frame = window.bounds
+        web.isUserInteractionEnabled = false
+        web.accessibilityElementsHidden = true
+        window.insertSubview(web, at: 0)
+    }
+    #endif
+
     private func load() {
         webView?.load(URLRequest(url: BobAPI.base.appendingPathComponent("login")))
     }
@@ -179,6 +213,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         window?.close()
         window = nil
         #else
+        webView?.removeFromSuperview()   // the hidden assisted host, if any
         sheetWebView = nil
         #endif
         webView = nil
