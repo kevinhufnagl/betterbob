@@ -46,6 +46,11 @@ struct BobLiveActivity: Widget {
     private func timer(_ state: BobActivityAttributes.ContentState) -> some View {
         if state.isOnBreak, let ends = state.breakEnds {
             Text(timerInterval: Date()...ends, countsDown: true)
+        } else if state.showsTotal {
+            // Whole-day total: shift the anchor back by the already-banked
+            // time so the ticking value reads workedBase + elapsed stretch.
+            Text(timerInterval: state.stretchStart.addingTimeInterval(-state.workedBase)...Date.distantFuture,
+                 countsDown: false)
         } else {
             Text(timerInterval: state.stretchStart...Date.distantFuture, countsDown: false)
         }

@@ -12,13 +12,18 @@ final class LiveActivityController {
     private var activity: Activity<BobActivityAttributes>?
 
     func sync(_ snapshot: WidgetSnapshot) {
+        guard Prefs.shared.liveActivityEnabled else {
+            end()
+            return
+        }
         switch snapshot.state {
         case .working, .onBreak:
             let content = BobActivityAttributes.ContentState(
                 isOnBreak: snapshot.state == .onBreak,
                 stretchStart: snapshot.stretchStart ?? snapshot.updatedAt,
                 workedBase: snapshot.workedBase,
-                breakEnds: snapshot.breakEnds)
+                breakEnds: snapshot.breakEnds,
+                showsTotal: Prefs.shared.liveActivityShowsTotal)
             if let activity {
                 Task { await activity.update(ActivityContent(state: content, staleDate: nil)) }
             } else {
@@ -27,9 +32,13 @@ final class LiveActivityController {
                     content: ActivityContent(state: content, staleDate: nil))
             }
         case .clockedOut, .signedOut:
-            guard let activity else { return }
-            self.activity = nil
-            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            end()
         }
+    }
+
+    private func end() {
+        guard let activity else { return }
+        self.activity = nil
+        Task { await activity.end(nil, dismissalPolicy: .immediate) }
     }
 }

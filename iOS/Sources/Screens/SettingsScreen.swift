@@ -15,6 +15,7 @@ struct SettingsScreen: View {
                 autoBreakSection
                 dailyLimitSection
                 if state.signedIn { reasonsSection }
+                liveActivitySection
                 notificationsSection
                 generalSection
                 diagnosticsSection
@@ -124,6 +125,29 @@ struct SettingsScreen: View {
                 .pickerStyle(.menu)
             }
         }
+    }
+
+    // MARK: Live Activity
+
+    private var liveActivitySection: some View {
+        GlassGroupedSection(
+            header: "Live Activity",
+            footer: "Shows your clock state in the Dynamic Island and on the Lock Screen while clocked in."
+        ) {
+            GlassRow(showDivider: false) {
+                Toggle("Show Live Activity", isOn: $prefs.liveActivityEnabled)
+            }
+            GlassRow {
+                Picker("Timer counts", selection: $prefs.liveActivityShowsTotal) {
+                    Text("Current stretch").tag(false)
+                    Text("Whole day").tag(true)
+                }
+                .pickerStyle(.menu)
+                .disabled(!prefs.liveActivityEnabled)
+            }
+        }
+        .onChange(of: prefs.liveActivityEnabled) { _, _ in WidgetBridge.shared.push() }
+        .onChange(of: prefs.liveActivityShowsTotal) { _, _ in WidgetBridge.shared.push() }
     }
 
     // MARK: Notifications

@@ -9,5 +9,7 @@ struct BobActivityAttributes: ActivityAttributes {
         var stretchStart: Date
         var workedBase: TimeInterval
         var breakEnds: Date?
+        /// Timer counts the whole day instead of the current stretch.
+        var showsTotal: Bool = false
     }
 }
