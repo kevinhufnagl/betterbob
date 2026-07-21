@@ -13,13 +13,11 @@ struct BetterBobApp: App {
             RootTabs(state: BobState.shared)
                 .signInSheet()
                 .fullScreenCover(isPresented: $showOnboarding) {
-                    ScrollView {
-                        OnboardingView(state: BobState.shared) {
-                            OnboardingController.completed = true
-                            showOnboarding = false
-                        }
-                        .padding(.vertical, 24)
+                    OnboardingScreen(state: BobState.shared) {
+                        OnboardingController.completed = true
+                        showOnboarding = false
                     }
+                    .signInSheet()
                     .interactiveDismissDisabled(!BobState.shared.signedIn)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .presentOnboarding)) { _ in

@@ -4,14 +4,14 @@ import Security
 /// Tiny wrapper over the macOS login Keychain for the few secrets BetterBob
 /// stores locally (the HiBob password + TOTP secret used to autofill sign-in).
 /// Nothing here ever leaves the machine except into the HiBob login form.
-enum Keychain {
+public enum Keychain {
     private static let service = "k3n.betterbob.credentials"
 
-    enum Key: String {
+    public enum Key: String {
         case password = "hibobPassword"
     }
 
-    static func set(_ value: String?, for key: Key) {
+    public static func set(_ value: String?, for key: Key) {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -25,7 +25,7 @@ enum Keychain {
         SecItemAdd(add as CFDictionary, nil)
     }
 
-    static func get(_ key: Key) -> String? {
+    public static func get(_ key: Key) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -55,7 +55,7 @@ enum Keychain {
         set(value, for: key)
     }
 
-    static func has(_ key: Key) -> Bool { get(key) != nil }
+    public static func has(_ key: Key) -> Bool { get(key) != nil }
 
     /// One-time cleanup for the authenticator seed earlier versions stored under
     /// this service. The feature is gone; delete any lingering item so the seed
