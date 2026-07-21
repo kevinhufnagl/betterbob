@@ -156,7 +156,7 @@ struct TodayScreen: View {
             }
             if state.overDailyMax {
                 warningRow("Past the daily limit — only clocking out helps.",
-                           symbol: "exclamationmark.octagon.fill", tint: .red)
+                           symbol: "exclamationmark.octagon.fill", tint: .bobRed)
             }
         }
     }
@@ -183,17 +183,17 @@ struct TodayScreen: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: 14)
+        .glassSurface(cornerRadius: 14, tint: .bobOrange)
     }
 
     private func warningRow(_ text: String, symbol: String, tint: Color) -> some View {
         Label(text, systemImage: symbol)
-            .font(.footnote)
+            .font(.footnote.weight(.semibold))
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .glassSurface(cornerRadius: 14)
+            .glassSurface(cornerRadius: 14, tint: tint)
     }
 
     // MARK: Entries

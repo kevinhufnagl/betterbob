@@ -5,13 +5,18 @@ import SwiftUI
 /// corner radius and stroke recipe.
 struct GlassSurface: ViewModifier {
     var cornerRadius: CGFloat = 18
+    /// Washes the glass itself in a color — warning banners and other
+    /// semantic surfaces; nil keeps the plain material.
+    var tint: Color?
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .glassEffect(tint.map { Glass.regular.tint($0.opacity(0.22)) } ?? .regular, in: shape)
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                shape.strokeBorder(
+                    tint.map { $0.opacity(0.35) } ?? Color.white.opacity(0.08),
+                    lineWidth: tint == nil ? 0.5 : 0.7)
             )
     }
 }
@@ -30,7 +35,7 @@ struct GlassCard<Content: View>: View {
 }
 
 extension View {
-    func glassSurface(cornerRadius: CGFloat = 18) -> some View {
-        modifier(GlassSurface(cornerRadius: cornerRadius))
+    func glassSurface(cornerRadius: CGFloat = 18, tint: Color? = nil) -> some View {
+        modifier(GlassSurface(cornerRadius: cornerRadius, tint: tint))
     }
 }
