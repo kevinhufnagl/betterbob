@@ -124,8 +124,10 @@ struct MainWindow: View {
                     if state.canAutoSignIn {
                         // One button per second factor, like the popover — a
                         // bare "log in automatically" silently assumed Google
-                        // Authenticator.
+                        // Authenticator. Capped like AutoLoginInline so it
+                        // doesn't stretch across the wide dashboard.
                         SignInFactorGroup(state: state)
+                            .frame(maxWidth: 300)
                     }
                     Button { state.startSSOSignIn() } label: {
                         Label("Sign in with browser…", systemImage: "safari")
