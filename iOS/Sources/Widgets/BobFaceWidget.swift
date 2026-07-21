@@ -30,10 +30,20 @@ struct BobFaceWidgetView: View {
     }
 
     var body: some View {
-        ZStack {
-            AccessoryWidgetBackground()
-            BobFaceMark(expression: expression)
-                .frame(width: 40, height: 40)
+        if let snap = entry.snapshot {
+            // Progress toward today's target rings the face — measured at the
+            // snapshot's own timestamp so a stale render can't overfill it.
+            Gauge(value: min(1, snap.workedTotal(now: snap.updatedAt) / max(snap.target, 1))) {
+                BobFaceMark(expression: expression)
+                    .frame(width: 30, height: 30)
+            }
+            .gaugeStyle(.accessoryCircularCapacity)
+        } else {
+            ZStack {
+                AccessoryWidgetBackground()
+                BobFaceMark(expression: .asleep)
+                    .frame(width: 40, height: 40)
+            }
         }
     }
 }
