@@ -168,11 +168,20 @@ public struct FreshDayWelcome: View {
     }
 
     /// The cycle's running over/under, when the summary has arrived —
-    /// worded, not signed: "1:00 behind this month" beats "−1:00 this cycle".
+    /// fully worded: "1 hour 30 minutes behind this month".
     private var balanceText: String? {
         guard let minutes = state.cycleSummary?.overUnderMinutes, minutes != 0 else { return nil }
-        let amount = Fmt.hm(TimeInterval(abs(minutes) * 60))
-        return minutes > 0 ? "\(amount) ahead this month" : "\(amount) behind this month"
+        return minutes > 0 ? "\(spoken(abs(minutes))) ahead this month"
+                           : "\(spoken(abs(minutes))) behind this month"
+    }
+
+    /// Minutes → words: 90 → "1 hour 30 minutes".
+    private func spoken(_ totalMinutes: Int) -> String {
+        let h = totalMinutes / 60, m = totalMinutes % 60
+        var parts: [String] = []
+        if h > 0 { parts.append("\(h) hour" + (h == 1 ? "" : "s")) }
+        if m > 0 { parts.append("\(m) minute" + (m == 1 ? "" : "s")) }
+        return parts.isEmpty ? "0 minutes" : parts.joined(separator: " ")
     }
 
     /// The next booked, still-active leave — something to look forward to.
@@ -245,7 +254,7 @@ public struct FreshDayWelcome: View {
                     // what there is to look forward to. Chips share a row
                     // when they fit, wrap when they don't — uniform spacing.
                     ChipFlow(spacing: 6) {
-                        chip("\(Fmt.hm(target)) today", symbol: "target")
+                        chip("\(spoken(Int(target / 60))) today", symbol: "target")
                         if let doneByText {
                             chip(doneByText, symbol: "clock.badge.checkmark")
                         }

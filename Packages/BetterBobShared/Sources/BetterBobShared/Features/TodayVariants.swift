@@ -1053,6 +1053,18 @@ public struct BuoyBob: View {
             BobMascot(blink: blink)
                 .frame(width: size, height: size)
                 .mask(alignment: .top) { Rectangle().frame(height: size * 0.56) }
+            // Paws gripping the ring's top tube, one either side of his
+            // muzzle, tilted with the tube's slope.
+            ForEach([-1.0, 1.0], id: \.self) { side in
+                Ellipse()
+                    .fill(Color(red: 0.64, green: 0.44, blue: 0.28))
+                    .overlay(Ellipse().strokeBorder(
+                        Color(red: 0.42, green: 0.27, blue: 0.16),
+                        lineWidth: max(1, size * 0.015)))
+                    .frame(width: size * 0.15, height: size * 0.105)
+                    .rotationEffect(.degrees(14 * side))
+                    .offset(x: size * 0.22 * side, y: -size * 0.11)
+            }
             if onBreak {
                 BobShades(size: size)
                 // Standing on the ring's tube beside his ear, leaning
