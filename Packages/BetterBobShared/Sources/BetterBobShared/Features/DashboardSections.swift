@@ -665,7 +665,11 @@ public struct CalendarHeatmap: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 if worked {
+                    // Phone cells are ~44pt wide — scale down rather than
+                    // wrap "7h 30m" onto two lines.
                     Text(hoursText(day.worked)).font(.system(size: 9, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
                         .foregroundStyle(accent).padding(5)
                 }
             }
