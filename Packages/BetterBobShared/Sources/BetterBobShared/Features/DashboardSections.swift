@@ -244,7 +244,11 @@ struct ReasonPicker: View {
 
 // MARK: - Day detail (edit a past day)
 
-struct DayDetailSheet: View {
+public struct DayDetailSheet: View {
+    public init(state: BobState, dateKey: String) {
+        self.state = state
+        self.dateKey = dateKey
+    }
     @ObservedObject var state: BobState
     let dateKey: String
     @Environment(\.dismiss) private var dismiss
@@ -256,7 +260,7 @@ struct DayDetailSheet: View {
             .reduce(0) { $0 + ($1.end ?? $1.start).timeIntervalSince($1.start) }
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -552,7 +556,11 @@ public struct CyclePane: View {
 
 /// A proper month calendar: weekday columns, week rows, each day shaded by
 /// hours worked with the number shown and today ringed.
-struct CalendarHeatmap: View {
+public struct CalendarHeatmap: View {
+    public init(state: BobState, onOpenToday: @escaping () -> Void = {}) {
+        self.state = state
+        self.onOpenToday = onOpenToday
+    }
     @ObservedObject var state: BobState
     var onOpenToday: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
@@ -561,7 +569,7 @@ struct CalendarHeatmap: View {
     private let cols = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
     private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-    var body: some View {
+    public var body: some View {
         Card(title: "Daily hours", symbol: "calendar") {
             if let days = state.cycleSummary?.days, !days.isEmpty {
                 let maxWorked = max(days.map(\.worked).max() ?? 1, 1)
@@ -682,7 +690,8 @@ struct CalendarHeatmap: View {
     }
 }
 
-struct BalanceTrendCard: View {
+public struct BalanceTrendCard: View {
+    public init(state: BobState) { self.state = state }
     @ObservedObject var state: BobState
     @Environment(\.colorScheme) private var scheme
     private struct Point: Identifiable { let id = UUID(); let date: Date; let balance: Double }
@@ -699,7 +708,7 @@ struct BalanceTrendCard: View {
         return out
     }
 
-    var body: some View {
+    public var body: some View {
         Card(title: "Running over / under", symbol: "chart.xyaxis.line") {
             if points.count < 2 {
                 Text("Not enough days yet.").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -794,13 +803,18 @@ public struct ActivityPane: View {
 
 // MARK: - Shared bits
 
-struct ProgressRing: View {
+public struct ProgressRing: View {
+    public init(fraction: Double, center: String, tint: Color) {
+        self.fraction = fraction
+        self.center = center
+        self.tint = tint
+    }
     let fraction: Double
     let center: String
     let tint: Color
     @State private var sweep = false
 
-    var body: some View {
+    public var body: some View {
         let f = min(1, max(0, fraction))
         let done = fraction >= 1
         ZStack {

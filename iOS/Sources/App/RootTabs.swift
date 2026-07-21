@@ -15,19 +15,7 @@ struct RootTabs: View {
                 .tag(BobTab.today)
 
             NavigationStack {
-                ScrollView {
-                    CyclePane(state: state, onOpenToday: { tab = .today })
-                        .padding(16)
-                }
-                .background(DashboardBG())
-                .navigationTitle("Month")
-                .toolbar {
-                    NavigationLink {
-                        ScrollView { ActivityPane(state: state).padding(16) }
-                            .background(DashboardBG())
-                            .navigationTitle("Activity")
-                    } label: { Image(systemName: "clock.arrow.circlepath") }
-                }
+                MonthScreen(state: state, onOpenToday: { tab = .today })
             }
             .tabItem { Label("Month", systemImage: "calendar") }
             .tag(BobTab.month)

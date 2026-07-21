@@ -65,13 +65,19 @@ struct Card<Content: View>: View {
 }
 
 /// A KPI tile: big value, small caption, optional accent + trailing glyph.
-struct StatTile: View {
+public struct StatTile: View {
+    public init(value: String, caption: String, tint: Color = .primary, symbol: String? = nil) {
+        self.value = value
+        self.caption = caption
+        self.tint = tint
+        self.symbol = symbol
+    }
     let value: String
     let caption: String
     var tint: Color = .primary
     var symbol: String? = nil
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let symbol {
                 Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
