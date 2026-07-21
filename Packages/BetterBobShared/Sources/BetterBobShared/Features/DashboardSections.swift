@@ -580,9 +580,9 @@ public struct CalendarHeatmap: View {
                 VStack(spacing: 8) {
                     LazyVGrid(columns: cols, spacing: 6) {
                         ForEach(weekdays, id: \.self) { wd in
-                            Text(wd).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                            Text(wd).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                         }
-                        ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 40) }
+                        ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 46) }
                         ForEach(days, id: \.date) { day in cell(day) }
                     }
                     legend
@@ -656,17 +656,17 @@ public struct CalendarHeatmap: View {
         if missingReason { helpText += " · a work entry has no reason set" }
         return RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(fill)
-            .frame(height: 40)
+            .frame(height: 46)
             .overlay(alignment: .topLeading) {
                 Text(dayNum(day.date))
-                    .font(.system(size: 9, weight: worked || isToday ? .bold : .medium))
+                    .font(.system(size: 11, weight: worked || isToday ? .bold : .medium))
                     .foregroundStyle(worked || isToday ? accent : .secondary)
-                    .padding(4)
+                    .padding(6)
             }
             .overlay(alignment: .bottomTrailing) {
                 if worked {
-                    Text(hoursText(day.worked)).font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(accent).padding(3)
+                    Text(hoursText(day.worked)).font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(accent).padding(5)
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -731,13 +731,36 @@ public struct BalanceTrendCard: View {
             if points.count < 2 {
                 Text("Not enough days yet.").font(.system(size: 12)).foregroundStyle(.secondary)
             } else {
+                // A connected series can only carry ONE style — per-point
+                // colors silently collapse to the first point's, tinting the
+                // whole month by whatever sign day one had. Split the colors
+                // with a hard gradient stop pinned to the zero line instead:
+                // teal above, orange below, within the single line. The
+                // y-domain is set explicitly so the stop lands exactly on 0.
+                let top = max(points.map(\.balance).max() ?? 0, 0)
+                let bottom = min(points.map(\.balance).min() ?? 0, 0)
+                let span = max(top - bottom, 0.1)
+                let zero = top / span
+                let lineSplit = LinearGradient(stops: [
+                    .init(color: Color.workAccent(scheme), location: 0),
+                    .init(color: Color.workAccent(scheme), location: zero),
+                    .init(color: Color.breakAccent(scheme), location: zero),
+                    .init(color: Color.breakAccent(scheme), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                let areaSplit = LinearGradient(stops: [
+                    .init(color: Color.workAccent(scheme).opacity(0.16), location: 0),
+                    .init(color: Color.workAccent(scheme).opacity(0.16), location: zero),
+                    .init(color: Color.breakAccent(scheme).opacity(0.16), location: zero),
+                    .init(color: Color.breakAccent(scheme).opacity(0.16), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
                 Chart(points) { p in
                     AreaMark(x: .value("Date", p.date), yStart: .value("z", 0), yEnd: .value("Balance", p.balance))
-                        .foregroundStyle((p.balance >= 0 ? Color.workAccent(scheme) : Color.breakAccent(scheme)).opacity(0.16))
+                        .foregroundStyle(areaSplit)
                     LineMark(x: .value("Date", p.date), y: .value("Balance", p.balance))
-                        .foregroundStyle(p.balance >= 0 ? Color.workAccent(scheme) : Color.breakAccent(scheme))
+                        .foregroundStyle(lineSplit)
                         .interpolationMethod(.monotone).lineStyle(StrokeStyle(lineWidth: 2))
                 }
+                .chartYScale(domain: bottom...(bottom + span))
                 .chartYAxis { AxisMarks(position: .leading) { v in
                     AxisGridLine().foregroundStyle(.secondary.opacity(0.12))
                     AxisValueLabel { if let h = v.as(Double.self) { Text("\(Int(h))h").font(.system(size: 9)) } } } }
