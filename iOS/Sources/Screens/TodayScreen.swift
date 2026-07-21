@@ -22,8 +22,10 @@ struct TodayScreen: View {
                 // Full-bleed: expanding past the bottom safe area lets the
                 // pool's water run under the glass tab bar to the screen's
                 // physical bottom; the waterline and dock sit well above it.
+                // The greeting IS the title here — hide the nav bar's.
                 FreshDayWelcome(state: state)
                     .ignoresSafeArea(edges: .bottom)
+                    .toolbarVisibility(.hidden, for: .navigationBar)
             } else {
                 ScrollView {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in

@@ -151,12 +151,13 @@ public struct FreshDayWelcome: View {
                     .frame(height: waterH)
                     .frame(maxWidth: .infinity)
 
-                // Bob floats at the waterline, off to the side.
+                // Bob floats at the waterline, off to the side — far enough
+                // left that he stays clear of the centered dock.
                 HStack {
                     BuoyBob(size: compact ? 58 : 84)
                     Spacer()
                 }
-                .padding(.leading, compact ? 28 : 56)
+                .padding(.leading, compact ? 14 : 32)
                 .padding(.bottom, line - (compact ? 24 : 36))
 
                 // The dock straddles the waterline, centered.
