@@ -32,7 +32,11 @@ struct PillDateField: View {
                 if components == .date {
                     picker.datePickerStyle(.graphical).frame(width: 300)
                 } else {
+                    #if os(macOS)
                     picker.datePickerStyle(.field).labelsHidden()
+                    #else
+                    picker.datePickerStyle(.compact).labelsHidden()
+                    #endif
                 }
             }
             .padding(12)

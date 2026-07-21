@@ -1,12 +1,22 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 // Shared motion vocabulary — one place for the app's animation timing so the
 // popover and dashboard move the same way. Every accessor collapses to nil
 // (no animation) when the system's Reduce Motion setting is on, so passing
 // these to .animation(_:value:) automatically honors accessibility.
 enum Motion {
-    static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    static var reduce: Bool {
+        #if os(macOS)
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        #else
+        UIAccessibility.isReduceMotionEnabled
+        #endif
+    }
 
     /// Default for state-driven layout changes — clock state, banners, rows.
     static var standard: Animation? { reduce ? nil : .smooth(duration: 0.28) }

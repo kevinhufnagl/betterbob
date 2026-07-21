@@ -23,6 +23,11 @@ targets:
           - "Services/BobParsing.swift"
           - "Services/BobClient.swift"
           - "Services/Keychain.swift"
+          - "UI/Motion.swift"
+          - "UI/WindowVisibility.swift"
+          - "UI/Components.swift"
+          - "UI/PillControls.swift"
+          - "UI/BobMascot.swift"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios

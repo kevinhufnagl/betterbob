@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 // Bob — the BetterBob mascot, a (cute) beaver. Beavers are the original
 // clock-watchers: industrious, always building on schedule. Drawn as vector
@@ -424,6 +426,7 @@ enum BobLines {
                             "Rise and grind? Sign in first"]
 }
 
+#if os(macOS)
 @MainActor
 enum BobIcon {
     /// Corner badge: play while working, pause on a break, a lock when signed
@@ -527,40 +530,6 @@ enum BobIcon {
     }
 }
 
-/// Reports the mouse location (in its own top-left coordinate space) on every
-/// move anywhere in the app window — even over buttons and other controls — via
-/// a local event monitor, so Bob's eyes can follow the cursor continuously.
-struct MouseTracker: NSViewRepresentable {
-    var onMove: (CGPoint) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let v = TrackerView()
-        v.onMove = onMove
-        return v
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? TrackerView)?.onMove = onMove
-    }
-
-    final class TrackerView: NSView {
-        var onMove: ((CGPoint) -> Void)?
-        private var monitor: Any?
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            window?.acceptsMouseMovedEvents = true
-            guard monitor == nil, window != nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-                guard let self, self.window != nil else { return event }
-                let p = self.convert(event.locationInWindow, from: nil)
-                self.onMove?(CGPoint(x: p.x, y: self.bounds.height - p.y))  // flip to top-left
-                return event
-            }
-        }
-        deinit { if let m = monitor { NSEvent.removeMonitor(m) } }
-    }
-}
-
 extension NSImage {
     /// A colored copy of a template image (its alpha as a mask) — used to tint
     /// Bob's silhouette for the menu bar and the popover mark.
@@ -575,3 +544,4 @@ extension NSImage {
         return img
     }
 }
+#endif

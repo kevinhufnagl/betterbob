@@ -1,4 +1,5 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
 
 // SwiftUI keeps a closed window's view hierarchy alive, and TimelineView
@@ -78,3 +79,13 @@ extension View {
         background(WindowVisibility(onChange: onChange))
     }
 }
+#else
+// iOS backgrounds/suspends the whole scene, so TimelineView clocks stop on
+// their own; visibility only needs to track view appearance.
+extension View {
+    func trackWindowVisibility(_ onChange: @escaping (Bool) -> Void) -> some View {
+        self.onAppear { onChange(true) }
+            .onDisappear { onChange(false) }
+    }
+}
+#endif

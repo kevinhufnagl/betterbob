@@ -68,7 +68,7 @@ extension View {
     /// look. Use one per settings section with a header above it.
     func settingsCard(cornerRadius: CGFloat = 12) -> some View {
         self
-            .background(Color(nsColor: .controlBackgroundColor),
+            .background(settingsCardFill,
                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -76,6 +76,15 @@ extension View {
             )
             .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
+}
+
+/// The settings card's solid fill, per platform.
+private var settingsCardFill: Color {
+    #if os(macOS)
+    Color(nsColor: .controlBackgroundColor)
+    #else
+    Color(uiColor: .secondarySystemGroupedBackground)
+    #endif
 }
 
 /// A titled settings section: an uppercase header above one solid grouped card.
@@ -127,11 +136,17 @@ extension Color {
         Color(hue: accentHue, saturation: sat, brightness: bri)
     }
 
-    /// The Mac's accent hue (0…1).
+    /// The system accent hue (0…1). iOS has no user-selectable accent, so the
+    /// dynamic tint is resolved once (it's teal-blue by default).
     static var accentHue: Double {
         var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        #if os(macOS)
         (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
             .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        #else
+        _ = UIColor.tintColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+            .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        #endif
         return Double(h)
     }
 
@@ -144,8 +159,12 @@ extension Color {
     /// This color's hue (0…1), so a fixed brand color can be re-lit by `hued`.
     var hueComponent: Double {
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        #if os(macOS)
         (NSColor(self).usingColorSpace(.deviceRGB) ?? .systemTeal)
             .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        #else
+        UIColor(self).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        #endif
         return Double(h)
     }
 
