@@ -48,3 +48,20 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Resources/BetterBob.entitlements
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: false
+    dependencies:
+      - target: BetterBobWidgets
+        embed: true
+  BetterBobWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Widgets
+      - path: Sources/Shared
+      - path: ../Sources/Models/WidgetSnapshot.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios.widgets
+        INFOPLIST_FILE: Resources/Widgets-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Resources/Widgets.entitlements
+        GENERATE_INFOPLIST_FILE: false
+        SKIP_INSTALL: true
