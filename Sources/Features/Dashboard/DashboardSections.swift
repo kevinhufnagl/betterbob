@@ -1,6 +1,8 @@
 import SwiftUI
 import Charts
+#if os(macOS)
 import AppKit
+#endif
 
 /// A clean, tabular list of the day's entries — type, time range, duration,
 /// editable reason, delete. Replaces the timeline bar.
@@ -88,11 +90,13 @@ struct EntryRowView: View {
             .buttonStyle(.plain)
             .disabled(!editable)
             .frame(width: 170, alignment: .leading)
+            #if os(macOS)
             .onHover { h in
                 guard editable else { return }
                 timeHover = h
                 if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
             }
+            #endif
             .animation(.easeOut(duration: 0.12), value: timeHover)
             .popover(isPresented: $editing, arrowEdge: .bottom) { timeEditor(e) }
 
@@ -306,7 +310,10 @@ struct DayDetailSheet: View {
             Text("Edit times or reasons, drag breaks, or delete entries — changes save to HiBob for this day.")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
         }
-        .padding(20).frame(width: 560)
+        .padding(20)
+        #if os(macOS)
+        .frame(width: 560)
+        #endif
         .animation(Motion.standard, value: day?.entries)
     }
 

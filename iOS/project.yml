@@ -34,6 +34,12 @@ targets:
           - "Services/BobState.swift"
           - "Intents/BobIntents.swift"
           - "Features/Dashboard/DashboardView.swift"
+          - "Features/Dashboard/DashboardSections.swift"
+          - "Features/Dashboard/TodayVariants.swift"
+          - "Features/Dashboard/EditableDayStrip.swift"
+          - "Features/Dashboard/TimeOffPane.swift"
+          - "Features/Onboarding/Onboarding.swift"
+          - "Features/Settings/SettingsPanel.swift"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios

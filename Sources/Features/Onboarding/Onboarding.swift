@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 /// First-run welcome window: Bob greets the user and walks them through signing
 /// in, leading with automatic sign-in and clearly contrasting it with the
@@ -8,13 +10,15 @@ import AppKit
 @MainActor
 final class OnboardingController {
     static let shared = OnboardingController()
-    private var window: NSWindow?
 
     /// Whether the user has already been through (or dismissed) onboarding.
     static var completed: Bool {
         get { UserDefaults.standard.bool(forKey: "hasOnboarded") }
         set { UserDefaults.standard.set(newValue, forKey: "hasOnboarded") }
     }
+
+    #if os(macOS)
+    private var window: NSWindow?
 
     func present() {
         if let win = window {
@@ -59,6 +63,7 @@ final class OnboardingController {
             NSApp.setActivationPolicy(.accessory)
         }
     }
+    #endif
 }
 
 struct OnboardingView: View {

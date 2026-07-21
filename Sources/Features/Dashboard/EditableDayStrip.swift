@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 /// A to-scale day timeline you can drag breaks around on — and resize by the
 /// edges. The drag gesture lives on the whole strip (stable), so re-flowing
@@ -69,6 +71,7 @@ struct EditableDayStrip: View {
                 }
             }
             .contentShape(Rectangle())
+            #if os(macOS)
             .onContinuousHover { phase in
                 guard dragID == nil, edgeGrab == nil else { return }
                 switch phase {
@@ -88,6 +91,7 @@ struct EditableDayStrip: View {
                     NSCursor.arrow.set()
                 }
             }
+            #endif
             .highPriorityGesture(drag(shown: sorted, geoStart: start, span: span, w: w))
         }
         .frame(height: height)
@@ -130,10 +134,14 @@ struct EditableDayStrip: View {
                 if dragID == nil && edgeGrab == nil {
                     if let edge = edgeAt(v.startLocation.x, source, start: start, span: span, w: w) {
                         edgeGrab = edge; hoverEdge = nil
+                        #if os(macOS)
                         NSCursor.resizeLeftRight.set()
+                        #endif
                     } else if let hit = breakAt(v.startLocation.x, source, start: start, span: span, w: w) {
                         dragID = hit.id; grabStart = hit.start; hoverID = nil
+                        #if os(macOS)
                         NSCursor.closedHand.set()
+                        #endif
                     } else { return }
                 }
                 let delta = TimeInterval(v.translation.width / max(1, w)) * span
@@ -166,7 +174,9 @@ struct EditableDayStrip: View {
                 preview = AttendanceLogic.moved(entries, id: id, toStart: newStart)
             }
             .onEnded { _ in
+                #if os(macOS)
                 NSCursor.arrow.set()
+                #endif
                 if let p = preview { onChange(p) }
                 dragID = nil; grabStart = nil; edgeGrab = nil
                 preview = nil; dropStart = nil

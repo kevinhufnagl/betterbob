@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 // The Today layout and its shared helpers — TodayVals, the actions row and
 // the interactive timeline strip.
@@ -188,10 +190,12 @@ private struct DockButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(PressablePillStyle())
+        #if os(macOS)
         .onHover { h in
             hovering = h
             if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
+        #endif
         .animation(Motion.quick, value: hovering)
     }
 }
@@ -592,6 +596,7 @@ final class HeroSweep {
     private var observer: NSObjectProtocol?
 
     private init() {
+        #if os(macOS)
         observer = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
         ) { note in
@@ -599,6 +604,7 @@ final class HeroSweep {
                   window.identifier?.rawValue.hasPrefix("main") == true else { return }
             DispatchQueue.main.async { HeroSweep.shared.generation += 1 }
         }
+        #endif
     }
 
     /// True the first time a hero asks in the current window session.

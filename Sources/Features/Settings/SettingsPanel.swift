@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 struct SettingsPanel: View {
     @Environment(\.colorScheme) private var scheme
@@ -18,16 +20,22 @@ struct SettingsPanel: View {
             if state.signedIn {
                 SettingsGroup(title: "Reasons") {
                     defaultReasonContent
+                    #if os(macOS)
                     Divider().opacity(0.12)
                     wifiReasonContent
+                    #endif
                 }
             }
             SettingsGroup(title: "Notifications") { notificationsContent }
+            #if os(macOS)
             SettingsGroup(title: "Menu bar") { menuBarContent }
             SettingsGroup(title: "Popover") { popoverContent }
+            #endif
             SettingsGroup(title: "General") { generalContent }
+            #if os(macOS)
             SettingsGroup(title: "Updates") { UpdatesCard() }
             SettingsGroup(title: "Uninstall") { uninstallContent }
+            #endif
             if let err = state.lastError {
                 SettingsGroup(title: "Diagnostics") { diagnosticsContent(err) }
             }
@@ -36,6 +44,16 @@ struct SettingsPanel: View {
     }
 
     // MARK: - Account
+
+    /// macOS opens the onboarding window; iOS asks the app root to show the
+    /// onboarding cover instead.
+    private func presentSignInSetup() {
+        #if os(macOS)
+        OnboardingController.shared.present()
+        #else
+        NotificationCenter.default.post(name: .presentOnboarding, object: nil)
+        #endif
+    }
 
     @ViewBuilder
     private var accountContent: some View {
@@ -46,14 +64,14 @@ struct SettingsPanel: View {
                     Text("Signed in as \(state.accountEmail ?? "—")")
                         .font(.system(size: 12))
                     Spacer()
-                    Button("Sign-in setup…") { OnboardingController.shared.present() }
+                    Button("Sign-in setup…") { presentSignInSetup() }
                         .controlSize(.small)
                     Button("Sign out") { state.signOut() }
                         .controlSize(.small)
                 }
             } else {
                 Button {
-                    OnboardingController.shared.present()
+                    presentSignInSetup()
                 } label: {
                     Label("Sign in…", systemImage: "arrow.right.circle.fill")
                         .font(.system(size: 12, weight: .medium))
@@ -153,6 +171,7 @@ struct SettingsPanel: View {
         }
     }
 
+    #if os(macOS)
     @ViewBuilder
     private var wifiReasonContent: some View {
         Group {
@@ -223,6 +242,8 @@ struct SettingsPanel: View {
         }
     }
 
+    #endif
+
     // MARK: - Notifications / General
 
     @ViewBuilder
@@ -243,6 +264,7 @@ struct SettingsPanel: View {
         }
     }
 
+    #if os(macOS)
     @ViewBuilder
     private var menuBarContent: some View {
         Group {
@@ -291,11 +313,14 @@ struct SettingsPanel: View {
                 .font(.system(size: 12))
         }
     }
+    #endif
 
     @ViewBuilder
     private var generalContent: some View {
+        #if os(macOS)
         Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             .font(.system(size: 12))
+        #endif
         VStack(alignment: .leading, spacing: 2) {
             Toggle("Automatically fix gaps and overlaps", isOn: $prefs.autoFixGapsOverlaps)
                 .font(.system(size: 12))
@@ -308,6 +333,7 @@ struct SettingsPanel: View {
 
     // MARK: - Uninstall
 
+    #if os(macOS)
     @ViewBuilder
     private var uninstallContent: some View {
         Group {
@@ -332,6 +358,7 @@ struct SettingsPanel: View {
             Text("Everything BetterBob stores on this Mac is removed and the app moves to the Trash. Attendance data lives on HiBob and is not affected.")
         }
     }
+    #endif
 
     // Endpoint-capture stays available via the `--capture-endpoints` launch
     // flag (EndpointCaptureController) — the settings card is intentionally
@@ -357,6 +384,7 @@ struct SettingsPanel: View {
     }
 }
 
+#if os(macOS)
 /// Version + background-update status against GitHub Releases.
 private struct UpdatesCard: View {
     @Environment(\.colorScheme) private var scheme
@@ -408,3 +436,4 @@ private struct UpdatesCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+#endif
