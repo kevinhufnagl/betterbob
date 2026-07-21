@@ -438,9 +438,19 @@ public enum BobLines {
 /// Bob where an SF Symbol would go. Same unit coordinates as `BobIcon`,
 /// flipped into SwiftUI's y-down space.
 public struct BobFaceMark: View {
-    var color: Color
+    /// What Bob's face says about the clock: eyes open while working,
+    /// sunglasses on a break, eyes closed when clocked out.
+    public enum Expression {
+        case awake, shades, asleep
+    }
 
-    public init(color: Color = .primary) { self.color = color }
+    var color: Color
+    var expression: Expression
+
+    public init(color: Color = .primary, expression: Expression = .awake) {
+        self.color = color
+        self.expression = expression
+    }
 
     public var body: some View {
         Canvas { ctx, size in
@@ -463,11 +473,25 @@ public struct BobFaceMark: View {
                                 cornerSize: CGSize(width: 0.02 * s, height: 0.02 * s))
             ctx.fill(face, with: .color(color))
 
-            // Punch holes: two eyes and the vertical tooth gap.
+            // Punch holes: the eyes (per expression) and the tooth gap.
             ctx.blendMode = .clear
             var holes = Path()
-            holes.addEllipse(in: ell(0.39, 0.69, 0.15, 0.15))
-            holes.addEllipse(in: ell(0.61, 0.69, 0.15, 0.15))
+            switch expression {
+            case .awake:
+                holes.addEllipse(in: ell(0.39, 0.69, 0.15, 0.15))
+                holes.addEllipse(in: ell(0.61, 0.69, 0.15, 0.15))
+            case .shades:
+                // One punched band across both eyes — reads as sunglasses
+                // in silhouette.
+                holes.addRoundedRect(in: ell(0.5, 0.69, 0.46, 0.13),
+                                     cornerSize: CGSize(width: 0.04 * s, height: 0.04 * s))
+            case .asleep:
+                // Two thin slits: closed lids.
+                holes.addRoundedRect(in: ell(0.39, 0.67, 0.15, 0.035),
+                                     cornerSize: CGSize(width: 0.02 * s, height: 0.02 * s))
+                holes.addRoundedRect(in: ell(0.61, 0.67, 0.15, 0.035),
+                                     cornerSize: CGSize(width: 0.02 * s, height: 0.02 * s))
+            }
             holes.addRect(ell(0.5, 0.45, 0.02, 0.10))
             ctx.fill(holes, with: .color(color))
         }

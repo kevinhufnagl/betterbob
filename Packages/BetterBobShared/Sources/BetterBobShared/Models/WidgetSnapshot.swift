@@ -9,6 +9,20 @@ public struct WidgetSnapshot: Codable, Equatable {
         case working, onBreak, clockedOut, signedOut
     }
 
+    /// One block of today's timeline — enough for a widget to draw the
+    /// day-strip miniature without knowing the full entry model.
+    public struct Segment: Codable, Equatable {
+        public var start: Date
+        public var end: Date?
+        public var isBreak: Bool
+
+        public init(start: Date, end: Date?, isBreak: Bool) {
+            self.start = start
+            self.end = end
+            self.isBreak = isBreak
+        }
+    }
+
     public var state: State
     /// Start of the current uninterrupted work stretch — the live timer's anchor.
     public var stretchStart: Date?
@@ -20,17 +34,20 @@ public struct WidgetSnapshot: Codable, Equatable {
     public var breakEnds: Date?
     /// When the next auto-break is due while working, if one is armed.
     public var breakDue: Date?
+    /// Today's timeline blocks, in order (open block has `end == nil`).
+    public var segments: [Segment] = []
     public var updatedAt: Date
 
     public init(state: State, stretchStart: Date?, workedBase: TimeInterval,
                 target: TimeInterval, breakEnds: Date?, breakDue: Date? = nil,
-                updatedAt: Date) {
+                segments: [Segment] = [], updatedAt: Date) {
         self.state = state
         self.stretchStart = stretchStart
         self.workedBase = workedBase
         self.target = target
         self.breakEnds = breakEnds
         self.breakDue = breakDue
+        self.segments = segments
         self.updatedAt = updatedAt
     }
 

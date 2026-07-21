@@ -468,18 +468,24 @@ public enum AttendanceLogic {
                                   target: target, breakEnds: nil, updatedAt: now)
         }
         let worked = workedToday(entries: entries, now: now)
+        let segments = entries.sorted { $0.start < $1.start }.map {
+            WidgetSnapshot.Segment(start: $0.start, end: $0.end,
+                                   isBreak: $0.kind == .breakTime)
+        }
         switch state(entries: entries, now: now) {
         case .working(let since):
             return WidgetSnapshot(state: .working, stretchStart: since,
                                   workedBase: worked - now.timeIntervalSince(since),
                                   target: target, breakEnds: nil, breakDue: breakDue,
-                                  updatedAt: now)
+                                  segments: segments, updatedAt: now)
         case .onBreak:
             return WidgetSnapshot(state: .onBreak, stretchStart: nil, workedBase: worked,
-                                  target: target, breakEnds: breakEnds, updatedAt: now)
+                                  target: target, breakEnds: breakEnds,
+                                  segments: segments, updatedAt: now)
         case .clockedOut:
             return WidgetSnapshot(state: .clockedOut, stretchStart: nil, workedBase: worked,
-                                  target: target, breakEnds: nil, updatedAt: now)
+                                  target: target, breakEnds: nil,
+                                  segments: segments, updatedAt: now)
         }
     }
 

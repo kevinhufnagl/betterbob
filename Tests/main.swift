@@ -868,6 +868,9 @@ expect(snapBreak.state == .onBreak, "break: state")
 expect(snapBreak.stretchStart == nil, "break: no ticking timer")
 expect(abs(snapBreak.workedBase - 3 * 3600) < 1, "break: base is worked-so-far")
 expect(snapBreak.breakEnds == t(12.5), "break: carries the auto-break end")
+expect(snapBreak.segments.count == 2, "break: carries today's timeline blocks")
+expect(snapBreak.segments.last?.isBreak == true, "break: open block flagged as break")
+expect(snapBreak.segments.last?.end == nil, "break: open block has no end")
 
 let snapOut = AttendanceLogic.widgetSnapshot(
     entries: [work(9, 12)], signedIn: true, target: sixH, breakEnds: nil, now: t(14))

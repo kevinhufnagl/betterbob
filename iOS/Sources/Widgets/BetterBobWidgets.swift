@@ -6,6 +6,8 @@ import SwiftUI
 struct BetterBobWidgets: WidgetBundle {
     var body: some Widget {
         TodayWidget()
+        BobFaceWidget()
+        DayStripWidget()
         BobLiveActivity()
     }
 }
