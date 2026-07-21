@@ -27,9 +27,7 @@ struct RootTabs: View {
             .tag(BobTab.timeOff)
 
             NavigationStack {
-                ScrollView { SettingsPanel(state: state, prefs: prefs).padding(16) }
-                    .background(DashboardBG())
-                    .navigationTitle("Settings")
+                SettingsScreen(state: state, prefs: prefs)
             }
             .tabItem { Label("Settings", systemImage: "gearshape.fill") }
             .tag(BobTab.settings)
