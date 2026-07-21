@@ -139,37 +139,52 @@ public struct FreshDayWelcome: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
-            // Full-bleed water pinned to the very bottom — edge to edge, and
-            // (on iOS) under the tab bar. The band is tall enough that even a
-            // wave crest never clears the content above it.
-            WaterBand(fill: 0.55)
-                .frame(height: compact ? 120 : 240)
-                .frame(maxWidth: .infinity, alignment: .bottom)
-                .ignoresSafeArea()
-            VStack(spacing: 0) {
-                Spacer(minLength: compact ? 12 : 24)
-                AnimatedBob().frame(width: compact ? 92 : 150, height: compact ? 92 : 150)
-                Spacer().frame(height: compact ? 12 : 20)
-                Text(greeting)
-                    .font(compact ? .title2.bold() : .largeTitle.bold())
-                    .multilineTextAlignment(.center)
-                Text("Ready when you are")
-                    .font(compact ? .footnote : .body)
-                    .foregroundStyle(.secondary)
-                Spacer().frame(height: compact ? 12 : 18)
-                Label("\(Fmt.hm(target)) today", systemImage: "target")
-                    .font(compact ? .caption.weight(.medium) : .subheadline.weight(.medium))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
-                Spacer(minLength: compact ? 20 : 30)
+        // A pool scene, not a banner: the lower part of the page IS the
+        // water, Bob floats in it waiting, the clock-in dock rides the
+        // waterline like it rides the hero's edge, and the greeting centers
+        // in the sky above. Fills a wide pane and a phone alike.
+        GeometryReader { geo in
+            let waterH: CGFloat = compact ? 118 : max(220, geo.size.height * 0.42)
+            let line = waterH * 0.80   // waterline height from the bottom
+            ZStack(alignment: .bottom) {
+                WaterBand(fill: 0.80, amplitude: compact ? 4 : 6)
+                    .frame(height: waterH)
+                    .frame(maxWidth: .infinity)
+
+                // Bob floats at the waterline, off to the side.
+                HStack {
+                    BuoyBob(size: compact ? 58 : 84)
+                    Spacer()
+                }
+                .padding(.leading, compact ? 28 : 56)
+                .padding(.bottom, line - (compact ? 24 : 36))
+
+                // The dock straddles the waterline, centered.
                 ActionDock(state: state, now: Date())
-                Spacer(minLength: compact ? 28 : 56)
+                    .padding(.bottom, line - (compact ? 20 : 24))
+
+                // Greeting block, centered in the sky above the water.
+                VStack(spacing: compact ? 6 : 10) {
+                    Spacer()
+                    Text(greeting)
+                        .font(compact ? .title2.bold() : .largeTitle.bold())
+                        .multilineTextAlignment(.center)
+                    Text("Ready when you are")
+                        .font(compact ? .footnote : .body)
+                        .foregroundStyle(.secondary)
+                    Spacer().frame(height: compact ? 10 : 16)
+                    Label("\(Fmt.hm(target)) today", systemImage: "target")
+                        .font(compact ? .caption.weight(.medium) : .subheadline.weight(.medium))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, waterH)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 16)
-            .frame(maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

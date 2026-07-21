@@ -19,9 +19,11 @@ struct TodayScreen: View {
             // Signed-out and booting states never reach this screen — RootView
             // swaps the whole page for them.
             if isFreshDay {
-                // Full-bleed: its own water reaches the screen edges and runs
-                // under the tab bar, so it can't sit in the padded ScrollView.
+                // Full-bleed: expanding past the bottom safe area lets the
+                // pool's water run under the glass tab bar to the screen's
+                // physical bottom; the waterline and dock sit well above it.
                 FreshDayWelcome(state: state)
+                    .ignoresSafeArea(edges: .bottom)
             } else {
                 ScrollView {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
