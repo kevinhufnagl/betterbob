@@ -47,9 +47,11 @@ private struct RootView: View {
     @ObservedObject var state = BobState.shared
 
     var body: some View {
-        if state.signedIn {
+        if state.signedIn && state.ready {
             RootTabs(state: state)
-        } else if state.bootingUp {
+        } else if state.bootingUp || state.signedIn {
+            // Booting the stored session, or signed in but the first reconcile
+            // hasn't landed yet (connect() flips signedIn before ready).
             ZStack {
                 BobBackdrop()
                 BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {

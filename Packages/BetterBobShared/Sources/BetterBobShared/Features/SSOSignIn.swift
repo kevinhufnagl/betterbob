@@ -142,8 +142,13 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         // the mobile variants have different markup and stall the flow at
         // the gateway step.
         config.defaultWebpagePreferences.preferredContentMode = .desktop
-        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768),
-                            configuration: config)
+        // Assisted mode runs hidden — its autofill JS focuses fields to fill
+        // them, which would raise the software keyboard over the app. A web
+        // view that refuses first responder fills silently without it. The
+        // visible sheet uses a normal web view so the user can type.
+        let web = visible
+            ? WKWebView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768), configuration: config)
+            : NoKeyboardWebView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768), configuration: config)
         web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
         web.navigationDelegate = self
         webView = web
@@ -507,6 +512,21 @@ extension SSOSignInController: NSWindowDelegate {
     public func windowWillClose(_ notification: Notification) {
         // A visible manual window the user closed.
         if drive == .manual { stopAutofill() }
+    }
+}
+#else
+/// A WKWebView that never becomes first responder, so JS `focus()` in the
+/// hidden assisted-login page can't raise the software keyboard. WebKit's
+/// inner content view is what normally takes focus; blocking it here (plus
+/// the host's `isUserInteractionEnabled = false`) keeps the keyboard down.
+final class NoKeyboardWebView: WKWebView {
+    override var canBecomeFirstResponder: Bool { false }
+    override func becomeFirstResponder() -> Bool { false }
+
+    override func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        // The private WKContentView is the real focus target — deny it too.
+        subview.isUserInteractionEnabled = false
     }
 }
 #endif
