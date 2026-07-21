@@ -136,18 +136,19 @@ extension Color {
         Color(hue: accentHue, saturation: sat, brightness: bri)
     }
 
-    /// The system accent hue (0…1). iOS has no user-selectable accent, so the
-    /// dynamic tint is resolved once (it's teal-blue by default).
+    /// The accent hue (0…1) every brand color derives from. macOS follows
+    /// the user's system accent; iOS pins the app icon cap's petrol hue —
+    /// resolving UIColor.tintColor outside a view hierarchy falls back to
+    /// systemBlue and drifted the whole palette off-brand.
     public static var accentHue: Double {
-        var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         #if os(macOS)
+        var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
             .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        #else
-        _ = UIColor.tintColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
-            .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        #endif
         return Double(h)
+        #else
+        return 0.529   // the icon cap: RGB(0.05, 0.24, 0.28)
+        #endif
     }
 
     /// Re-light any hue with our saturation/brightness recipe — used to build

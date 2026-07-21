@@ -481,7 +481,7 @@ public struct CyclePane: View {
         let avg = worked.isEmpty ? 0 : worked.reduce(0) { $0 + $1.worked } / Double(worked.count)
         let longest = worked.map(\.worked).max() ?? 0
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-            StatTile(value: hoursText(avg), caption: "Avg day", tint: .workAccent(scheme), symbol: "clock")
+            StatTile(value: hoursText(avg), caption: "Avg day", symbol: "clock")
             StatTile(value: hoursText(longest), caption: "Longest day", symbol: "arrow.up.right")
             StatTile(value: "\(worked.count)", caption: "Days worked", symbol: "calendar")
         }
@@ -621,34 +621,23 @@ public struct CalendarHeatmap: View {
         let missingReason = day.date < DayFmt.today()
             && (state.monthDays.first(where: { $0.dateKey == day.date })
                 .map { state.missingReason($0.entries) } ?? false)
-        // Deviation from the day's own expectation is the sole color driver
-        // (not a workload heatmap): neutral grey inside a ±4% band around the
-        // target, then ramping fast to full strength at ±25% — over in the
-        // work accent, under in the break accent, the same over/under
-        // language as the balance trend chart.
+        // One hue, intensity from the day's own expectation (not a workload
+        // heatmap): the accent sits at a medium baseline on target and ramps
+        // quickly — fainter when under, stronger when over. ±21% deviation
+        // spans the whole range.
         let deviation: Double? = hasTarget ? (day.worked - (day.target ?? 0)) / (day.target ?? 1) : nil
-        let ramp: Double = {
-            guard worked else { return 0 }
-            guard let deviation else { return 0.5 }   // worked with no target: flat mild tint
-            return min(1, max(0, (abs(deviation) - 0.04) / 0.21))
-        }()
-        let deviationTint: Color? = {
-            guard worked else { return nil }
-            guard let deviation else { return Color.workAccent(scheme) }
-            guard ramp > 0 else { return nil }        // near target: neutral
-            return deviation > 0 ? Color.workAccent(scheme) : Color.breakAccent(scheme)
-        }()
         let flagged = overMax || breakIssue || missingReason
         let accent = overMax ? Color.bobRed
                    : breakIssue ? Color.bobOrange
                    : missingReason ? Color.bobViolet
-                   : deviationTint ?? Color.primary
-        // Flag colors stay clearly visible regardless of deviation; neutral
-        // days sit at a fixed quiet strength.
-        let strength = !worked ? 0
-                     : flagged ? max(ramp, 0.5)
-                     : deviationTint == nil ? 0.3
-                     : ramp
+                   : Color.workAccent(scheme)
+        // Flag colors stay clearly visible regardless of deviation.
+        let strength: Double = {
+            guard worked else { return 0 }
+            guard let deviation else { return 0.5 }   // worked with no target: baseline
+            let scaled = 0.5 + deviation / 0.42
+            return flagged ? max(min(1, scaled), 0.5) : min(1, max(0.06, scaled))
+        }()
         let fill = worked ? accent.opacity(0.06 + 0.22 * strength + (hov ? 0.12 : 0))
                           : Color.primary.opacity(hov ? 0.09 : (hasTarget ? 0.04 : 0.015))
         let border = worked ? accent.opacity(0.22 + 0.50 * strength + (hov ? 0.28 : 0))
@@ -702,11 +691,11 @@ public struct CalendarHeatmap: View {
 
     private var legend: some View {
         HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 3).fill(Color.breakAccent(scheme).opacity(0.6)).frame(width: 14, height: 10)
+            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.12)).frame(width: 14, height: 10)
             Text("Under").font(.system(size: 9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.15)).frame(width: 14, height: 10)
+            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.4)).frame(width: 14, height: 10)
             Text("On target").font(.system(size: 9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.6)).frame(width: 14, height: 10)
+            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.85)).frame(width: 14, height: 10)
             Text("Over").font(.system(size: 9)).foregroundStyle(.secondary)
             Spacer()
             RoundedRectangle(cornerRadius: 3).fill(Color.bobViolet.opacity(0.6)).frame(width: 14, height: 10)
