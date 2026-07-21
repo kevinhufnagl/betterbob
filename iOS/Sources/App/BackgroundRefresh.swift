@@ -1,3 +1,4 @@
+import BetterBobShared
 import BackgroundTasks
 import Foundation
 

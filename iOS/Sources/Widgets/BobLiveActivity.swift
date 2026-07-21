@@ -1,3 +1,4 @@
+import BetterBobShared
 import ActivityKit
 import WidgetKit
 import SwiftUI

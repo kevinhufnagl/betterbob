@@ -8,27 +8,27 @@ import Combine
 /// truth) every minute, on wake, and after every action. Decisions are
 /// delegated to AttendanceLogic; this class polls, executes, and publishes.
 @MainActor
-final class BobState: ObservableObject {
-    static let shared = BobState()
+public final class BobState: ObservableObject {
+    public static let shared = BobState()
 
-    @Published private(set) var entries: [AttendanceEntry] = []
-    @Published private(set) var clockState: ClockState = .clockedOut
-    @Published private(set) var signedIn = false
-    @Published private(set) var accountEmail: String?
-    @Published private(set) var busy = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var lastSync: Date?
-    @Published private(set) var reasonOptions: [ReasonOption] = []
-    @Published private(set) var cycle: CycleInfo?
-    @Published private(set) var cycleSummary: CycleSummary?
-    @Published private(set) var activity: [ActivityEvent] = []
-    @Published private(set) var timeOffBalances: [TimeOffBalance] = []
-    @Published private(set) var timeOffRequests: [TimeOffRequest] = []
-    @Published private(set) var timeOffPolicyTypes: [TimeOffPolicyType] = []
-    @Published private(set) var cancellingRequests: Set<String> = []
-    @Published private(set) var monthDays: [DayEntries] = []
+    @Published public private(set) var entries: [AttendanceEntry] = []
+    @Published public private(set) var clockState: ClockState = .clockedOut
+    @Published public private(set) var signedIn = false
+    @Published public private(set) var accountEmail: String?
+    @Published public private(set) var busy = false
+    @Published public private(set) var lastError: String?
+    @Published public private(set) var lastSync: Date?
+    @Published public private(set) var reasonOptions: [ReasonOption] = []
+    @Published public private(set) var cycle: CycleInfo?
+    @Published public private(set) var cycleSummary: CycleSummary?
+    @Published public private(set) var activity: [ActivityEvent] = []
+    @Published public private(set) var timeOffBalances: [TimeOffBalance] = []
+    @Published public private(set) var timeOffRequests: [TimeOffRequest] = []
+    @Published public private(set) var timeOffPolicyTypes: [TimeOffPolicyType] = []
+    @Published public private(set) var cancellingRequests: Set<String> = []
+    @Published public private(set) var monthDays: [DayEntries] = []
     /// The employee's display name / role / site for the dashboard header.
-    @Published private(set) var profile: (name: String, role: String, site: String)?
+    @Published public private(set) var profile: (name: String, role: String, site: String)?
 
     private let client = BobClient()
     private var employeeID: String?
@@ -39,15 +39,15 @@ final class BobState: ObservableObject {
     /// HiBob rejects two punches less than a minute apart. We enforce the same
     /// gap client-side: punches sit in `queue` and fire one minute apart. The
     /// user can queue several ahead of time and remove any before it fires.
-    static let punchCooldown: TimeInterval = 60
-    @Published private(set) var queue: [QueuedPunch] = []
+    public static let punchCooldown: TimeInterval = 60
+    @Published public private(set) var queue: [QueuedPunch] = []
     /// A punch whose optimistic state we're holding until the server reflects it.
     private var expectedAfterPunch: PunchAction?
     /// Server-ids of entries currently being deleted (drives a per-row spinner).
-    @Published private(set) var deletingEntries: Set<String> = []
+    @Published public private(set) var deletingEntries: Set<String> = []
     /// False until the first reconcile after signing in has fully settled, so
     /// the UI can show a loading placeholder instead of a half-loaded day.
-    @Published private(set) var ready = false
+    @Published public private(set) var ready = false
     /// True while a window showing the full dashboard is on screen. The
     /// background poll skips the heavy fetches (month grid, activity feed,
     /// time off, per-poll cycle summary) unless something is actually
@@ -57,24 +57,24 @@ final class BobState: ObservableObject {
     /// background (it only feeds notifications + the midnight fallback there).
     private var lastCycleSummaryAt: Date?
     /// True while a headless auto re-login is running (drives its loading state).
-    @Published private(set) var autoLoginInProgress = false
+    @Published public private(set) var autoLoginInProgress = false
     /// A user-friendly line describing the current auto sign-in step.
-    @Published var autoLoginStatus = ""
+    @Published public var autoLoginStatus = ""
     /// True once the hidden sign-in browser is sitting on the authenticator
     /// step and needs the one-time code — the UI shows an inline code field.
-    @Published var awaitingOTP = false
+    @Published public var awaitingOTP = false
     /// True while an Okta Verify push is out and we're waiting for the user to
     /// approve it on their phone — the UI shows an "approve on your phone" state.
-    @Published var pushPending = false
+    @Published public var pushPending = false
     /// The factor the in-progress sign-in is using, so the inline UI knows from
     /// the start whether to show a code field or the push-approval state (rather
     /// than briefly flashing the code field before the push screen loads).
-    @Published var signInFactor: SignInFactor?
+    @Published public var signInFactor: SignInFactor?
     /// True from the moment the user submits a code until it's accepted or
     /// rejected — drives the inline field's "Verifying…" state.
-    @Published var otpSubmitting = false
+    @Published public var otpSubmitting = false
     /// Set when a submitted code was rejected, so the inline field can say so.
-    @Published var otpError: String?
+    @Published public var otpError: String?
     private var lastPunchAt: Date? {
         get {
             let t = UserDefaults.standard.double(forKey: "lastPunchAt")
@@ -109,7 +109,7 @@ final class BobState: ObservableObject {
 
     // MARK: - Lifecycle
 
-    func start() {
+    public func start() {
         // Older versions could store the authenticator seed; it's no longer
         // used or accepted, so clear any lingering item on launch.
         Keychain.wipeLegacyTOTPSecret()
@@ -137,12 +137,12 @@ final class BobState: ObservableObject {
     /// True once the user has signed in through the embedded browser; the app
     /// then relies on the captured session cookies (the tenant uses Okta, so
     /// there is no password to re-login with).
-    var usedSSO: Bool { UserDefaults.standard.bool(forKey: "signedInViaSSO") }
+    public var usedSSO: Bool { UserDefaults.standard.bool(forKey: "signedInViaSSO") }
 
     // MARK: - Account
 
     /// SSO sign-in: open the embedded browser; on success adopt the session.
-    func startSSOSignIn() {
+    public func startSSOSignIn() {
         SSOSignInController.shared.present { [weak self] in
             Task { await self?.completeSSOSignIn() }
         }
@@ -151,7 +151,7 @@ final class BobState: ObservableObject {
     /// True when a re-login can be started from stored credentials (autofill on
     /// + a password saved). Completion still needs the user to type the current
     /// authenticator code into the native prompt.
-    var canAutoSignIn: Bool { Prefs.shared.autofillEnabled && Keychain.has(.password) }
+    public var canAutoSignIn: Bool { Prefs.shared.autofillEnabled && Keychain.has(.password) }
 
     /// Re-login using the stored password: the hidden browser fills email +
     /// password and advances to the authenticator step, where the inline field
@@ -161,7 +161,7 @@ final class BobState: ObservableObject {
     /// never pre-emptively on expiry — Okta's login transaction expires in a
     /// few minutes, so driving to the code step only when the user is actually
     /// there keeps that transaction fresh when they submit the code.
-    func startAutoSignIn(factor: SignInFactor = .googleAuthenticator) {
+    public func startAutoSignIn(factor: SignInFactor = .googleAuthenticator) {
         guard canAutoSignIn, !autoLoginInProgress else { return }
         autoLoginInProgress = true
         signInFactor = factor
@@ -184,14 +184,14 @@ final class BobState: ObservableObject {
     }
 
     /// Feed the code the user typed into the inline field to the sign-in browser.
-    func submitOTP(_ code: String) {
+    public func submitOTP(_ code: String) {
         otpError = nil
         otpSubmitting = true
         SSOSignInController.shared.submitCode(code)
     }
 
     /// Abort an in-progress auto sign-in (inline Cancel).
-    func cancelAutoSignIn() {
+    public func cancelAutoSignIn() {
         SSOSignInController.shared.cancel()
     }
 
@@ -199,7 +199,7 @@ final class BobState: ObservableObject {
     /// + auto-relogin. Only the password is stored — the authenticator code is
     /// always typed (or push-approved) at sign-in. Does NOT start signing in;
     /// the user then picks a method (Google / Okta code / Okta push).
-    func setupAutoLogin(email: String, password: String) {
+    public func setupAutoLogin(email: String, password: String) {
         UserDefaults.standard.set(email, forKey: "lastAccountEmail")
         Keychain.set(password, for: .password)
         Prefs.shared.autofillEnabled = true
@@ -207,7 +207,7 @@ final class BobState: ObservableObject {
     }
 
     /// Cookie-only session check — also how the SSO window knows it's done.
-    func probeSession() async -> Bool {
+    public func probeSession() async -> Bool {
         do {
             let user = try await client.currentUser()
             employeeID = user.id
@@ -233,7 +233,7 @@ final class BobState: ObservableObject {
         await reconcile()
     }
 
-    func signOut() {
+    public func signOut() {
         UserDefaults.standard.set(false, forKey: "signedInViaSSO")
         HTTPCookieStorage.shared.cookies?.forEach(HTTPCookieStorage.shared.deleteCookie)
         SSOSignInController.clearWebCookies()
@@ -267,14 +267,14 @@ final class BobState: ObservableObject {
 
     // MARK: - User actions
 
-    func clockIn()          { enqueuePunch(.clockIn) }
-    func clockOut()         { enqueuePunch(.clockOut) }
-    func startManualBreak() { enqueuePunch(.startBreak) }
-    func endBreak()         { enqueuePunch(.endBreak) }
+    public func clockIn()          { enqueuePunch(.clockIn) }
+    public func clockOut()         { enqueuePunch(.clockOut) }
+    public func startManualBreak() { enqueuePunch(.startBreak) }
+    public func endBreak()         { enqueuePunch(.endBreak) }
 
     /// The clock state you'd be in once every queued punch has fired — what the
     /// action buttons offer, so queuing several ahead of time makes sense.
-    var projectedClockState: ClockState {
+    public var projectedClockState: ClockState {
         queue.reduce(clockState) { $1.action.applied(to: $0, at: $1.fireAt) }
     }
 
@@ -288,7 +288,7 @@ final class BobState: ObservableObject {
     }
 
     /// Remove a still-pending punch before it fires.
-    func removeQueued(_ id: UUID) {
+    public func removeQueued(_ id: UUID) {
         queue.removeAll { $0.id == id }
         recomputeQueueTimes()
         scheduleQueue()
@@ -410,18 +410,18 @@ final class BobState: ObservableObject {
     }
 
     // Today convenience wrappers (popover + Today table).
-    func setReason(for entry: AttendanceEntry, to option: ReasonOption) {
+    public func setReason(for entry: AttendanceEntry, to option: ReasonOption) {
         setReason(for: entry, in: entries, on: today, to: option)
     }
-    func deleteEntry(_ entry: AttendanceEntry) {
+    public func deleteEntry(_ entry: AttendanceEntry) {
         deleteEntry(entry, in: entries, on: today)
     }
-    func updateEntryTimes(_ entry: AttendanceEntry, start: Date, end: Date?) {
+    public func updateEntryTimes(_ entry: AttendanceEntry, start: Date, end: Date?) {
         updateEntryTimes(entry, in: entries, on: today, start: start, end: end)
     }
 
     /// Change one entry's reason within a specific day (whole-day resave).
-    func setReason(for entry: AttendanceEntry, in day: [AttendanceEntry], on date: Date, to option: ReasonOption) {
+    public func setReason(for entry: AttendanceEntry, in day: [AttendanceEntry], on date: Date, to option: ReasonOption) {
         guard entry.id != nil else { return }
         saveDay(day.map { e in var e = e; if e.id == entry.id { e.reason = option.name }; return e }, on: date)
     }
@@ -429,7 +429,7 @@ final class BobState: ObservableObject {
     /// Delete one entry from a specific day. Keeps the row visible with a
     /// spinner (via `deletingEntries`) until the server confirms, rather than
     /// optimistically yanking it, so the deletion has a clear loading state.
-    func deleteEntry(_ entry: AttendanceEntry, in day: [AttendanceEntry], on date: Date) {
+    public func deleteEntry(_ entry: AttendanceEntry, in day: [AttendanceEntry], on date: Date) {
         guard let entryID = entry.id, let empID = employeeID else { return }
         deletingEntries.insert(entryID)
         let kept = day.filter { $0.id != entry.id }
@@ -453,7 +453,7 @@ final class BobState: ObservableObject {
     }
 
     /// Adjust one entry's start/end within a specific day.
-    func updateEntryTimes(_ entry: AttendanceEntry, in day: [AttendanceEntry], on date: Date,
+    public func updateEntryTimes(_ entry: AttendanceEntry, in day: [AttendanceEntry], on date: Date,
                           start: Date, end: Date?) {
         guard entry.id != nil else { return }
         saveDay(day.map { e in var e = e; if e.id == entry.id { e.start = start; e.end = end }; return e },
@@ -463,7 +463,7 @@ final class BobState: ObservableObject {
     /// True when the day has enough work to owe a break but none is logged.
     /// The reason that will be auto-applied to work right now — a matching
     /// Wi-Fi rule for the current network, else the default. nil if neither.
-    var currentAutoReason: String? {
+    public var currentAutoReason: String? {
         let prefs = Prefs.shared
         if prefs.wifiAutoReasonEnabled, let reason = matchingWiFiReason() {
             return reason
@@ -489,7 +489,7 @@ final class BobState: ObservableObject {
     }
 
     /// Length of the current uninterrupted work stretch (0 unless working).
-    var uninterruptedWork: TimeInterval {
+    public var uninterruptedWork: TimeInterval {
         guard case .working(let since) = clockState else { return 0 }
         return max(0, now.timeIntervalSince(since))
     }
@@ -497,33 +497,33 @@ final class BobState: ObservableObject {
     /// Whether a day's entries contain any uninterrupted work run past the max
     /// — so the "add a break" wand can offer to fix it (on any day, not just
     /// today, and even when other breaks already exist).
-    func hasOverLongStretch(_ dayEntries: [AttendanceEntry]) -> Bool {
+    public func hasOverLongStretch(_ dayEntries: [AttendanceEntry]) -> Bool {
         AttendanceLogic.overLongStretch(entries: dayEntries,
                                         threshold: Prefs.shared.threshold, now: now) != nil
     }
 
     /// True when today has an uninterrupted run past the max non-break time.
-    var overMaxNonBreak: Bool { hasOverLongStretch(entries) }
+    public var overMaxNonBreak: Bool { hasOverLongStretch(entries) }
 
     /// A day where at least one work entry has no reason set — i.e. some
     /// untagged time. Used to flag past days in the month grid.
-    func missingReason(_ dayEntries: [AttendanceEntry]) -> Bool {
+    public func missingReason(_ dayEntries: [AttendanceEntry]) -> Bool {
         dayEntries.contains { $0.kind == .work && ($0.reason ?? "").isEmpty }
     }
 
     /// Whether a day's total worked time is past the daily max (default 10h).
-    func isOverDailyMax(_ dayEntries: [AttendanceEntry]) -> Bool {
+    public func isOverDailyMax(_ dayEntries: [AttendanceEntry]) -> Bool {
         AttendanceLogic.overDailyMax(entries: dayEntries,
                                      max: Prefs.shared.maxDayLimit, now: now)
     }
 
     /// True when today's total worked time is past the daily max.
-    var overDailyMax: Bool { isOverDailyMax(entries) }
+    public var overDailyMax: Bool { isOverDailyMax(entries) }
 
     /// The over-limit tint for today, matching the month cells: red past the
     /// daily max, orange for an over-long uninterrupted run or a break
     /// shortfall, nil otherwise. Drives the hero water and the status pill.
-    var heroLimitTint: Color? {
+    public var heroLimitTint: Color? {
         if overDailyMax { return .bobRed }
         if overMaxNonBreak || breakGuidelineShortfall != nil { return .bobOrange }
         return nil
@@ -532,9 +532,9 @@ final class BobState: ObservableObject {
     /// Magic-wand fix for a too-long stretch on `date`: carve a break out of the
     /// middle of the offending run. Clock-in/out stay put, so this *reduces*
     /// worked time by the break length rather than extending the day.
-    func addMissingBreak() { addMissingBreak(in: entries, on: today) }
+    public func addMissingBreak() { addMissingBreak(in: entries, on: today) }
 
-    func addMissingBreak(in dayEntries: [AttendanceEntry], on date: Date) {
+    public func addMissingBreak(in dayEntries: [AttendanceEntry], on date: Date) {
         guard let rebuilt = AttendanceLogic.insertingAllBreaks(
                 into: dayEntries, threshold: Prefs.shared.threshold,
                 breakLength: Prefs.shared.breakLength, now: now) else { return }
@@ -544,17 +544,17 @@ final class BobState: ObservableObject {
     /// HiBob's "Break not taken or doesn't meet guidelines" for a day: worked
     /// past the threshold with too little qualifying pause (only pauses of
     /// 15 min or more count). Returns the missing pause time.
-    func breakShortfall(_ dayEntries: [AttendanceEntry]) -> TimeInterval? {
+    public func breakShortfall(_ dayEntries: [AttendanceEntry]) -> TimeInterval? {
         AttendanceLogic.breakShortfall(entries: dayEntries, threshold: Prefs.shared.threshold,
                                        required: Prefs.shared.breakLength, now: now)
     }
     /// Today's break-guideline shortfall, if any.
-    var breakGuidelineShortfall: TimeInterval? { breakShortfall(entries) }
+    public var breakGuidelineShortfall: TimeInterval? { breakShortfall(entries) }
 
     /// Wand fix for a break-guideline shortfall: grow the day's longest break
     /// (or insert one) so the required pause is met.
-    func fixBreakGuideline() { fixBreakGuideline(in: entries, on: today) }
-    func fixBreakGuideline(in dayEntries: [AttendanceEntry], on date: Date) {
+    public func fixBreakGuideline() { fixBreakGuideline(in: entries, on: today) }
+    public func fixBreakGuideline(in dayEntries: [AttendanceEntry], on date: Date) {
         guard let rebuilt = AttendanceLogic.meetingBreakGuideline(
                 entries: dayEntries, threshold: Prefs.shared.threshold,
                 required: Prefs.shared.breakLength, now: now) else { return }
@@ -565,7 +565,7 @@ final class BobState: ObservableObject {
     /// `anchor` is the id of the entry the user just edited; when the
     /// auto-fix-gaps-and-overlaps preference is on, the day is normalised so it
     /// stays contiguous, keeping the anchor's times and moving its neighbours.
-    func saveDay(_ entries: [AttendanceEntry], on date: Date, anchor: String? = nil) {
+    public func saveDay(_ entries: [AttendanceEntry], on date: Date, anchor: String? = nil) {
         guard let id = employeeID else { return }
         let sorted = Prefs.shared.autoFixGapsOverlaps
             ? AttendanceLogic.normalized(entries, anchor: anchor)
@@ -598,7 +598,7 @@ final class BobState: ObservableObject {
         }
     }
 
-    func loadMonthDays() async {
+    public func loadMonthDays() async {
         guard let id = employeeID else { return }
         if let m = try? await client.fetchMonthDays(employeeID: id, cycleId: cycle?.id ?? 0,
                                                     reasonOptions: reasonOptions) {
@@ -607,7 +607,7 @@ final class BobState: ObservableObject {
     }
 
     /// Today's clock/edit history for the activity feed.
-    func loadActivity() async {
+    public func loadActivity() async {
         guard let id = employeeID else { return }
         if let acts = try? await client.fetchActivity(employeeID: id, date: Date()) {
             activity = acts
@@ -616,7 +616,7 @@ final class BobState: ObservableObject {
 
     /// Cycle summary + month grid, loaded on demand when the This-month pane
     /// appears (the background poll no longer fetches the grid every minute).
-    func loadCycleData() async {
+    public func loadCycleData() async {
         guard let id = employeeID else { return }
         if let (c, s) = try? await client.fetchCycleSummary(employeeID: id) {
             cycle = c
@@ -628,7 +628,7 @@ final class BobState: ObservableObject {
 
     /// Called by the dashboard window as it shows/hides. Turning active kicks a
     /// full reconcile so the panes fill in immediately.
-    func setDashboardActive(_ active: Bool) {
+    public func setDashboardActive(_ active: Bool) {
         guard active != dashboardActive else { return }
         dashboardActive = active
         if active { Task { await reconcile() } }
@@ -636,7 +636,7 @@ final class BobState: ObservableObject {
 
     // MARK: - Time off
 
-    func loadTimeOff() async {
+    public func loadTimeOff() async {
         guard let id = employeeID else { return }
         if let b = try? await client.fetchTimeOffBalances(employeeID: id) { timeOffBalances = b }
         if let r = try? await client.fetchTimeOffRequests(employeeID: id) { timeOffRequests = r }
@@ -660,14 +660,14 @@ final class BobState: ObservableObject {
         ]
     }
 
-    func previewTimeOff(policyType: String, start: Date, end: Date) async throws -> TimeOffCalc? {
+    public func previewTimeOff(policyType: String, start: Date, end: Date) async throws -> TimeOffCalc? {
         guard let id = employeeID else { return nil }
         return try await client.calculateTimeOff(employeeID: id,
                                                  body: timeOffBody(policyType: policyType, start: start, end: end))
     }
 
     /// Submit a request; returns an error string or nil on success.
-    func submitTimeOff(policyType: String, start: Date, end: Date) async -> String? {
+    public func submitTimeOff(policyType: String, start: Date, end: Date) async -> String? {
         guard let id = employeeID else { return "Not signed in." }
         do {
             try await client.submitTimeOff(employeeID: id,
@@ -679,7 +679,7 @@ final class BobState: ObservableObject {
         }
     }
 
-    func cancelTimeOff(_ request: TimeOffRequest) {
+    public func cancelTimeOff(_ request: TimeOffRequest) {
         guard let id = employeeID else { return }
         cancellingRequests.insert(request.id)
         Task {
@@ -691,7 +691,7 @@ final class BobState: ObservableObject {
 
     // MARK: - Reconciliation (the heartbeat)
 
-    func reconcile() async {
+    public func reconcile() async {
         guard signedIn, let id = employeeID else {
             // Logged out: nothing to poll. Re-login needs the user to type a
             // one-time code, so we don't auto-open the prompt on every poll —
@@ -970,12 +970,12 @@ final class BobState: ObservableObject {
     /// Time worked today, computed live so an in-progress entry keeps
     /// counting up to now — HiBob's `minutesWorkedToday` is a snapshot frozen
     /// at the last punch, which reads low while you're still clocked in.
-    var workedToday: TimeInterval {
+    public var workedToday: TimeInterval {
         AttendanceLogic.workedToday(entries: entries, now: Date())
     }
 
     /// Date the auto-break will start, for the countdown chip.
-    var autoBreakDue: Date? {
+    public var autoBreakDue: Date? {
         guard Prefs.shared.autoBreakEnabled else { return nil }
         guard case .working(let since) = clockState else { return nil }
         return since.addingTimeInterval(Prefs.shared.threshold)
@@ -983,7 +983,7 @@ final class BobState: ObservableObject {
 
     /// The label to show next to the menu-bar icon — each clock state has its
     /// own choice of what (if anything) to show.
-    func menuBarText() -> String? {
+    public func menuBarText() -> String? {
         let prefs = Prefs.shared
         switch clockState {
         case .working:
@@ -1022,7 +1022,7 @@ final class BobState: ObservableObject {
     }
 
     /// End of the currently running auto-break, if one is running.
-    var autoBreakEnds: Date? {
+    public var autoBreakEnds: Date? {
         guard case .onBreak = clockState, let started = autoBreakStartedAt else { return nil }
         return started.addingTimeInterval(Prefs.shared.breakLength)
     }

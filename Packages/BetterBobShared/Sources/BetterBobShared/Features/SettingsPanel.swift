@@ -3,13 +3,18 @@ import SwiftUI
 import AppKit
 #endif
 
-struct SettingsPanel: View {
+public struct SettingsPanel: View {
     @Environment(\.colorScheme) private var scheme
     @ObservedObject var state: BobState
     @ObservedObject var prefs: Prefs
+
+    public init(state: BobState, prefs: Prefs) {
+        self.state = state
+        self.prefs = prefs
+    }
     @State private var confirmingUninstall = false
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             PaneHeader(title: "Settings",
                        subtitle: state.signedIn ? state.accountEmail : "Not signed in")

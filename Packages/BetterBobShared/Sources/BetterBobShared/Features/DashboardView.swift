@@ -20,9 +20,10 @@ struct PaneHeader: View {
 }
 
 /// Subtle top-down gradient so the glass cards have something to sit on.
-struct DashboardBG: View {
+public struct DashboardBG: View {
     @Environment(\.colorScheme) private var scheme
-    var body: some View {
+    public init() {}
+    public var body: some View {
         LinearGradient(
             colors: scheme == .dark
                 ? [Color(red: 0.11, green: 0.12, blue: 0.15), Color(red: 0.07, green: 0.07, blue: 0.09)]

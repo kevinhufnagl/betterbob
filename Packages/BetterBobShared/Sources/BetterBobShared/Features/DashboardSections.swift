@@ -393,13 +393,18 @@ struct DayDetailSheet: View {
 
 // MARK: - This cycle
 
-struct CyclePane: View {
+public struct CyclePane: View {
     @ObservedObject var state: BobState
     var onOpenToday: () -> Void = {}
+
+    public init(state: BobState, onOpenToday: @escaping () -> Void = {}) {
+        self.state = state
+        self.onOpenToday = onOpenToday
+    }
     @Environment(\.colorScheme) private var scheme
     @State private var openDay: DayEntries?
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PaneHeader(title: "This month", subtitle: cycleSubtitle)
             if monthTargetSecs > 0 {
@@ -719,10 +724,12 @@ struct BalanceTrendCard: View {
 
 // MARK: - Activity
 
-struct ActivityPane: View {
+public struct ActivityPane: View {
     @ObservedObject var state: BobState
 
-    var body: some View {
+    public init(state: BobState) { self.state = state }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PaneHeader(title: "Activity", subtitle: "Today's clock & edit history")
             Card {

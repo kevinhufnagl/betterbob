@@ -8,11 +8,11 @@ import AppKit
 /// browser option. Presented as a plain AppKit window (like the SSO window) so
 /// it centres nicely and doesn't tangle with the main window scene.
 @MainActor
-final class OnboardingController {
-    static let shared = OnboardingController()
+public final class OnboardingController {
+    public static let shared = OnboardingController()
 
     /// Whether the user has already been through (or dismissed) onboarding.
-    static var completed: Bool {
+    public static var completed: Bool {
         get { UserDefaults.standard.bool(forKey: "hasOnboarded") }
         set { UserDefaults.standard.set(newValue, forKey: "hasOnboarded") }
     }
@@ -66,8 +66,13 @@ final class OnboardingController {
     #endif
 }
 
-struct OnboardingView: View {
+public struct OnboardingView: View {
     @ObservedObject var state: BobState
+
+    public init(state: BobState, onDone: @escaping () -> Void) {
+        self.state = state
+        self.onDone = onDone
+    }
     @ObservedObject private var prefs = Prefs.shared
     var onDone: () -> Void
 
@@ -79,7 +84,7 @@ struct OnboardingView: View {
     private var canSetUp: Bool { !email.isEmpty && !password.isEmpty }
     private var hasSaved: Bool { Keychain.has(.password) }
 
-    var body: some View {
+    public var body: some View {
         ScrollView {
             VStack(spacing: 18) {
                 header

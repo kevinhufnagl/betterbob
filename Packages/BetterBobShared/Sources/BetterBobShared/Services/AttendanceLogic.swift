@@ -2,13 +2,13 @@ import Foundation
 
 /// Pure attendance math — no clocks, no network, no state. Everything takes
 /// today's entries plus an explicit `now`, so it's all unit-testable.
-enum AttendanceLogic {
+public enum AttendanceLogic {
     /// Current punch state, read straight from the entries: an entry with no
     /// end time is in progress. An open break means on break; an open work
     /// entry means working; everything closed means clocked out. This mirrors
     /// reality even when HiBob's `nextClockAction` is briefly confused (e.g. a
     /// day left in an inconsistent state), which is why we don't rely on it.
-    static func state(entries: [AttendanceEntry], now: Date) -> ClockState {
+    public static func state(entries: [AttendanceEntry], now: Date) -> ClockState {
         if let openBreak = entries.last(where: { $0.kind == .breakTime && $0.end == nil }) {
             return .onBreak(since: openBreak.start)
         }
@@ -24,13 +24,13 @@ enum AttendanceLogic {
     /// out/in blips (under 15 min) don't reset the counter. (This is only
     /// about the continuity counter; whether a pause satisfies the break
     /// guideline is `breakShortfall`'s stricter `required` minimum.)
-    static let gapResets: TimeInterval = 15 * 60
+    public static let gapResets: TimeInterval = 15 * 60
 
     /// Start of the current uninterrupted work stretch: the end of the most
     /// recent completed break, the far side of the most recent clocked-out
     /// gap, or — failing both — the first clock-in of the day. (The caller
     /// decides *whether* we're working; this only answers *since when*.)
-    static func stretchStart(entries: [AttendanceEntry]) -> Date? {
+    public static func stretchStart(entries: [AttendanceEntry]) -> Date? {
         let works = entries.filter { $0.kind == .work }.sorted { $0.start < $1.start }
         guard let first = works.first else { return nil }
         var runStart = first.start
@@ -46,7 +46,7 @@ enum AttendanceLogic {
     }
 
     /// Total time worked today: work periods minus any overlapping breaks.
-    static func workedToday(entries: [AttendanceEntry], now: Date) -> TimeInterval {
+    public static func workedToday(entries: [AttendanceEntry], now: Date) -> TimeInterval {
         let breaks = entries.filter { $0.kind == .breakTime }
         var total: TimeInterval = 0
         for entry in entries where entry.kind == .work {
@@ -69,7 +69,7 @@ enum AttendanceLogic {
     /// The action the engine should take right now, if any.
     /// `autoBreakStartedAt` is the start of a break *this app* began — nil
     /// means any open break is the user's own and is left alone.
-    static func action(entries: [AttendanceEntry],
+    public static func action(entries: [AttendanceEntry],
                        autoBreakStartedAt: Date?,
                        threshold: TimeInterval,
                        breakLength: TimeInterval,
@@ -96,7 +96,7 @@ enum AttendanceLogic {
     /// True when the day's total worked time (breaks excluded, an open entry
     /// counted to `now`) is past the daily maximum. Warning only — unlike a
     /// missing break there is nothing to auto-fix.
-    static func overDailyMax(entries: [AttendanceEntry], max: TimeInterval, now: Date) -> Bool {
+    public static func overDailyMax(entries: [AttendanceEntry], max: TimeInterval, now: Date) -> Bool {
         workedToday(entries: entries, now: now) > max
     }
 
@@ -104,7 +104,7 @@ enum AttendanceLogic {
     /// between) whose duration exceeds `threshold`, as `[start, end]` — or nil if
     /// every run is within the max. Works for any day: an open run is measured to
     /// `now`. This is what the "add a break" wand fixes.
-    static func overLongStretch(entries: [AttendanceEntry], threshold: TimeInterval,
+    public static func overLongStretch(entries: [AttendanceEntry], threshold: TimeInterval,
                                 now: Date) -> (start: Date, end: Date)? {
         let sorted = entries.sorted { $0.start < $1.start }
         var runStart: Date?
@@ -143,7 +143,7 @@ enum AttendanceLogic {
     /// 30-minute rule. Clocked-out gaps qualify like breaks. Returns how much
     /// pause is missing, or nil when the day complies (or hasn't reached the
     /// threshold yet).
-    static func breakShortfall(entries: [AttendanceEntry], threshold: TimeInterval,
+    public static func breakShortfall(entries: [AttendanceEntry], threshold: TimeInterval,
                                required: TimeInterval, now: Date) -> TimeInterval? {
         guard required > 0,
               workedToday(entries: entries, now: now) > threshold else { return nil }
@@ -168,7 +168,7 @@ enum AttendanceLogic {
     /// break as anchor reflows the neighbours), or, with no closed break to
     /// grow, splice a fresh `required`-long break into the middle of the
     /// longest work entry. Returns nil when the day already complies.
-    static func meetingBreakGuideline(entries: [AttendanceEntry], threshold: TimeInterval,
+    public static func meetingBreakGuideline(entries: [AttendanceEntry], threshold: TimeInterval,
                                       required: TimeInterval, now: Date) -> [AttendanceEntry]? {
         guard let missing = breakShortfall(entries: entries, threshold: threshold,
                                            required: required, now: now) else { return nil }
@@ -201,7 +201,7 @@ enum AttendanceLogic {
     /// nil leaves the break open/ongoing (no trailing work); a date closes it
     /// and resumes work (the trailing piece keeps the original's reason and
     /// open/closed end). Returns nil if no work entry contains `start`.
-    static func insertingBreak(into entries: [AttendanceEntry],
+    public static func insertingBreak(into entries: [AttendanceEntry],
                                start: Date, end: Date?,
                                breakID: String? = nil, breakReason: String? = nil) -> [AttendanceEntry]? {
         guard let idx = entries.firstIndex(where: {
@@ -226,7 +226,7 @@ enum AttendanceLogic {
     /// each placed at the edge of a max window (run start + threshold). Fixes a
     /// whole over-long day in one go — a 13h block gets two breaks. Returns nil
     /// if nothing needed fixing.
-    static func insertingAllBreaks(into entries: [AttendanceEntry], threshold: TimeInterval,
+    public static func insertingAllBreaks(into entries: [AttendanceEntry], threshold: TimeInterval,
                                    breakLength: TimeInterval, now: Date) -> [AttendanceEntry]? {
         var current = entries.sorted { $0.start < $1.start }
         var changed = false
@@ -249,7 +249,7 @@ enum AttendanceLogic {
 
     /// Close the open (ongoing) break at `at` and resume work from there —
     /// the retroactive end for an auto-break that has run its length.
-    static func closingBreak(into entries: [AttendanceEntry], at: Date,
+    public static func closingBreak(into entries: [AttendanceEntry], at: Date,
                              reason: String?) -> [AttendanceEntry]? {
         guard let idx = entries.firstIndex(where: { $0.kind == .breakTime && $0.end == nil })
         else { return nil }
@@ -266,7 +266,7 @@ enum AttendanceLogic {
     /// covering it (clocked out at 2, back at 3 → a 2–3 break). Returns the
     /// fixed day, or nil when there is nothing to fix. Holes under a minute
     /// are left alone — not worth a whole-day rewrite.
-    static func fillingGapBeforeClockIn(entries: [AttendanceEntry]) -> [AttendanceEntry]? {
+    public static func fillingGapBeforeClockIn(entries: [AttendanceEntry]) -> [AttendanceEntry]? {
         let sorted = entries.sorted { $0.start < $1.start }
         guard sorted.count >= 2,
               let last = sorted.last, last.kind == .work, last.end == nil
@@ -295,7 +295,7 @@ enum AttendanceLogic {
     /// open. With no `anchor`, this is a plain left-to-right contiguity chain:
     /// each entry's start snaps to the previous end, preserving the first
     /// clock-in and every entry's own end (so the clock-out is preserved).
-    static func normalized(_ entries: [AttendanceEntry], anchor: String? = nil) -> [AttendanceEntry] {
+    public static func normalized(_ entries: [AttendanceEntry], anchor: String? = nil) -> [AttendanceEntry] {
         let sorted = entries.sorted { $0.start < $1.start }
         var out: [AttendanceEntry] = []
         for entry in sorted {
@@ -325,7 +325,7 @@ enum AttendanceLogic {
     /// Merge consecutive same-kind entries into one, closing the gaps between
     /// them — used after pulling a break out of the day so the work on either
     /// side of its old slot becomes one continuous block again.
-    static func coalesced(_ entries: [AttendanceEntry]) -> [AttendanceEntry] {
+    public static func coalesced(_ entries: [AttendanceEntry]) -> [AttendanceEntry] {
         let sorted = entries.sorted { $0.start < $1.start }
         var out: [AttendanceEntry] = []
         for e in sorted {
@@ -344,7 +344,7 @@ enum AttendanceLogic {
     /// dragged any distance, the day stays gap/overlap-free, and total worked
     /// time is unchanged. Non-break or open entries can't be repositioned this
     /// way; the day is just normalised.
-    static func moved(_ entries: [AttendanceEntry], id: String, toStart: Date) -> [AttendanceEntry] {
+    public static func moved(_ entries: [AttendanceEntry], id: String, toStart: Date) -> [AttendanceEntry] {
         guard let moving = entries.first(where: { $0.id == id }),
               moving.kind == .breakTime, let end = moving.end
         else { return normalized(entries, anchor: id) }
@@ -355,7 +355,7 @@ enum AttendanceLogic {
     }
 
     /// Which part of a block a timeline drag is moving.
-    enum DragMode { case moveStart, moveEnd, translate }
+    public enum DragMode { case moveStart, moveEnd, translate }
 
     /// Edit an existing day by dragging one block on the timeline, ripple-style:
     /// the block and *everything to its right* shift by the same amount, so
@@ -366,7 +366,7 @@ enum AttendanceLogic {
     /// moves the whole block (keeping its duration) and ripples the rest.
     /// `delta` is the time shift (seconds); results snap to `snap`, keep at
     /// least `minGap`, and never overlap the block before it.
-    static func dragged(_ input: [AttendanceEntry], index: Int, mode: DragMode,
+    public static func dragged(_ input: [AttendanceEntry], index: Int, mode: DragMode,
                         by delta: TimeInterval, now: Date,
                         minGap: TimeInterval = 300, snap: TimeInterval = 300) -> [AttendanceEntry] {
         var es = input.sorted { $0.start < $1.start }
@@ -418,7 +418,7 @@ enum AttendanceLogic {
     /// one lengthens exactly as much as the other shortens — nothing else
     /// moves. On the last block it just moves the day's clock-out. Snapped to
     /// `snap`; both blocks keep at least `minGap`. No-op if `index` is open.
-    static func boundaryMoved(_ input: [AttendanceEntry], after index: Int,
+    public static func boundaryMoved(_ input: [AttendanceEntry], after index: Int,
                               by delta: TimeInterval, now: Date,
                               minGap: TimeInterval = 300, snap: TimeInterval = 300) -> [AttendanceEntry] {
         var es = input.sorted { $0.start < $1.start }
@@ -437,7 +437,7 @@ enum AttendanceLogic {
 
     /// When the next scheduled transition (auto-break start or end) is due,
     /// so the engine can arm a precise timer instead of relying on polling.
-    static func nextEvent(entries: [AttendanceEntry],
+    public static func nextEvent(entries: [AttendanceEntry],
                           autoBreakStartedAt: Date?,
                           threshold: TimeInterval,
                           breakLength: TimeInterval,
@@ -458,7 +458,7 @@ enum AttendanceLogic {
     /// Snapshot of the current attendance state for the widgets and Live
     /// Activity. `breakEnds` is engine state (BobState.autoBreakEnds), not
     /// derivable from entries, so it's passed through.
-    static func widgetSnapshot(entries: [AttendanceEntry], signedIn: Bool,
+    public static func widgetSnapshot(entries: [AttendanceEntry], signedIn: Bool,
                                target: TimeInterval, breakEnds: Date?,
                                now: Date) -> WidgetSnapshot {
         guard signedIn else {
@@ -483,7 +483,7 @@ enum AttendanceLogic {
     /// When the next background refresh should run: at the auto-break
     /// boundary when that's sooner than the regular cadence, but never
     /// sooner than a minute from now.
-    static func nextBackgroundRefresh(now: Date, breakDue: Date?,
+    public static func nextBackgroundRefresh(now: Date, breakDue: Date?,
                                       cadence: TimeInterval = 15 * 60) -> Date {
         let regular = now.addingTimeInterval(cadence)
         guard let due = breakDue, due < regular else { return regular }

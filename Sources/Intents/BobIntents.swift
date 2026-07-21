@@ -1,5 +1,11 @@
 import AppIntents
 import Foundation
+// On iOS this file compiles into the app target next to the BetterBobShared
+// package; on macOS it is globbed into the single app module, where no such
+// module exists.
+#if canImport(BetterBobShared)
+import BetterBobShared
+#endif
 
 /// "Hey Siri, clock in" — punch actions from Siri, Spotlight, Shortcuts,
 /// and the Action Button.

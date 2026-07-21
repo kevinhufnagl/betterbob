@@ -243,10 +243,12 @@ extension ClockState {
 /// The three second-factor methods as one tied-together button group; each
 /// starts the automatic sign-in for that factor (one click, code field or push
 /// wait appears in place). Shared by the popover and the sign-in window.
-struct SignInFactorGroup: View {
+public struct SignInFactorGroup: View {
     @ObservedObject var state: BobState
 
-    var body: some View {
+    public init(state: BobState) { self.state = state }
+
+    public var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(SignInFactor.allCases.enumerated()), id: \.element.id) { i, factor in
                 if i > 0 { Divider().frame(height: 34) }
@@ -274,11 +276,15 @@ struct SignInFactorGroup: View {
 /// field is available right away so the user can enter it while the hidden
 /// browser is still filling email + password in the background; a small step
 /// line tracks progress, and the button shows a "verifying" state after submit.
-struct AutoLoginInline: View {
+public struct AutoLoginInline: View {
     @ObservedObject var state: BobState
     /// Fill the container width (popover) instead of the capped card width used
     /// in wide windows.
     var fillWidth = false
+    public init(state: BobState, fillWidth: Bool = false) {
+        self.state = state
+        self.fillWidth = fillWidth
+    }
     @State private var code = ""
     @FocusState private var focused: Bool
 
@@ -287,7 +293,7 @@ struct AutoLoginInline: View {
     /// This sign-in uses push (no code field at any point).
     private var isPush: Bool { state.signInFactor?.isPush == true }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 ZStack {

@@ -1,3 +1,4 @@
+import BetterBobShared
 import SwiftUI
 
 struct TodayTab: View {

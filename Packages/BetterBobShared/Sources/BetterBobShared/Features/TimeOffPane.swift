@@ -14,8 +14,10 @@ func policyIcon(_ name: String) -> String {
     return "calendar"
 }
 
-struct TimeOffPane: View {
+public struct TimeOffPane: View {
     @ObservedObject var state: BobState
+
+    public init(state: BobState) { self.state = state }
     @Environment(\.colorScheme) private var scheme
     // A booking presented via `.sheet(item:)` — its unique id forces SwiftUI to
     // rebuild the sheet on every open, so the sheet's @State picks up the new
@@ -28,7 +30,7 @@ struct TimeOffPane: View {
         let end: Date
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 PaneHeader(title: "Time off")

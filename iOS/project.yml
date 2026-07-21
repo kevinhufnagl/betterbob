@@ -6,41 +6,26 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
+    # Free signing: leave DEVELOPMENT_TEAM blank — Xcode fills in the
+    # Personal Team you pick in Signing & Capabilities on first open.
+    DEVELOPMENT_TEAM: ""
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: "2.15"
+packages:
+  BetterBobShared:
+    path: ../Packages/BetterBobShared
 targets:
   BetterBob:
     type: application
     platform: iOS
     sources:
       - path: Sources/App
+      - path: Sources/Common
+      - path: Sources/Screens
       - path: Sources/Shared
-      # Shared code from the Mac app — this list grows as files gain
-      # platform guards. Only files listed here are compiled for iOS.
-      - path: ../Sources
-        includes:
-          - "Models/**"
-          - "Services/AttendanceLogic.swift"
-          - "Services/BobParsing.swift"
-          - "Services/BobClient.swift"
-          - "Services/Keychain.swift"
-          - "UI/Motion.swift"
-          - "UI/WindowVisibility.swift"
-          - "UI/Components.swift"
-          - "UI/PillControls.swift"
-          - "UI/BobMascot.swift"
-          - "Features/Settings/SSOSignIn.swift"
-          - "Services/Prefs.swift"
-          - "Services/Notifier.swift"
-          - "Services/BobState.swift"
-          - "Intents/BobIntents.swift"
-          - "Features/Dashboard/DashboardView.swift"
-          - "Features/Dashboard/DashboardSections.swift"
-          - "Features/Dashboard/TodayVariants.swift"
-          - "Features/Dashboard/EditableDayStrip.swift"
-          - "Features/Dashboard/TimeOffPane.swift"
-          - "Features/Onboarding/Onboarding.swift"
-          - "Features/Settings/SettingsPanel.swift"
+      # App Intents must compile into the app target itself so Shortcuts
+      # metadata extraction sees them; the file is shared with the Mac build.
+      - path: ../Sources/Intents/BobIntents.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios
@@ -49,6 +34,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: false
     dependencies:
+      - package: BetterBobShared
       - target: BetterBobWidgets
         embed: true
   BetterBobWidgets:
@@ -57,7 +43,6 @@ targets:
     sources:
       - path: Sources/Widgets
       - path: Sources/Shared
-      - path: ../Sources/Models/WidgetSnapshot.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios.widgets
@@ -65,3 +50,5 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Resources/Widgets.entitlements
         GENERATE_INFOPLIST_FILE: false
         SKIP_INSTALL: true
+    dependencies:
+      - package: BetterBobShared

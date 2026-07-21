@@ -4,23 +4,33 @@ import Foundation
 /// from — everything a separate process needs to show current state,
 /// including a self-ticking timer anchor. Foundation-only so the Mac build
 /// and tests compile it too.
-struct WidgetSnapshot: Codable, Equatable {
-    enum State: String, Codable {
+public struct WidgetSnapshot: Codable, Equatable {
+    public enum State: String, Codable {
         case working, onBreak, clockedOut, signedOut
     }
 
-    var state: State
+    public var state: State
     /// Start of the current uninterrupted work stretch — the live timer's anchor.
-    var stretchStart: Date?
+    public var stretchStart: Date?
     /// Worked seconds excluding the open stretch; the renderer adds the
     /// elapsed stretch on top while `state == .working`.
-    var workedBase: TimeInterval
-    var target: TimeInterval
+    public var workedBase: TimeInterval
+    public var target: TimeInterval
     /// When the running auto-break ends, if one is running.
-    var breakEnds: Date?
-    var updatedAt: Date
+    public var breakEnds: Date?
+    public var updatedAt: Date
 
-    func workedTotal(now: Date) -> TimeInterval {
+    public init(state: State, stretchStart: Date?, workedBase: TimeInterval,
+                target: TimeInterval, breakEnds: Date?, updatedAt: Date) {
+        self.state = state
+        self.stretchStart = stretchStart
+        self.workedBase = workedBase
+        self.target = target
+        self.breakEnds = breakEnds
+        self.updatedAt = updatedAt
+    }
+
+    public func workedTotal(now: Date) -> TimeInterval {
         guard state == .working, let start = stretchStart else { return workedBase }
         return workedBase + max(0, now.timeIntervalSince(start))
     }

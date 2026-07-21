@@ -3,66 +3,66 @@ import Foundation
 /// The internal web-API routes the HiBob single-page app calls, captured
 /// from a live tenant (see Docs/endpoints.md). Unofficial, but verified
 /// against a real HiBob account.
-enum BobAPI {
-    static let base = URL(string: "https://app.hibob.com")!
+public enum BobAPI {
+    public static let base = URL(string: "https://app.hibob.com")!
 
-    static let currentUser = "api/user"
+    public static let currentUser = "api/user"
     /// Everything about today: entries, worked/break totals, next action.
-    static let clockStatus = "api/attendance/my/clockStatus"
+    public static let clockStatus = "api/attendance/my/clockStatus"
     /// Clock in/out and break start/end — one endpoint, four request bodies.
-    static let punchClock = "api/attendance/my/punchClock"
+    public static let punchClock = "api/attendance/my/punchClock"
     /// The tenant's metadata lists; reasons live under `timeLogEntryReason`.
-    static let lists = "api/company/metadata/lists/?includeArchived=true"
+    public static let lists = "api/company/metadata/lists/?includeArchived=true"
 
     /// Timesheet cycles list (current cycle window + lock date).
-    static func timesheets(_ employeeID: String) -> String {
+    public static func timesheets(_ employeeID: String) -> String {
         "api/attendance/employees/\(employeeID)/timesheets"
     }
     /// Per-cycle summary: daily worked/target breakdown + cycle totals.
-    static func summary(_ employeeID: String, cycle: Int) -> String {
+    public static func summary(_ employeeID: String, cycle: Int) -> String {
         "api/attendance/employees/\(employeeID)/timesheets/\(cycle)/summary"
     }
     /// Edit/clock history for one day (`yyyy-MM-dd`).
-    static func history(_ employeeID: String, date: String) -> String {
+    public static func history(_ employeeID: String, date: String) -> String {
         "api/attendance/employees/\(employeeID)/timesheets/\(date)/history"
     }
     /// The timesheet grid report — per-day entries for the whole cycle.
-    static let viewsSearch = "api/company/views/search?idsOnly=false"
+    public static let viewsSearch = "api/company/views/search?idsOnly=false"
 
     // Time off
-    static func timeOffBalances(_ id: String) -> String {
+    public static func timeOffBalances(_ id: String) -> String {
         "api/timeoff/employees/\(id)/balance/policies/summary-metrics"
     }
-    static func timeOffPolicyConfig(_ id: String, from: String) -> String {
+    public static func timeOffPolicyConfig(_ id: String, from: String) -> String {
         "api/timeoff/employees/\(id)/timeoff/policy-request-configuration?from=\(from)"
     }
-    static func timeOffRequestsInRange(_ id: String, from: String, to: String) -> String {
+    public static func timeOffRequestsInRange(_ id: String, from: String, to: String) -> String {
         "api/timeoff/employees/\(id)/requests/inRange?from=\(from)&to=\(to)"
     }
-    static func timeOffCalculate(_ id: String) -> String {
+    public static func timeOffCalculate(_ id: String) -> String {
         "api/timeoff/employees/\(id)/timeoff/requests/calculateTimeOff"
     }
-    static func timeOffRequests(_ id: String) -> String {
+    public static func timeOffRequests(_ id: String) -> String {
         "api/timeoff/employees/\(id)/timeoff/requests"
     }
-    static func timeOffCancel(_ id: String, request: String) -> String {
+    public static func timeOffCancel(_ id: String, request: String) -> String {
         "api/timeoff/employees/\(id)/requests/\(request)/cancels"
     }
 
     /// Edit a day's entries as a whole (used to set a reason, or to insert a
     /// retroactive break). `forDate` is `yyyy-MM-dd`.
-    static func editEntries(_ employeeID: String, forDate: String) -> String {
+    public static func editEntries(_ employeeID: String, forDate: String) -> String {
         "api/attendance/employees/\(employeeID)/attendance/entries?forDate=\(forDate)"
     }
 }
 
-enum BobError: LocalizedError {
+public enum BobError: LocalizedError {
     case notSignedIn
     case sessionExpired
     case http(Int, path: String, message: String?)
     case badResponse(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .notSignedIn:
             return "Not signed in — open Settings and sign in to HiBob."
@@ -81,13 +81,13 @@ enum BobError: LocalizedError {
 /// session cookies captured by the SSO sign-in. There is no programmatic
 /// re-login (the tenant uses Okta), so an expired session surfaces as
 /// `.sessionExpired` and the user re-signs-in through the browser.
-final class BobClient {
+public final class BobClient {
     private let session: URLSession
     /// The employee's IANA timezone from /api/user (entry times are local).
     private(set) var timeZone: TimeZone = .current
     private var timeZoneName: String = TimeZone.current.identifier
 
-    init() {
+    public init() {
         let cfg = URLSessionConfiguration.default
         cfg.httpShouldSetCookies = true
         cfg.httpCookieAcceptPolicy = .always
@@ -101,7 +101,7 @@ final class BobClient {
 
     // MARK: - Identity
 
-    struct User {
+    public struct User {
         var id: String
         var email: String?
         var name: String
@@ -111,7 +111,7 @@ final class BobClient {
 
     /// Confirms the session is live and captures employee id + timezone + the
     /// profile fields shown in the dashboard header.
-    func currentUser() async throws -> User {
+    public func currentUser() async throws -> User {
         let data = try await get(BobAPI.currentUser)
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let id = BobParsing.employeeID(fromUserJSON: data) else {
@@ -130,7 +130,7 @@ final class BobClient {
 
     // MARK: - Reads
 
-    func fetchDayStatus() async throws -> DayStatus {
+    public func fetchDayStatus() async throws -> DayStatus {
         let data = try await get(BobAPI.clockStatus)
         guard let status = BobParsing.dayStatus(fromClockStatusJSON: data, timeZone: timeZone) else {
             throw BobError.badResponse("clockStatus")
@@ -138,13 +138,13 @@ final class BobClient {
         return status
     }
 
-    func fetchReasonOptions() async throws -> [ReasonOption] {
+    public func fetchReasonOptions() async throws -> [ReasonOption] {
         let data = try await get(BobAPI.lists)
         return BobParsing.reasonOptions(fromListsJSON: data)
     }
 
     /// Load the current cycle and its per-day summary for the dashboard.
-    func fetchCycleSummary(employeeID: String) async throws -> (CycleInfo, CycleSummary)? {
+    public func fetchCycleSummary(employeeID: String) async throws -> (CycleInfo, CycleSummary)? {
         let tsData = try await get(BobAPI.timesheets(employeeID))
         guard let cycle = BobParsing.cycle(fromTimesheetsJSON: tsData) else { return nil }
         let sumData = try await get(BobAPI.summary(employeeID, cycle: cycle.id))
@@ -154,17 +154,17 @@ final class BobClient {
 
     // MARK: - Time off
 
-    func fetchTimeOffBalances(employeeID: String) async throws -> [TimeOffBalance] {
+    public func fetchTimeOffBalances(employeeID: String) async throws -> [TimeOffBalance] {
         BobParsing.timeOffBalances(fromSummaryJSON: try await get(BobAPI.timeOffBalances(employeeID)))
     }
 
-    func fetchTimeOffPolicyTypes(employeeID: String) async throws -> [TimeOffPolicyType] {
+    public func fetchTimeOffPolicyTypes(employeeID: String) async throws -> [TimeOffPolicyType] {
         let from = dayString(Date())
         return BobParsing.timeOffPolicyTypes(
             fromConfigJSON: try await get(BobAPI.timeOffPolicyConfig(employeeID, from: from)))
     }
 
-    func fetchTimeOffRequests(employeeID: String) async throws -> [TimeOffRequest] {
+    public func fetchTimeOffRequests(employeeID: String) async throws -> [TimeOffRequest] {
         let cal = Calendar.current
         let from = dayString(cal.date(byAdding: .month, value: -6, to: Date()) ?? Date())
         let to = dayString(cal.date(byAdding: .year, value: 1, to: Date()) ?? Date())
@@ -173,16 +173,16 @@ final class BobClient {
     }
 
     /// Preview a request (day count, forecast, validity) before submitting.
-    func calculateTimeOff(employeeID: String, body: [String: Any]) async throws -> TimeOffCalc? {
+    public func calculateTimeOff(employeeID: String, body: [String: Any]) async throws -> TimeOffCalc? {
         BobParsing.timeOffCalc(fromJSON:
             try await post(BobAPI.timeOffCalculate(employeeID), json: body))
     }
 
-    func submitTimeOff(employeeID: String, body: [String: Any]) async throws {
+    public func submitTimeOff(employeeID: String, body: [String: Any]) async throws {
         _ = try await post(BobAPI.timeOffRequests(employeeID), json: body)
     }
 
-    func cancelTimeOff(employeeID: String, request: String) async throws {
+    public func cancelTimeOff(employeeID: String, request: String) async throws {
         _ = try await post(BobAPI.timeOffCancel(employeeID, request: request), json: [:])
     }
 
@@ -194,7 +194,7 @@ final class BobClient {
     }
 
     /// Every day's entries for the cycle (the monthly timesheet grid).
-    func fetchMonthDays(employeeID: String, cycleId: Int,
+    public func fetchMonthDays(employeeID: String, cycleId: Int,
                         reasonOptions: [ReasonOption]) async throws -> [DayEntries] {
         let body: [String: Any] = [
             "instructions": [["values": ["Active"], "operator": "text_equals",
@@ -213,7 +213,7 @@ final class BobClient {
     }
 
     /// Today's clock/edit history for the activity feed.
-    func fetchActivity(employeeID: String, date: Date) async throws -> [ActivityEvent] {
+    public func fetchActivity(employeeID: String, date: Date) async throws -> [ActivityEvent] {
         let df = DateFormatter()
         df.calendar = Calendar(identifier: .gregorian); df.timeZone = timeZone
         df.dateFormat = "yyyy-MM-dd"
@@ -223,7 +223,7 @@ final class BobClient {
 
     // MARK: - Actions
 
-    func punch(_ action: PunchAction, employeeID: String) async throws {
+    public func punch(_ action: PunchAction, employeeID: String) async throws {
         _ = try await post(BobAPI.punchClock, json: [
             "timeZone": timeZoneName,
             "clockAction": action.clockAction,
@@ -235,7 +235,7 @@ final class BobClient {
 
     /// Replace today's entry list — the write path for changing a reason or
     /// inserting a retroactive break. `entries` must be the *full* day.
-    func writeEntries(_ entries: [[String: Any]], employeeID: String, forDate: Date) async throws {
+    public func writeEntries(_ entries: [[String: Any]], employeeID: String, forDate: Date) async throws {
         let df = DateFormatter()
         df.calendar = Calendar(identifier: .gregorian)
         df.timeZone = timeZone

@@ -370,8 +370,10 @@ func slimBar(_ fraction: Double, tint: Color, height: CGFloat = 8) -> some View 
 
 // MARK: - Today (to-scale timeline)
 
-struct TodayTimeline: View {
+public struct TodayTimeline: View {
     @ObservedObject var state: BobState
+
+    public init(state: BobState) { self.state = state }
     @Environment(\.colorScheme) private var scheme
     // The 1Hz clock only exists to tick the live worked-time counter. A closed
     // Window scene keeps its view tree (and this clock) alive in SwiftUI, so
@@ -379,7 +381,7 @@ struct TodayTimeline: View {
     // Today pane every second in the background, burning CPU for nobody.
     @State private var windowVisible = true
 
-    var body: some View {
+    public var body: some View {
         Group {
             if windowVisible {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in

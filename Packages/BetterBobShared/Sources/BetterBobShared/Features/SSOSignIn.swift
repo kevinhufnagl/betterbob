@@ -16,23 +16,23 @@ import SwiftUI
 /// Which second factor the automatic flow drives to at Okta's "choose a method"
 /// step. Two are typed codes (inline field); the push one is approved on the
 /// phone (no code).
-enum SignInFactor: String, CaseIterable, Identifiable {
+public enum SignInFactor: String, CaseIterable, Identifiable {
     case googleAuthenticator = "ga"
     case oktaVerifyCode = "ovc"
     case oktaVerifyPush = "ovp"
 
-    var id: String { rawValue }
-    var isPush: Bool { self == .oktaVerifyPush }
+    public var id: String { rawValue }
+    public var isPush: Bool { self == .oktaVerifyPush }
 
     /// Short label for the popover button group.
-    var shortLabel: String {
+    public var shortLabel: String {
         switch self {
         case .googleAuthenticator: return "Google"
         case .oktaVerifyCode: return "Okta code"
         case .oktaVerifyPush: return "Okta push"
         }
     }
-    var icon: String {
+    public var icon: String {
         switch self {
         case .googleAuthenticator: return "key.fill"
         case .oktaVerifyCode: return "123.rectangle.fill"
@@ -42,8 +42,8 @@ enum SignInFactor: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegate {
-    static let shared = SSOSignInController()
+public final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegate {
+    public static let shared = SSOSignInController()
 
     /// How the sign-in window drives itself.
     /// - `manual`: visible window, fields autofilled but the user clicks through.
@@ -60,7 +60,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
     private var window: NSWindow?
     #else
     /// Published while a sign-in runs — the iOS app root presents it in a sheet.
-    @Published private(set) var sheetWebView: WKWebView?
+    @Published public private(set) var sheetWebView: WKWebView?
     #endif
     private var webView: WKWebView?
     /// The one-time code the user typed into the inline field (assisted mode).
@@ -77,7 +77,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
     // MARK: - Entry points
 
     /// Visible sign-in window; autofills fields but leaves the buttons to you.
-    func present(onSuccess: @escaping () -> Void) {
+    public func present(onSuccess: @escaping () -> Void) {
         teardown()
         self.onSuccess = onSuccess
         self.drive = .manual
@@ -99,7 +99,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
     /// iOS there is no hidden-window trick, so the same drive runs in a
     /// visible sheet and the user finishes the OTP right in the page. Generous
     /// deadline since a human is in the loop.
-    func presentAssisted(factor: SignInFactor, onFinish: @escaping (Bool) -> Void) {
+    public func presentAssisted(factor: SignInFactor, onFinish: @escaping (Bool) -> Void) {
         teardown()
         self.onFinish = onFinish
         self.drive = .assisted
@@ -115,7 +115,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
     /// API client uses. The web store survives relaunches, but those cookies are
     /// only otherwise mirrored during a sign-in flow — so at startup the app
     /// looked signed out even though the session was still valid.
-    static func syncWebCookies() async {
+    public static func syncWebCookies() async {
         let cookies = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
         for cookie in cookies where cookie.domain.contains("hibob.com") {
             HTTPCookieStorage.shared.setCookie(cookie)
@@ -124,7 +124,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
 
     /// Wipe the embedded browser's cookies on sign-out, so the next sign-in
     /// starts fresh instead of silently reusing the old Okta session.
-    static func clearWebCookies() {
+    public static func clearWebCookies() {
         WKWebsiteDataStore.default().removeData(
             ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: .distantPast) {}
     }
@@ -417,7 +417,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
 
     // MARK: - Delegates
 
-    nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    public nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in
             let store = webView.configuration.websiteDataStore.httpCookieStore
             let cookies = await store.allCookies()
@@ -436,7 +436,7 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
     /// Inject the code the user typed into the inline field. Clears the OTP
     /// field first so a re-entered code overwrites a previously rejected one;
     /// the next autofill tick fills and submits it.
-    func submitCode(_ code: String) {
+    public func submitCode(_ code: String) {
         enteredCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
         codeStepSince = nil   // restart the rejection grace for this attempt
         let clear = """
@@ -454,12 +454,12 @@ final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegat
     }
 
     /// Cancel an in-progress sign-in (inline Cancel button).
-    func cancel() { finish(false) }
+    public func cancel() { finish(false) }
 }
 
 #if os(macOS)
 extension SSOSignInController: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
+    public func windowWillClose(_ notification: Notification) {
         // A visible manual window the user closed.
         if drive == .manual { stopAutofill() }
     }

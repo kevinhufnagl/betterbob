@@ -1,3 +1,4 @@
+import BetterBobShared
 import SwiftUI
 
 enum BobTab: Hashable { case today, month, timeOff, settings }

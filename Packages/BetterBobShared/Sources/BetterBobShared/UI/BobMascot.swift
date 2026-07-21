@@ -10,7 +10,8 @@ import AppKit
 
 /// Bob's palette. `mono` collapses everything to a single ink colour for the
 /// template menu-bar glyph.
-struct BobPalette {
+public struct BobPalette {
+    public init() {}
     var furLight = Color(red: 0.64, green: 0.44, blue: 0.28)
     var fur      = Color(red: 0.55, green: 0.36, blue: 0.22)
     var furDark  = Color(red: 0.42, green: 0.27, blue: 0.16)
@@ -196,18 +197,24 @@ struct BobMascot: View {
 /// a lazy tail wag, all derived deterministically from the clock (no timers).
 /// `sleeping` closes his eyes, slows the breathing, and floats z's — used
 /// wherever the clock is off (same look as the phone page).
-struct AnimatedBob: View {
+public struct AnimatedBob: View {
     /// When set, Bob's eyes point here (−1…1 each axis) instead of idly wandering.
     var lookAt: CGSize? = nil
     var sleeping = false
     var palette = BobPalette()
+
+    public init(lookAt: CGSize? = nil, sleeping: Bool = false, palette: BobPalette = BobPalette()) {
+        self.lookAt = lookAt
+        self.sleeping = sleeping
+        self.palette = palette
+    }
     // Only animate while the window is really visible — a retained-but-
     // hidden view (closed popover or closed-yet-retained window) must not
     // keep the 24fps clock running. Gated on the window tracker alone:
     // onAppear/onDisappear misfire during pane transitions.
     @State private var windowVisible = true
 
-    var body: some View {
+    public var body: some View {
         Group {
             if windowVisible {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in

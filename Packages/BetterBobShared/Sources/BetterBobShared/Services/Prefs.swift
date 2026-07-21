@@ -3,81 +3,81 @@ import SwiftUI
 import ServiceManagement
 #endif
 
-final class Prefs: ObservableObject {
-    static let shared = Prefs()
+public final class Prefs: ObservableObject {
+    public static let shared = Prefs()
 
     /// Uninterrupted work before the auto-break fires. Default 6 hours.
-    @Published var thresholdMinutes: Int {
+    @Published public var thresholdMinutes: Int {
         didSet { UserDefaults.standard.set(thresholdMinutes, forKey: "thresholdMinutes") }
     }
 
     /// Auto-break length. Default 30 minutes.
-    @Published var breakMinutes: Int {
+    @Published public var breakMinutes: Int {
         didSet { UserDefaults.standard.set(breakMinutes, forKey: "breakMinutes") }
     }
 
     /// Master switch for the whole auto-break feature.
-    @Published var autoFixGapsOverlaps: Bool {
+    @Published public var autoFixGapsOverlaps: Bool {
         didSet { UserDefaults.standard.set(autoFixGapsOverlaps, forKey: "autoFixGapsOverlaps") }
     }
 
-    @Published var autoBreakEnabled: Bool {
+    @Published public var autoBreakEnabled: Bool {
         didSet { UserDefaults.standard.set(autoBreakEnabled, forKey: "autoBreakEnabled") }
     }
 
     /// Autofill the stored password + TOTP into the SSO sign-in form.
-    @Published var autofillEnabled: Bool {
+    @Published public var autofillEnabled: Bool {
         didSet { UserDefaults.standard.set(autofillEnabled, forKey: "autofillEnabled") }
     }
 
     /// Automatically start re-login when the session expires. The hidden browser
     /// fills email + password; the user types the one-time code into a native
     /// prompt (no authenticator seed is ever stored).
-    @Published var autoReloginOnExpiry: Bool {
+    @Published public var autoReloginOnExpiry: Bool {
         didSet { UserDefaults.standard.set(autoReloginOnExpiry, forKey: "autoReloginOnExpiry") }
     }
 
-    @Published var notifyAutoBreak: Bool {
+    @Published public var notifyAutoBreak: Bool {
         didSet { UserDefaults.standard.set(notifyAutoBreak, forKey: "notifyAutoBreak") }
     }
 
-    @Published var notifyFailures: Bool {
+    @Published public var notifyFailures: Bool {
         didSet { UserDefaults.standard.set(notifyFailures, forKey: "notifyFailures") }
     }
 
     /// Notify when a background re-login is waiting for the authenticator code,
     /// so the user knows to open BetterBob and enter it.
-    @Published var notifyAwaitingCode: Bool {
+    @Published public var notifyAwaitingCode: Bool {
         didSet { UserDefaults.standard.set(notifyAwaitingCode, forKey: "notifyAwaitingCode") }
     }
 
     /// Notify once when today's worked time reaches the day's target.
-    @Published var notifyTargetReached: Bool {
+    @Published public var notifyTargetReached: Bool {
         didSet { UserDefaults.standard.set(notifyTargetReached, forKey: "notifyTargetReached") }
     }
 
     /// Notify when the timesheet lock/submission deadline is approaching.
-    @Published var notifyDeadline: Bool {
+    @Published public var notifyDeadline: Bool {
         didSet { UserDefaults.standard.set(notifyDeadline, forKey: "notifyDeadline") }
     }
 
     /// Notify once when today's total crosses the daily max.
-    @Published var notifyOverMax: Bool {
+    @Published public var notifyOverMax: Bool {
         didSet { UserDefaults.standard.set(notifyOverMax, forKey: "notifyOverMax") }
     }
 
     /// Total worked time per day past which the day is flagged red. Warning
     /// only — unlike a missing break there is nothing to auto-fix. Default 10h.
-    @Published var maxDayMinutes: Int {
+    @Published public var maxDayMinutes: Int {
         didSet { UserDefaults.standard.set(maxDayMinutes, forKey: "maxDayMinutes") }
     }
 
     /// What to show next to the menu-bar icon — a separate choice per clock
     /// state, so e.g. working shows the auto-break countdown while a break
     /// shows how long it has run.
-    enum MenuBarTextWorking: String, CaseIterable, Identifiable {
+    public enum MenuBarTextWorking: String, CaseIterable, Identifiable {
         case none, workedTime, untilBreak, status
-        var id: String { rawValue }
+        public var id: String { rawValue }
         var label: String {
             switch self {
             case .none: return "Nothing"
@@ -87,9 +87,9 @@ final class Prefs: ObservableObject {
             }
         }
     }
-    enum MenuBarTextBreak: String, CaseIterable, Identifiable {
+    public enum MenuBarTextBreak: String, CaseIterable, Identifiable {
         case none, breakElapsed, breakRemaining, workedTime, status
-        var id: String { rawValue }
+        public var id: String { rawValue }
         var label: String {
             switch self {
             case .none: return "Nothing"
@@ -100,9 +100,9 @@ final class Prefs: ObservableObject {
             }
         }
     }
-    enum MenuBarTextOut: String, CaseIterable, Identifiable {
+    public enum MenuBarTextOut: String, CaseIterable, Identifiable {
         case none, workedTime, status
-        var id: String { rawValue }
+        public var id: String { rawValue }
         var label: String {
             switch self {
             case .none: return "Nothing"
@@ -111,19 +111,19 @@ final class Prefs: ObservableObject {
             }
         }
     }
-    @Published var menuBarTextWorking: MenuBarTextWorking {
+    @Published public var menuBarTextWorking: MenuBarTextWorking {
         didSet {
             UserDefaults.standard.set(menuBarTextWorking.rawValue, forKey: "menuBarTextWorking")
             NotificationCenter.default.post(name: .updateStatusItem, object: nil)
         }
     }
-    @Published var menuBarTextBreak: MenuBarTextBreak {
+    @Published public var menuBarTextBreak: MenuBarTextBreak {
         didSet {
             UserDefaults.standard.set(menuBarTextBreak.rawValue, forKey: "menuBarTextBreak")
             NotificationCenter.default.post(name: .updateStatusItem, object: nil)
         }
     }
-    @Published var menuBarTextOut: MenuBarTextOut {
+    @Published public var menuBarTextOut: MenuBarTextOut {
         didSet {
             UserDefaults.standard.set(menuBarTextOut.rawValue, forKey: "menuBarTextOut")
             NotificationCenter.default.post(name: .updateStatusItem, object: nil)
@@ -131,7 +131,7 @@ final class Prefs: ObservableObject {
     }
 
     /// Play/pause badge on the menu-bar icon by clock state.
-    @Published var showStateBadge: Bool {
+    @Published public var showStateBadge: Bool {
         didSet {
             UserDefaults.standard.set(showStateBadge, forKey: "showStateBadge")
             NotificationCenter.default.post(name: .updateStatusItem, object: nil)
@@ -139,46 +139,46 @@ final class Prefs: ObservableObject {
     }
 
     /// Which popover sections to show.
-    @Published var popoverShowHeader: Bool {
+    @Published public var popoverShowHeader: Bool {
         didSet { UserDefaults.standard.set(popoverShowHeader, forKey: "popoverShowHeader") }
     }
-    @Published var popoverShowWarnings: Bool {
+    @Published public var popoverShowWarnings: Bool {
         didSet { UserDefaults.standard.set(popoverShowWarnings, forKey: "popoverShowWarnings") }
     }
-    @Published var popoverShowEntries: Bool {
+    @Published public var popoverShowEntries: Bool {
         didSet { UserDefaults.standard.set(popoverShowEntries, forKey: "popoverShowEntries") }
     }
     /// Opt-in mini timeline strip (drag breaks / edges right in the popover).
-    @Published var popoverShowTimeline: Bool {
+    @Published public var popoverShowTimeline: Bool {
         didSet { UserDefaults.standard.set(popoverShowTimeline, forKey: "popoverShowTimeline") }
     }
 
     /// Tint the menu-bar icon by clock state (green working / orange break).
-    @Published var colorMenuBarIcon: Bool {
+    @Published public var colorMenuBarIcon: Bool {
         didSet {
             UserDefaults.standard.set(colorMenuBarIcon, forKey: "colorMenuBarIcon")
             NotificationCenter.default.post(name: .updateStatusItem, object: nil)
         }
     }
 
-    @Published var launchAtLogin: Bool {
+    @Published public var launchAtLogin: Bool {
         didSet { applyLaunchAtLogin() }
     }
 
     /// When on this Wi-Fi network, auto-tag the open work entry with
     /// `wifiReasonName`. Empty SSID / disabled = off.
-    @Published var wifiAutoReasonEnabled: Bool {
+    @Published public var wifiAutoReasonEnabled: Bool {
         didSet { UserDefaults.standard.set(wifiAutoReasonEnabled, forKey: "wifiAutoReasonEnabled") }
     }
 
     /// Fallback reason applied to the open work entry when no Wi-Fi rule
     /// matches. Empty = no default.
-    @Published var defaultReasonName: String {
+    @Published public var defaultReasonName: String {
         didSet { UserDefaults.standard.set(defaultReasonName, forKey: "defaultReasonName") }
     }
 
     /// One rule per network: SSID → reason. Persisted as JSON.
-    @Published var wifiRules: [WiFiRule] {
+    @Published public var wifiRules: [WiFiRule] {
         didSet {
             if let data = try? JSONEncoder().encode(wifiRules) {
                 UserDefaults.standard.set(data, forKey: "wifiRules")
@@ -186,9 +186,9 @@ final class Prefs: ObservableObject {
         }
     }
 
-    var threshold: TimeInterval { TimeInterval(thresholdMinutes * 60) }
-    var breakLength: TimeInterval { TimeInterval(breakMinutes * 60) }
-    var maxDayLimit: TimeInterval { TimeInterval(maxDayMinutes * 60) }
+    public var threshold: TimeInterval { TimeInterval(thresholdMinutes * 60) }
+    public var breakLength: TimeInterval { TimeInterval(breakMinutes * 60) }
+    public var maxDayLimit: TimeInterval { TimeInterval(maxDayMinutes * 60) }
 
     private init() {
         let d = UserDefaults.standard
@@ -267,9 +267,9 @@ final class Prefs: ObservableObject {
 }
 
 extension Notification.Name {
-    static let updateStatusItem = Notification.Name("updateStatusItem")
-    static let closePopover     = Notification.Name("closePopover")
+    public static let updateStatusItem = Notification.Name("updateStatusItem")
+    public static let closePopover     = Notification.Name("closePopover")
     /// iOS: asks the app root to show the onboarding cover (macOS opens the
     /// onboarding window directly).
-    static let presentOnboarding = Notification.Name("presentOnboarding")
+    public static let presentOnboarding = Notification.Name("presentOnboarding")
 }
