@@ -14,6 +14,18 @@ settings:
 packages:
   BetterBobShared:
     path: ../Packages/BetterBobShared
+# Only the app is a runnable scheme — running the widget-extension target
+# directly can't work (extensions are launched by the system, not the
+# debugger), so no scheme is generated for it.
+schemes:
+  BetterBob:
+    build:
+      targets:
+        BetterBob: all
+    run:
+      config: Debug
+    archive:
+      config: Release
 targets:
   BetterBob:
     type: application
