@@ -27,8 +27,23 @@ struct PopoverRootView: View {
                 // 1s tick keeps worked-time and the countdown live.
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     VStack(spacing: 10) {
-                        if prefs.popoverShowHeader { workedHeader(now: context.date) }
-                        actionButtons(now: context.date)
+                        if prefs.popoverShowHeader {
+                            // Dock straddles the hero's bottom edge, same as
+                            // the dashboard; the padding reserves its lower half.
+                            workedHeader(now: context.date)
+                                .padding(.bottom, 25)
+                                .overlay(alignment: .bottom) {
+                                    ActionDock(state: state, now: context.date)
+                                }
+                        } else {
+                            ActionDock(state: state, now: context.date)
+                        }
+                        if !state.queue.isEmpty {
+                            Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")
+                                .font(.system(size: 10)).foregroundStyle(.secondary)
+                                .contentTransition(.numericText())
+                                .transition(.bobBanner)
+                        }
                         if prefs.popoverShowWarnings {
                             if state.overMaxNonBreak { missingBreakWarning }
                             if !state.overMaxNonBreak, let short = state.breakGuidelineShortfall {
@@ -70,7 +85,7 @@ struct PopoverRootView: View {
             Divider().opacity(0.3)
             footer
         }
-        .frame(width: prefs.popoverWidth.points)
+        .frame(width: 460)
         .animation(Motion.standard, value: state.signedIn)
         .animation(Motion.standard, value: state.ready)
     }
@@ -171,98 +186,6 @@ struct PopoverRootView: View {
     // MARK: - Actions
 
     @ViewBuilder
-    private func actionButtons(now: Date) -> some View {
-        // Compact layout puts both buttons on one row.
-        let layout = prefs.popoverCompact ? AnyLayout(HStackLayout(spacing: 8))
-                                          : AnyLayout(VStackLayout(spacing: 8))
-        // Side-by-side buttons share one height: the info line would make
-        // just one of them taller, so the whole row grows together.
-        let rowTall: Bool = {
-            switch state.projectedClockState {
-            case .clockedOut: return autoTagTrailing != nil
-            case .working: return autoBreakTrailing(now: now) != nil
-            case .onBreak: return endBreakTrailing(now: now) != nil
-            }
-        }()
-        let rowHeight: CGFloat? = prefs.popoverCompact ? (rowTall ? 40 : 34) : nil
-        VStack(spacing: 8) {
-            // Buttons reflect the state after everything queued; punches fire a
-            // minute apart on their own (see the queue in the dashboard footer).
-            // The ZStack lets the outgoing row cross-fade over the incoming one
-            // instead of stacking below it mid-transition.
-            ZStack {
-                layout {
-                    // All actions wear the primary accent — the icons carry
-                    // the semantics.
-                    switch state.projectedClockState {
-                    case .clockedOut:
-                        actionButton("Clock in", symbol: "play.fill", tint: .primaryAccent(scheme),
-                                     trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
-                    case .working:
-                        actionButton("Clock out", symbol: "stop.fill", tint: .primaryAccent(scheme),
-                                     height: rowHeight) { state.clockOut() }
-                        actionButton("Start break", symbol: "pause.circle.fill", tint: .primaryAccent(scheme),
-                                     trailing: autoBreakTrailing(now: now), height: rowHeight) {
-                            state.startManualBreak()
-                        }
-                    case .onBreak:
-                        actionButton("End break", symbol: "play.fill", tint: .primaryAccent(scheme),
-                                     trailing: endBreakTrailing(now: now), height: rowHeight) { state.endBreak() }
-                        actionButton("Clock out", symbol: "stop.fill", tint: .primaryAccent(scheme),
-                                     height: rowHeight) { state.clockOut() }
-                    }
-                }
-                .id(clockStateKey)
-                .transition(.bobReplace)
-            }
-            if !state.queue.isEmpty {
-                Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-                    .transition(.bobBanner)
-            }
-        }
-        .animation(Motion.standard, value: state.projectedClockState)
-    }
-
-    /// Stable identity per clock state so the whole button row cross-fades.
-    private var clockStateKey: String {
-        switch state.projectedClockState {
-        case .clockedOut: return "out"
-        case .working: return "working"
-        case .onBreak: return "break"
-        }
-    }
-
-    /// Full-width tinted capsule — matches the dashboard quick-action style.
-    private func actionButton(_ label: String, symbol: String, tint: Color,
-                              trailing: String? = nil, height: CGFloat? = nil,
-                              action: @escaping () -> Void) -> some View {
-        PopoverActionButton(label: label, symbol: symbol, tint: tint, trailing: trailing,
-                            height: height, action: action)
-    }
-
-    /// "auto in 42m" shown under the Start-break label while working.
-    private func autoBreakTrailing(now: Date) -> String? {
-        guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
-        return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
-    }
-
-    /// The reason the new entry gets tagged with automatically (Wi-Fi rule or
-    /// default), shown under the Clock-in / End-break label.
-    private var autoTagTrailing: String? {
-        state.currentAutoReason
-    }
-
-    /// "back in 12m" shown under the End-break label during an auto-break,
-    /// plus the auto-tag when one applies: "back in 12m · as In Office".
-    private func endBreakTrailing(now: Date) -> String? {
-        guard let ends = state.autoBreakEnds else { return autoTagTrailing }
-        let back = ends <= now ? "back now" : "back in \(Fmt.hm(ends.timeIntervalSince(now)))"
-        guard let tag = autoTagTrailing else { return back }
-        return "\(back) · \(tag)"
-    }
-
     // MARK: - Over-max-non-break warning + wand
 
     private var missingBreakWarning: some View {
@@ -417,7 +340,7 @@ struct PopoverRootView: View {
                         .foregroundStyle(.primary.opacity(0.85))
                 }
                 .padding(.horizontal, 8)
-                .frame(minHeight: prefs.popoverCompact ? 24 : 30)
+                .frame(minHeight: 24)
                 .contentShape(Rectangle())
                 .contextMenu {
                     if entry.id != nil {
@@ -551,46 +474,4 @@ struct PopoverRootView: View {
 }
 
 /// A clock-in/out/break pill for the popover, with a hover state (matching the
-/// dashboard's — subtle brighten, no size change).
-private struct PopoverActionButton: View {
-    let label: String
-    let symbol: String
-    let tint: Color
-    var trailing: String? = nil
-    /// Explicit height so row-mates match; nil sizes to the content.
-    var height: CGFloat? = nil
-    let action: () -> Void
-    @Environment(\.colorScheme) private var scheme
-    @State private var hovering = false
 
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 1) {
-                HStack(spacing: 6) {
-                    Image(systemName: symbol).font(.system(size: 12, weight: .bold))
-                    Text(label).font(.system(size: 13, weight: .semibold))
-                }
-                if let trailing {
-                    // Second line so countdown + auto-tag get full width.
-                    Text(trailing)
-                        .font(.system(size: 9, weight: .medium)).opacity(0.7)
-                }
-            }
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity)
-            .frame(height: height ?? (trailing == nil ? 34 : 40))
-            // Split roles: vivid control cut for the fill/border, deepened
-            // legible tone for the label.
-            .background(Capsule().fill(Color.controlAccent(scheme).opacity(hovering ? 0.26 : 0.18)))
-            .overlay(Capsule().strokeBorder(Color.controlAccent(scheme).opacity(hovering ? 0.65 : 0.45),
-                                            lineWidth: 0.8))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(PressablePillStyle())
-        .onHover { h in
-            hovering = h
-            if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
-        }
-        .animation(Motion.quick, value: hovering)
-    }
-}

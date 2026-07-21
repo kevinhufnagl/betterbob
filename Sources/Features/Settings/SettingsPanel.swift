@@ -270,17 +270,6 @@ struct SettingsPanel: View {
     @ViewBuilder
     private var popoverContent: some View {
         Group {
-            HStack(spacing: 8) {
-                Text("Width").font(.system(size: 12))
-                Spacer()
-                Picker("", selection: $prefs.popoverWidth) {
-                    ForEach(Prefs.PopoverWidth.allCases) { Text($0.label).tag($0) }
-                }
-                .labelsHidden().frame(maxWidth: 160)
-            }
-            Toggle("Compact layout (buttons share one row, tighter list)",
-                   isOn: $prefs.popoverCompact)
-                .font(.system(size: 12))
             Toggle("Show worked-time header", isOn: $prefs.popoverShowHeader)
                 .font(.system(size: 12))
             Toggle("Show warnings (missing break, daily max)", isOn: $prefs.popoverShowWarnings)

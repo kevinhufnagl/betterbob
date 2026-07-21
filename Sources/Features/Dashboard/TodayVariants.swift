@@ -61,58 +61,47 @@ struct StatusPill: View {
 }
 
 /// Clock in / out / break buttons + cooldown + auto-tag line.
-struct TodayActions: View {
+/// The clock actions as a floating glass dock: a liquid-glass capsule bar
+/// meant to straddle the hero's bottom edge like a dock on the water. The
+/// most likely next action is a solid accent capsule (with the countdown /
+/// auto-tag as its caption); the alternative rides along as a quiet glass
+/// one. Buttons offer the state *after* everything queued, so you can line
+/// up several punches; they fire a minute apart on their own.
+struct ActionDock: View {
     @ObservedObject var state: BobState
-    var vertical = true
     var now = Date()
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let layout = vertical ? AnyLayout(VStackLayout(spacing: 8))
-                                  : AnyLayout(HStackLayout(spacing: 8))
-            // Side-by-side buttons share one height: the info line would make
-            // just one of them taller, so the whole row grows together.
-            let rowTall: Bool = {
+        // The ZStack lets the outgoing pair cross-fade over the incoming one
+        // instead of stacking beside it mid-transition.
+        ZStack {
+            HStack(spacing: 6) {
                 switch state.projectedClockState {
-                case .clockedOut: return autoTagTrailing != nil
-                case .working: return autoBreakTrailing != nil
-                case .onBreak: return endBreakTrailing != nil
+                case .clockedOut:
+                    DockButton(label: "Clock in", sym: "play.fill",
+                               caption: autoTagTrailing, prominent: true) { state.clockIn() }
+                case .working:
+                    DockButton(label: "Start break", sym: "pause.fill",
+                               caption: autoBreakTrailing, prominent: true) { state.startManualBreak() }
+                    DockButton(label: "Clock out", sym: "stop.fill") { state.clockOut() }
+                case .onBreak:
+                    DockButton(label: "End break", sym: "play.fill",
+                               caption: endBreakTrailing, prominent: true) { state.endBreak() }
+                    DockButton(label: "Clock out", sym: "stop.fill") { state.clockOut() }
                 }
-            }()
-            let rowHeight: CGFloat? = vertical ? nil : (rowTall ? 40 : 34)
-            // Buttons offer the state *after* everything queued, so you can line
-            // up several punches; they fire a minute apart on their own.
-            // The ZStack lets the outgoing row cross-fade over the incoming one
-            // instead of stacking beside it mid-transition.
-            ZStack {
-                layout {
-                    // All actions wear the primary accent — the icons carry
-                    // the semantics.
-                    switch state.projectedClockState {
-                    case .clockedOut:
-                        btn("Clock in", "play.fill", .primaryAccent(scheme),
-                            trailing: autoTagTrailing, height: rowHeight) { state.clockIn() }
-                    case .working:
-                        btn("Clock out", "stop.fill", .primaryAccent(scheme),
-                            height: rowHeight) { state.clockOut() }
-                        btn("Start break", "pause.circle.fill", .primaryAccent(scheme),
-                            trailing: autoBreakTrailing, height: rowHeight) { state.startManualBreak() }
-                    case .onBreak:
-                        btn("End break", "play.fill", .primaryAccent(scheme),
-                            trailing: endBreakTrailing, height: rowHeight) { state.endBreak() }
-                        btn("Clock out", "stop.fill", .primaryAccent(scheme),
-                            height: rowHeight) { state.clockOut() }
-                    }
-                }
-                .id(clockStateKey)
-                .transition(.bobReplace)
             }
+            .id(clockStateKey)
+            .transition(.bobReplace)
         }
+        .padding(5)
+        .glassEffect(.regular, in: .capsule)
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6))
+        .shadow(color: .black.opacity(scheme == .dark ? 0.30 : 0.14), radius: 12, y: 4)
         .animation(Motion.standard, value: state.projectedClockState)
     }
 
-    /// Stable identity per clock state so the whole button row cross-fades.
+    /// Stable identity per clock state so the whole pair cross-fades.
     private var clockStateKey: String {
         switch state.projectedClockState {
         case .clockedOut: return "out"
@@ -120,14 +109,8 @@ struct TodayActions: View {
         case .onBreak: return "break"
         }
     }
-    private func btn(_ label: String, _ sym: String, _ tint: Color,
-                     trailing: String? = nil, height: CGFloat? = nil,
-                     _ act: @escaping () -> Void) -> some View {
-        ActionButton(label: label, sym: sym, tint: tint, trailing: trailing,
-                     height: height, act: act)
-    }
 
-    /// "auto in 42m" inside the Start-break button — same as the popover.
+    /// "auto in 42m" under the Start-break label while working.
     private var autoBreakTrailing: String? {
         guard case .working = state.clockState, let due = state.autoBreakDue else { return nil }
         return due <= now ? "auto now" : "auto in \(Fmt.hm(due.timeIntervalSince(now)))"
@@ -139,7 +122,7 @@ struct TodayActions: View {
         state.currentAutoReason
     }
 
-    /// "back in 12m" inside the End-break button during an auto-break, plus
+    /// "back in 12m" under the End-break label during an auto-break, plus
     /// the auto-tag when one applies: "back in 12m · as In Office".
     private var endBreakTrailing: String? {
         guard let ends = state.autoBreakEnds else { return autoTagTrailing }
@@ -149,14 +132,14 @@ struct TodayActions: View {
     }
 }
 
-/// A clock-in/out/break pill with a hover state.
-private struct ActionButton: View {
+/// One dock action. Prominent = solid accent capsule with a white label
+/// (the next thing you'll do); quiet = glass capsule with a neutral label.
+/// Fixed height so a captioned button and its plain neighbour stay level.
+private struct DockButton: View {
     let label: String
     let sym: String
-    let tint: Color
-    var trailing: String? = nil
-    /// Explicit height so row-mates match; nil sizes to the content.
-    var height: CGFloat? = nil
+    var caption: String? = nil
+    var prominent = false
     let act: () -> Void
     @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
@@ -168,20 +151,32 @@ private struct ActionButton: View {
                     Image(systemName: sym).font(.system(size: 12, weight: .bold))
                     Text(label).font(.system(size: 13, weight: .semibold))
                 }
-                if let trailing {
-                    // Second line so countdown + auto-tag get full width.
-                    Text(trailing)
-                        .font(.system(size: 9, weight: .medium)).opacity(0.7)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 9, weight: .medium)).opacity(0.75)
                 }
             }
-            .frame(maxWidth: .infinity).frame(height: height ?? (trailing == nil ? 34 : 40))
-            // Split roles: the fill/border wear the vivid control cut of the
-            // accent (like native buttons); the label keeps the deepened,
-            // legible text tone.
-            .background(Capsule().fill(Color.controlAccent(scheme).opacity(hovering ? 0.26 : 0.18)))
-            .overlay(Capsule().strokeBorder(Color.controlAccent(scheme).opacity(hovering ? 0.65 : 0.45),
-                                            lineWidth: 0.8))
-            .foregroundStyle(tint)
+            .foregroundStyle(prominent ? AnyShapeStyle(.white)
+                                       : AnyShapeStyle(Color.primary.opacity(0.85)))
+            .padding(.horizontal, 16)
+            .frame(height: 40)
+            .background(
+                // Solid fill sits a notch deeper than controlAccent in dark
+                // mode so the white label keeps its contrast.
+                Capsule().fill(prominent
+                    ? AnyShapeStyle(scheme == .dark
+                        ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
+                        : Color.controlAccent(scheme))
+                    : AnyShapeStyle(Color.primary.opacity(hovering ? 0.10 : 0.05))))
+            .overlay {
+                if prominent {
+                    // Hover brightens the solid fill instead of re-tinting it.
+                    Capsule().fill(Color.white.opacity(hovering ? 0.12 : 0))
+                } else {
+                    Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.7)
+                }
+            }
+            .contentShape(Capsule())
         }
         .buttonStyle(PressablePillStyle())
         .onHover { h in
@@ -352,6 +347,13 @@ struct TodayTimeline: View {
                             .transition(.bobReplace)
                     }
                 }
+                // The action dock floats half over the water, half over the
+                // page — the bottom padding reserves room for the lower half
+                // so it never overlaps the next card.
+                .padding(.bottom, 25)
+                .overlay(alignment: .bottom) {
+                    ActionDock(state: state, now: ctx.date)
+                }
 
                 Card {
                     VStack(alignment: .leading, spacing: 16) {
@@ -378,8 +380,6 @@ struct TodayTimeline: View {
                                 }
                             }
                         }
-                        Divider().opacity(0.15)
-                        TodayActions(state: state, vertical: false, now: ctx.date)
                     }
                 }
 

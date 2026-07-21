@@ -129,34 +129,6 @@ final class Prefs: ObservableObject {
         }
     }
 
-    /// Popover width presets.
-    enum PopoverWidth: String, CaseIterable, Identifiable {
-        case compact, regular, wide
-        var id: String { rawValue }
-        var points: CGFloat {
-            switch self {
-            case .compact: return 360
-            case .regular: return 400
-            case .wide: return 460
-            }
-        }
-        var label: String {
-            switch self {
-            case .compact: return "Compact (360)"
-            case .regular: return "Regular (400)"
-            case .wide: return "Wide (460)"
-            }
-        }
-    }
-    @Published var popoverWidth: PopoverWidth {
-        didSet { UserDefaults.standard.set(popoverWidth.rawValue, forKey: "popoverWidth") }
-    }
-
-    /// Compact popover: clock/break buttons share one row, tighter entry rows.
-    @Published var popoverCompact: Bool {
-        didSet { UserDefaults.standard.set(popoverCompact, forKey: "popoverCompact") }
-    }
-
     /// Which popover sections to show.
     @Published var popoverShowHeader: Bool {
         didSet { UserDefaults.standard.set(popoverShowHeader, forKey: "popoverShowHeader") }
@@ -243,9 +215,6 @@ final class Prefs: ObservableObject {
             .flatMap(MenuBarTextOut.init) ?? seed.2
         self.showStateBadge = d.object(forKey: "showStateBadge") as? Bool ?? true
         self.colorMenuBarIcon = d.object(forKey: "colorMenuBarIcon") as? Bool ?? false
-        self.popoverWidth = d.string(forKey: "popoverWidth")
-            .flatMap(PopoverWidth.init) ?? .regular
-        self.popoverCompact = d.object(forKey: "popoverCompact") as? Bool ?? false
         self.popoverShowHeader = d.object(forKey: "popoverShowHeader") as? Bool ?? true
         self.popoverShowWarnings = d.object(forKey: "popoverShowWarnings") as? Bool ?? true
         self.popoverShowEntries = d.object(forKey: "popoverShowEntries") as? Bool ?? true
