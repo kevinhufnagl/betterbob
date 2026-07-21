@@ -54,6 +54,7 @@ struct Card<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+        #if os(macOS)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         // primary-based border + soft shadow so the card's true extent is
         // visible in light mode too (a white hairline vanishes there, making
@@ -61,6 +62,13 @@ struct Card<Content: View>: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
             .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6))
         .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+        #else
+        // iOS wears the app-wide Liquid Glass recipe directly, so screens
+        // never need to double-wrap components in another card.
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+        #endif
     }
 }
 
@@ -94,10 +102,16 @@ public struct StatTile: View {
         }
         .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
         .padding(14)
+        #if os(macOS)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6))
         .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+        #else
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+        #endif
     }
 }
 

@@ -13,14 +13,16 @@ struct MonthScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                statGrid
-                GlassCard {
-                    CalendarHeatmap(state: state, onOpenToday: onOpenToday)
+                if monthTargetSecs > 0 {
+                    LiquidHero(worked: monthWorkedSecs, target: monthTargetSecs,
+                               cornerRadius: 18)
+                        .frame(height: 150)
+                        .glassSurface()
                 }
+                statGrid
+                CalendarHeatmap(state: state, onOpenToday: onOpenToday)
                 if summary?.days.isEmpty == false {
-                    GlassCard {
-                        BalanceTrendCard(state: state)
-                    }
+                    BalanceTrendCard(state: state)
                 }
             }
             .padding(.horizontal, 16)
@@ -40,32 +42,37 @@ struct MonthScreen: View {
     }
 
     private var statGrid: some View {
-        let workedMin = summary.map { $0.days.reduce(0) { $0 + Int($1.worked * 60) } } ?? 0
         let balance = summary?.overUnderMinutes ?? 0
         let potential = summary?.potentialMinutes ?? 0
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
                          spacing: 12) {
-            GlassCard(padding: 14) {
-                StatTile(value: Fmt.hm(TimeInterval(workedMin * 60)),
-                         caption: "Worked this cycle", symbol: "hammer.fill")
-            }
-            GlassCard(padding: 14) {
-                StatTile(value: (balance >= 0 ? "+" : "−") + Fmt.hm(TimeInterval(abs(balance) * 60)),
-                         caption: "Balance",
-                         tint: balance >= 0 ? .primary : .bobOrange,
-                         symbol: "scalemass.fill")
-            }
+            StatTile(value: Fmt.hm(monthWorkedSecs),
+                     caption: "Worked this cycle", symbol: "hammer.fill")
+            StatTile(value: (balance >= 0 ? "+" : "−") + Fmt.hm(TimeInterval(abs(balance) * 60)),
+                     caption: "Balance",
+                     tint: balance >= 0 ? .primary : .bobOrange,
+                     symbol: "scalemass.fill")
             if potential > 0 {
-                GlassCard(padding: 14) {
-                    StatTile(value: Fmt.hm(TimeInterval(potential * 60)),
-                             caption: "Cycle target", symbol: "target")
-                }
-                GlassCard(padding: 14) {
-                    StatTile(value: "\(summary?.days.count ?? 0)",
-                             caption: "Days recorded", symbol: "calendar")
-                }
+                StatTile(value: Fmt.hm(TimeInterval(potential * 60)),
+                         caption: "Cycle target", symbol: "target")
+                StatTile(value: "\(summary?.days.count ?? 0)",
+                         caption: "Days recorded", symbol: "calendar")
             }
         }
+    }
+
+    // Mirrors the Mac CyclePane: HiBob's own totals are authoritative; the
+    // per-day series drifts from them by rounding.
+    private var monthWorkedSecs: TimeInterval {
+        if let display = summary?.totalHoursDisplay {
+            let mins = BobParsing.minutes(fromDisplay: display)
+            if mins > 0 { return TimeInterval(mins * 60) }
+        }
+        return (summary?.days ?? []).reduce(0) { $0 + $1.worked * 3600 }
+    }
+    private var monthTargetSecs: TimeInterval {
+        if let mins = summary?.potentialMinutes, mins > 0 { return TimeInterval(mins * 60) }
+        return (summary?.days ?? []).reduce(0) { $0 + ($1.target ?? 0) * 3600 }
     }
 }
 

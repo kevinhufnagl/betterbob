@@ -179,22 +179,17 @@ struct TodayScreen: View {
 
     private func entryRow(_ entry: AttendanceEntry) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: entry.kind == .breakTime ? "cup.and.saucer.fill" : "hammer.fill")
-                .font(.callout)
+            Text(entry.kind == .breakTime ? "Break" : "Work")
+                .font(.body.weight(.semibold))
                 .foregroundStyle(entry.kind == .breakTime ? Color.bobOrange : Color.accentColor)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(Fmt.clock(entry.start)) – \(entry.end.map(Fmt.clock) ?? "now")")
-                    .font(.body.monospacedDigit())
-                if entry.kind == .work {
-                    reasonMenu(entry)
-                } else {
-                    Text("Break").font(.footnote).foregroundStyle(.secondary)
-                }
-            }
+                .frame(width: 56, alignment: .leading)
+            Text("\(Fmt.clock(entry.start)) – \(entry.end.map(Fmt.clock) ?? "now")")
+                .font(.body.monospacedDigit())
             Spacer()
             if let id = entry.id, state.deletingEntries.contains(id) {
                 ProgressView().controlSize(.small)
+            } else if entry.kind == .work {
+                reasonMenu(entry)
             }
         }
         .contextMenu {

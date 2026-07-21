@@ -5,11 +5,11 @@ import Foundation
 /// `GET /api/attendance/my/clockStatus`, whose entry times are **local
 /// wall-clock with no timezone** — they're anchored using the employee's
 /// timezone from `/api/user`.
-enum BobParsing {
+public enum BobParsing {
 
     // MARK: - clockStatus
 
-    static func dayStatus(fromClockStatusJSON data: Data, timeZone: TimeZone) -> DayStatus? {
+    public static func dayStatus(fromClockStatusJSON data: Data, timeZone: TimeZone) -> DayStatus? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
 
@@ -64,7 +64,7 @@ enum BobParsing {
 
     // MARK: - Reason options (metadata/lists → timeLogEntryReason)
 
-    static func reasonOptions(fromListsJSON data: Data) -> [ReasonOption] {
+    public static func reasonOptions(fromListsJSON data: Data) -> [ReasonOption] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let list = root["timeLogEntryReason"] as? [String: Any],
               let values = list["values"] as? [[String: Any]]
@@ -80,7 +80,7 @@ enum BobParsing {
     // MARK: - Timesheet cycle (dashboard)
 
     /// The current (first) timesheet cycle from the timesheets list.
-    static func cycle(fromTimesheetsJSON data: Data) -> CycleInfo? {
+    public static func cycle(fromTimesheetsJSON data: Data) -> CycleInfo? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let sheets = root["employeeTimesheets"] as? [[String: Any]],
               let first = sheets.first,
@@ -95,7 +95,7 @@ enum BobParsing {
     }
 
     /// Per-day worked/target plus cycle totals from the summary endpoint.
-    static func summary(fromSummaryJSON data: Data) -> CycleSummary? {
+    public static func summary(fromSummaryJSON data: Data) -> CycleSummary? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let breakdown = root["dailyBreakdown"] as? [String: Any],
               let categories = breakdown["categories"] as? [String],
@@ -155,7 +155,7 @@ enum BobParsing {
     }
 
     /// Parse HiBob "Xh Ym" duration displays into minutes.
-    static func minutes(fromDisplay s: String) -> Int {
+    public static func minutes(fromDisplay s: String) -> Int {
         var h = 0, m = 0
         for token in s.split(separator: " ") {
             if token.hasSuffix("h") { h = Int(token.dropLast()) ?? 0 }
@@ -168,7 +168,7 @@ enum BobParsing {
 
     /// Per-day entries for the whole cycle. Reason is a serverId here, mapped
     /// back to its display name via the reason options.
-    static func monthDays(fromViewsSearchJSON data: Data,
+    public static func monthDays(fromViewsSearchJSON data: Data,
                           reasonOptions: [ReasonOption],
                           timeZone: TimeZone) -> [DayEntries] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -225,7 +225,7 @@ enum BobParsing {
 
     // MARK: - Activity history
 
-    static func activity(fromHistoryJSON data: Data) -> [ActivityEvent] {
+    public static func activity(fromHistoryJSON data: Data) -> [ActivityEvent] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let events = root["events"] as? [[String: Any]] else { return [] }
         return events.compactMap { ev in
@@ -256,7 +256,7 @@ enum BobParsing {
 
     // MARK: - Time off
 
-    static func timeOffBalances(fromSummaryJSON data: Data) -> [TimeOffBalance] {
+    public static func timeOffBalances(fromSummaryJSON data: Data) -> [TimeOffBalance] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let summary = root["summary"] as? [[String: Any]] else { return [] }
         return summary.compactMap { s in
@@ -278,7 +278,7 @@ enum BobParsing {
         }
     }
 
-    static func timeOffPolicyTypes(fromConfigJSON data: Data) -> [TimeOffPolicyType] {
+    public static func timeOffPolicyTypes(fromConfigJSON data: Data) -> [TimeOffPolicyType] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let policies = root["policies"] as? [[String: Any]] else { return [] }
         return policies.compactMap { p in
@@ -292,7 +292,7 @@ enum BobParsing {
         }
     }
 
-    static func timeOffRequests(fromInRangeJSON data: Data) -> [TimeOffRequest] {
+    public static func timeOffRequests(fromInRangeJSON data: Data) -> [TimeOffRequest] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
         let lists = ["requests", "openRequests"].compactMap { root[$0] as? [[String: Any]] }
         return lists.flatMap { $0 }.compactMap { r in
@@ -308,7 +308,7 @@ enum BobParsing {
         }
     }
 
-    static func timeOffCalc(fromJSON data: Data) -> TimeOffCalc? {
+    public static func timeOffCalc(fromJSON data: Data) -> TimeOffCalc? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         // validationMessages: {"level":"ERROR","messages":[{"reason":"…"}]}
         var validation: String?
@@ -330,7 +330,7 @@ enum BobParsing {
 
     // MARK: - Employee id (/api/user)
 
-    static func employeeID(fromUserJSON data: Data) -> String? {
+    public static func employeeID(fromUserJSON data: Data) -> String? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         return stringValue(root["id"])
@@ -341,7 +341,7 @@ enum BobParsing {
     /// Parse a HiBob local wall-clock timestamp — `YYYY-MM-DDTHH:mm`, with
     /// optional `:ss` and optional fractional seconds, and no timezone —
     /// interpreting it in `timeZone`.
-    static func parseLocalTimestamp(_ raw: String, timeZone: TimeZone) -> Date? {
+    public static func parseLocalTimestamp(_ raw: String, timeZone: TimeZone) -> Date? {
         let trimmed = raw.split(separator: ".").first.map(String.init) ?? raw
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone

@@ -17,11 +17,10 @@ struct TimeOffScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                poolHero
                 balanceGrid
-                GlassCard {
-                    TimeOffCalendar(state: state) { start, end in
-                        booking = BookingRange(start: start, end: end)
-                    }
+                TimeOffCalendar(state: state) { start, end in
+                    booking = BookingRange(start: start, end: end)
                 }
                 requestsSection
                 bookButton
@@ -38,6 +37,29 @@ struct TimeOffScreen: View {
                 .presentationDetents([.medium, .large])
                 .presentationBackground(.thinMaterial)
         }
+    }
+
+    // MARK: Pool hero — the draining vacation pool, same wave as the Mac
+
+    @ViewBuilder private var poolHero: some View {
+        if let main = state.timeOffBalances.first,
+           let left = number(main.currentBalance) {
+            let total = number(main.totalAllowance) ?? 0
+            LiquidHero(worked: 0, target: 0,
+                       cornerRadius: 18,
+                       customFraction: total > 0 ? max(0, min(1, left / total)) : 0,
+                       customBig: main.currentBalance,
+                       customLine2: total > 0 ? "of \(main.totalAllowance) \(main.unit) left"
+                                              : "\(main.unit) left",
+                       customLine3: main.displayName)
+                .frame(height: 150)
+                .glassSurface()
+        }
+    }
+
+    private func number(_ s: String) -> Double? {
+        Double(s.replacingOccurrences(of: ",", with: ".")
+                 .filter { "0123456789.".contains($0) })
     }
 
     // MARK: Balances
