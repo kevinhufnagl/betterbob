@@ -148,22 +148,15 @@ struct OnboardingScreen: View {
     // MARK: Browser sign-in
 
     private var browserSection: some View {
-        GlassGroupedSection(
-            footer: "Signs in through HiBob's normal login page — including Okta Verify push. Quick to start, but you'll sign in again each time the session expires."
-        ) {
-            GlassRow(showDivider: false) {
-                Button {
-                    state.startSSOSignIn()
-                } label: {
-                    Label("Sign in with a browser", systemImage: "safari")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 28)
-                }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-                .padding(.vertical, 4)
-            }
+        Button {
+            state.startSSOSignIn()
+        } label: {
+            Label("Sign in with a browser", systemImage: "safari")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 28)
         }
+        .buttonStyle(.glass)
+        .controlSize(.large)
     }
 
     // MARK: Engine plumbing (same as the Mac onboarding)
