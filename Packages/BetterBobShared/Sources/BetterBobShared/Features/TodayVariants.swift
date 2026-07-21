@@ -1016,7 +1016,11 @@ public struct BuoyBob: View {
                 dipOffset = size * dipAmp
             }
         } else {
-            withTransaction(t) { swayAngle = 0; dipOffset = 0 }
+            // A repeatForever animator is NOT cancelled by a disablesAnimations
+            // write — it keeps ticking the attribute graph (and re-laying-out
+            // the retained window) forever. Replacing it with a finite
+            // animation is the only reliable way to stop it.
+            withAnimation(.linear(duration: 0.01)) { swayAngle = 0; dipOffset = 0 }
         }
     }
 

@@ -38,8 +38,11 @@ public struct WaterBand: View {
     public var body: some View {
         Group {
             if windowVisible && !Motion.reduce {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
+                TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
                     water(phase: ctx.date.timeIntervalSinceReferenceDate * 0.6)
+                        // Rasterize on the GPU — animated vector fills were
+                        // chewing CPU at full window width.
+                        .drawingGroup()
                 }
             } else {
                 water(phase: 0)   // a frozen frame keeps the look, costs nothing
@@ -101,10 +104,13 @@ private struct HWaterShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         guard rect.width > 0 else { return p }
+        // ~150 segments regardless of width — a full-window band at 3pt
+        // steps was rebuilding 350+ segment paths 30×/s.
+        let step = max(3, rect.width / 150)
         p.move(to: CGPoint(x: 0, y: field.y(0, in: rect)))
         var x: CGFloat = 0
         while x < rect.width {
-            x = min(x + 3, rect.width)
+            x = min(x + step, rect.width)
             p.addLine(to: CGPoint(x: x, y: field.y(x, in: rect)))
         }
         p.addLine(to: CGPoint(x: rect.width, y: rect.height))
@@ -119,10 +125,11 @@ private struct HWaterEdgeShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         guard rect.width > 0 else { return p }
+        let step = max(3, rect.width / 150)
         p.move(to: CGPoint(x: 0, y: field.y(0, in: rect)))
         var x: CGFloat = 0
         while x < rect.width {
-            x = min(x + 3, rect.width)
+            x = min(x + step, rect.width)
             p.addLine(to: CGPoint(x: x, y: field.y(x, in: rect)))
         }
         return p
