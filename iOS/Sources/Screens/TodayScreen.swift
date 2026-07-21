@@ -11,40 +11,27 @@ struct TodayScreen: View {
     var body: some View {
         ScrollView {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                // Signed-out and booting states never reach this screen —
+                // RootView swaps the whole page for them.
                 let vals = TodayVals(state, now: ctx.date)
                 VStack(spacing: 16) {
-                    if state.bootingUp {
-                        // First reconcile still in flight — Bob holds the fort
-                        // instead of a screenful of zeroes.
-                        BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
-                            ProgressView().controlSize(.small).padding(.top, 2)
+                    // The dock straddles the hero's bottom edge, like the
+                    // Mac popover — the padding reserves its lower half.
+                    hero(vals, now: ctx.date)
+                        .padding(.bottom, 25)
+                        .overlay(alignment: .bottom) {
+                            ActionDock(state: state, now: ctx.date)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
-                    } else if state.signedIn {
-                        // The dock straddles the hero's bottom edge, like the
-                        // Mac popover — the padding reserves its lower half.
-                        hero(vals, now: ctx.date)
-                            .padding(.bottom, 25)
-                            .overlay(alignment: .bottom) {
-                                ActionDock(state: state, now: ctx.date)
-                            }
-                        if let queued = state.queue.first {
-                            Text("\(state.queue.count) queued · fires \(Fmt.clock(queued.fireAt))")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        hero(vals, now: ctx.date)
-                        signedOutCard
+                    if let queued = state.queue.first {
+                        Text("\(state.queue.count) queued · fires \(Fmt.clock(queued.fireAt))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                    if state.ready {
-                        if !state.entries.isEmpty {
-                            timelineCard(now: ctx.date)
-                        }
-                        warnings
-                        entriesSection
+                    if !state.entries.isEmpty {
+                        timelineCard(now: ctx.date)
                     }
+                    warnings
+                    entriesSection
                 }
             }
             .padding(.horizontal, 16)
@@ -87,35 +74,6 @@ struct TodayScreen: View {
                     .padding(12)
             }
             .glassSurface()
-    }
-
-    // MARK: Signed out
-
-    private var signedOutCard: some View {
-        GlassCard {
-            VStack(spacing: 12) {
-                AnimatedBob(sleeping: true).frame(width: 72, height: 72)
-                Text("Bob's off the clock")
-                    .font(.headline)
-                if state.autoLoginInProgress {
-                    AutoLoginInline(state: state, fillWidth: true)
-                } else {
-                    if state.canAutoSignIn {
-                        SignInFactorGroup(state: state)
-                    }
-                    Button {
-                        NotificationCenter.default.post(name: .presentOnboarding, object: nil)
-                    } label: {
-                        Label("Sign in…", systemImage: "arrow.right.circle.fill")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 28)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .controlSize(.large)
-                }
-            }
-            .frame(maxWidth: .infinity)
-        }
     }
 
     // MARK: Timeline strip (drag to edit — same math as the Mac)

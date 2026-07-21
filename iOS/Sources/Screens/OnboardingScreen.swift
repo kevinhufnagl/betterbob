@@ -6,6 +6,9 @@ import SwiftUI
 /// engine calls as the Mac onboarding (Keychain save, factor choice, SSO).
 struct OnboardingScreen: View {
     @ObservedObject var state: BobState
+    /// False when this screen IS the app's signed-out root — there is
+    /// nothing to close to, so the X is hidden.
+    var isDismissible = true
     var onDone: () -> Void
 
     @State private var email = ""
@@ -48,17 +51,19 @@ struct OnboardingScreen: View {
         // Full-screen covers have no swipe-to-dismiss — without this the
         // screen is a trap when opened from Settings.
         .overlay(alignment: .topTrailing) {
-            Button {
-                onDone()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 34, height: 34)
+            if isDismissible {
+                Button {
+                    onDone()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.glass)
+                .clipShape(Circle())
+                .padding(.trailing, 16)
+                .padding(.top, 8)
             }
-            .buttonStyle(.glass)
-            .clipShape(Circle())
-            .padding(.trailing, 16)
-            .padding(.top, 8)
         }
         .onAppear {
             load()

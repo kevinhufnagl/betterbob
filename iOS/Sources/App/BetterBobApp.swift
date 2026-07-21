@@ -6,19 +6,20 @@ import UserNotifications
 struct BetterBobApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showOnboarding = !OnboardingController.completed
+    @State private var showOnboarding = false
 
     var body: some Scene {
         WindowGroup {
-            RootTabs(state: BobState.shared)
+            RootView()
                 .signInSheet()
+                // Sign-in setup opened from Settings while signed in — the
+                // signed-out state is handled by RootView itself.
                 .fullScreenCover(isPresented: $showOnboarding) {
                     OnboardingScreen(state: BobState.shared) {
                         OnboardingController.completed = true
                         showOnboarding = false
                     }
                     .signInSheet()
-                    .interactiveDismissDisabled(!BobState.shared.signedIn)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .presentOnboarding)) { _ in
                     showOnboarding = true
@@ -34,6 +35,30 @@ struct BetterBobApp: App {
                 BackgroundRefresh.schedule()
             default:
                 break
+            }
+        }
+    }
+}
+
+/// The app's trunk, Colimate-style: signed out means the sign-in page IS the
+/// app — no tabs, no hero, just Bob and the options. Tabs only exist with a
+/// session (or while the boot probe is still deciding).
+private struct RootView: View {
+    @ObservedObject var state = BobState.shared
+
+    var body: some View {
+        if state.signedIn {
+            RootTabs(state: state)
+        } else if state.bootingUp {
+            ZStack {
+                BobBackdrop()
+                BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
+                    ProgressView().controlSize(.small).padding(.top, 2)
+                }
+            }
+        } else {
+            OnboardingScreen(state: state, isDismissible: false) {
+                OnboardingController.completed = true
             }
         }
     }
