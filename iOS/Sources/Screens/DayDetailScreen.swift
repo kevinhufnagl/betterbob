@@ -8,6 +8,7 @@ struct DayDetailScreen: View {
     @ObservedObject var state: BobState
     let dateKey: String
     @Environment(\.dismiss) private var dismiss
+    @State private var editingEntry: EntryEdit?
 
     private var day: DayEntries? { state.monthDays.first { $0.dateKey == dateKey } }
     private var dayEnd: Date {
@@ -46,6 +47,19 @@ struct DayDetailScreen: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                }
+            }
+            .sheet(item: $editingEntry) { edit in
+                if let day {
+                    EntryEditSheet(entry: edit.entry,
+                                   onSave: { start, end in
+                                       state.updateEntryTimes(edit.entry, in: day.entries,
+                                                              on: day.date, start: start, end: end)
+                                   },
+                                   onDelete: {
+                                       state.deleteEntry(edit.entry, in: day.entries, on: day.date)
+                                   })
+                        .presentationDetents([.medium])
                 }
             }
         }
@@ -138,12 +152,7 @@ struct DayDetailScreen: View {
                 }
             }
         }
-        .contextMenu {
-            Button(role: .destructive) {
-                state.deleteEntry(entry, in: day.entries, on: day.date)
-            } label: {
-                Label("Delete entry", systemImage: "trash")
-            }
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { editingEntry = EntryEdit(entry: entry) }
     }
 }

@@ -6,6 +6,7 @@ import SwiftUI
 /// entries as native rows. All state flows through the shared engine.
 struct TodayScreen: View {
     @ObservedObject var state: BobState
+    @State private var editingEntry: EntryEdit?
 
     var body: some View {
         ScrollView {
@@ -42,6 +43,14 @@ struct TodayScreen: View {
         }
         .bobScreen(title: "Today")
         .refreshable { await state.reconcile() }
+        .sheet(item: $editingEntry) { edit in
+            EntryEditSheet(entry: edit.entry,
+                           onSave: { start, end in
+                               state.updateEntryTimes(edit.entry, start: start, end: end)
+                           },
+                           onDelete: { state.deleteEntry(edit.entry) })
+                .presentationDetents([.medium])
+        }
     }
 
     // MARK: Hero — the wave, untouched
@@ -56,9 +65,9 @@ struct TodayScreen: View {
             .overlay(alignment: .topLeading) {
                 if v.fraction >= 0.15 {
                     BuoyBob(sleeping: state.clockState == .clockedOut,
-                            onBreak: v.onBreak, size: 52)
+                            onBreak: v.onBreak, size: 72)
                         .padding(.leading, 18)
-                        .offset(y: 8)
+                        .offset(y: 10)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -173,13 +182,8 @@ struct TodayScreen: View {
                 reasonMenu(entry)
             }
         }
-        .contextMenu {
-            Button(role: .destructive) {
-                state.deleteEntry(entry)
-            } label: {
-                Label("Delete entry", systemImage: "trash")
-            }
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { editingEntry = EntryEdit(entry: entry) }
     }
 
     @ViewBuilder private func reasonMenu(_ entry: AttendanceEntry) -> some View {
