@@ -484,7 +484,8 @@ public struct TimeOffCalendar: View {
         let req = requestFor(date)
         let selected = inDrag(index)
         let reserved = req != nil && !selected
-        let reqColor: Color = req.map { $0.status.lowercased().contains("approv") ? .green : .bobOrange } ?? .clear
+        // Approved days wear the brand accent; only pending stays orange.
+        let reqColor: Color = req.map { $0.status.lowercased().contains("approv") ? .workAccent(scheme) : .bobOrange } ?? .clear
         let dayColor: Color = reserved ? reqColor : .primary
 
         return VStack(alignment: .leading, spacing: 2) {
