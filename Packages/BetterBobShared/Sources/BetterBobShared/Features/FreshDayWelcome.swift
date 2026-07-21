@@ -37,8 +37,22 @@ public struct WaterBand: View {
             let field = HWaveField(fill: fill, amplitude: Motion.reduce ? 0 : amplitude,
                                    phase: t * 0.6)
             let shape = HWaterShape(field: field)
+            // The waterline sits at this fraction from the top.
+            let line = 1 - min(1, fill)
             ZStack(alignment: .top) {
                 shape.fill(waterGradient)
+                // The signature glow: a vertical gradient over the water body
+                // that ramps to a bright band right at the waterline and
+                // fades down into the water — the hero's look, transposed.
+                shape.fill(LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: glowColor.opacity(0), location: max(0, line - 0.05)),
+                        .init(color: glowColor.opacity(0.14), location: max(0.001, line - 0.014)),
+                        .init(color: glowColor.opacity(0.50), location: max(0.002, line)),
+                        .init(color: glowColor.opacity(0), location: min(1, line + 0.18)),
+                    ]),
+                    startPoint: .top, endPoint: .bottom))
+                // Crisp rim highlight along the waterline itself.
                 HWaterEdgeShape(field: field)
                     .stroke(glowColor.opacity(0.9),
                             style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
@@ -126,8 +140,13 @@ public struct FreshDayWelcome: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            WaterBand(fill: 0.5)
-                .frame(height: compact ? 90 : 150)
+            // Full-bleed water pinned to the very bottom — edge to edge, and
+            // (on iOS) under the tab bar. The band is tall enough that even a
+            // wave crest never clears the content above it.
+            WaterBand(fill: 0.55)
+                .frame(height: compact ? 120 : 240)
+                .frame(maxWidth: .infinity, alignment: .bottom)
+                .ignoresSafeArea()
             VStack(spacing: 0) {
                 Spacer(minLength: compact ? 12 : 24)
                 AnimatedBob().frame(width: compact ? 92 : 150, height: compact ? 92 : 150)
@@ -147,9 +166,10 @@ public struct FreshDayWelcome: View {
                     .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
                 Spacer(minLength: compact ? 20 : 30)
                 ActionDock(state: state, now: Date())
-                Spacer(minLength: compact ? 24 : 48)
+                Spacer(minLength: compact ? 28 : 56)
             }
             .padding(.horizontal, 16)
+            .frame(maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -87,7 +87,24 @@ struct MainWindow: View {
         .tag(t)
     }
 
+    /// A fresh, clocked-out day on the Today tab — the welcome fills the whole
+    /// pane (edge to edge, water at the very bottom), so it skips the padded
+    /// ScrollView the other panes use.
+    private var showFreshWelcome: Bool {
+        tab == .today && state.signedIn && state.ready
+            && state.entries.isEmpty && state.clockState == .clockedOut
+    }
+
     @ViewBuilder private var detail: some View {
+        if showFreshWelcome {
+            FreshDayWelcome(state: state)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            scrollingDetail
+        }
+    }
+
+    @ViewBuilder private var scrollingDetail: some View {
         ScrollView {
             // Pane swaps are instant — the only staged entrance is the
             // heroes' one-time water sweep, which the panes own themselves.

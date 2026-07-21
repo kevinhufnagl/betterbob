@@ -15,44 +15,45 @@ struct TodayScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                // Signed-out and booting states never reach this screen —
-                // RootView swaps the whole page for them.
-                let vals = TodayVals(state, now: ctx.date)
-                if isFreshDay {
-                    FreshDayWelcome(state: state)
-                        // Fill the viewport so the greeting centers on the
-                        // whole page instead of floating above dead space.
-                        .containerRelativeFrame(.vertical)
-                } else {
-                    VStack(spacing: 16) {
-                        // The dock straddles the hero's bottom edge, like the
-                        // Mac popover — the padding reserves its lower half.
-                        hero(vals, now: ctx.date)
-                            .padding(.bottom, 25)
-                            .overlay(alignment: .bottom) {
-                                ActionDock(state: state, now: ctx.date)
+        Group {
+            // Signed-out and booting states never reach this screen — RootView
+            // swaps the whole page for them.
+            if isFreshDay {
+                // Full-bleed: its own water reaches the screen edges and runs
+                // under the tab bar, so it can't sit in the padded ScrollView.
+                FreshDayWelcome(state: state)
+            } else {
+                ScrollView {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        let vals = TodayVals(state, now: ctx.date)
+                        VStack(spacing: 16) {
+                            // The dock straddles the hero's bottom edge, like
+                            // the Mac popover — padding reserves its lower half.
+                            hero(vals, now: ctx.date)
+                                .padding(.bottom, 25)
+                                .overlay(alignment: .bottom) {
+                                    ActionDock(state: state, now: ctx.date)
+                                }
+                            if let queued = state.queue.first {
+                                Text("\(state.queue.count) queued · fires \(Fmt.clock(queued.fireAt))")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
                             }
-                        if let queued = state.queue.first {
-                            Text("\(state.queue.count) queued · fires \(Fmt.clock(queued.fireAt))")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                            if !state.entries.isEmpty {
+                                timelineCard(now: ctx.date)
+                            }
+                            warnings
+                            entriesSection
                         }
-                        if !state.entries.isEmpty {
-                            timelineCard(now: ctx.date)
-                        }
-                        warnings
-                        entriesSection
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 28)
                 }
+                .refreshable { await state.reconcile() }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-            .padding(.bottom, 28)
         }
         .bobScreen(title: "Today")
-        .refreshable { await state.reconcile() }
         .sheet(item: $editingEntry) { edit in
             EntryEditSheet(entry: edit.entry,
                            reasonOptions: state.reasonOptions,
