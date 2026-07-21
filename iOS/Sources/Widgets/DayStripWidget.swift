@@ -48,15 +48,15 @@ struct DayStripWidgetView: View {
             let lastEnd = segments.compactMap(\.end).max() ?? snap.updatedAt
             let recordedEnd = open ? max(snap.updatedAt, lastEnd) : lastEnd
 
-            let dayOver = snap.state == .clockedOut || snap.state == .signedOut
             // Project from the snapshot's own timestamp, NOT the render time:
             // widgets re-render hours after the last data push, and measuring
             // "worked so far" at render time would assume non-stop work since
-            // then — collapsing the remaining track to nothing.
+            // then — collapsing the remaining track to nothing. The track
+            // always spans the expected day — clocking out early leaves the
+            // shortfall visibly unfilled.
             let asOf = snap.updatedAt
             let remaining = max(0, snap.target - snap.workedTotal(now: asOf))
-            let projectedEnd = dayOver ? recordedEnd
-                                       : max(recordedEnd, asOf.addingTimeInterval(remaining))
+            let projectedEnd = max(recordedEnd, asOf.addingTimeInterval(remaining))
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
             let r: CGFloat = 4
 
@@ -70,7 +70,7 @@ struct DayStripWidgetView: View {
                 let end = seg.end ?? recordedEnd
                 let w = max(2, end.timeIntervalSince(seg.start) / span * size.width - 1)
                 // Round only edges that coincide with the track's ends.
-                let atTrackEnd = dayOver && i == segments.count - 1
+                let atTrackEnd = remaining <= 0 && i == segments.count - 1
                 let rect = CGRect(x: x, y: 0, width: w, height: size.height)
                 let path = Path(roundedRect: rect,
                                 cornerRadii: RectangleCornerRadii(
@@ -83,30 +83,27 @@ struct DayStripWidgetView: View {
         }
     }
 
-    @ViewBuilder private func bottomLine(_ snap: WidgetSnapshot) -> some View {
-        switch snap.state {
-        case .working:
-            if let start = snap.stretchStart {
-                HStack(spacing: 4) {
-                    Text("Working")
-                    Text(timerInterval: start...Date.distantFuture, countsDown: false)
-                        .monospacedDigit()
-                }
+    /// Worked total (live-ticking while working) and percent of target.
+    private func bottomLine(_ snap: WidgetSnapshot) -> some View {
+        let asOf = snap.updatedAt
+        let pct = Int((snap.workedTotal(now: asOf) / max(snap.target, 1) * 100).rounded())
+        return HStack(spacing: 4) {
+            if snap.state == .working, let start = snap.stretchStart {
+                // Anchor shifted back by the banked time so the ticking
+                // value reads the whole day's total.
+                Text(timerInterval: start.addingTimeInterval(-snap.workedBase)...Date.distantFuture,
+                     countsDown: false)
+                    .monospacedDigit()
             } else {
-                Text("Working")
+                Text(hm(snap.workedTotal(now: asOf)))
+                    .monospacedDigit()
             }
-        case .onBreak:
-            if let ends = snap.breakEnds, ends > entry.date {
-                HStack(spacing: 4) {
-                    Text("Break")
-                    Text(timerInterval: entry.date...ends, countsDown: true)
-                        .monospacedDigit()
-                }
-            } else {
-                Text("On a break")
-            }
-        case .clockedOut, .signedOut:
-            Text("Clocked out · \(Duration.seconds(snap.workedBase).formatted(.time(pattern: .hourMinute)))")
+            Text("worked · \(pct)%")
         }
+    }
+
+    private func hm(_ interval: TimeInterval) -> String {
+        let m = Int(interval / 60)
+        return String(format: "%d:%02d", m / 60, m % 60)
     }
 }
