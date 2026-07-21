@@ -54,44 +54,46 @@ struct DayStripWidgetView: View {
             // entry — anchoring it at the push time would insert a phantom
             // empty gap when the snapshot lands long after a clock-out.
             let remaining = max(0, snap.target - snap.workedTotal(now: snap.updatedAt))
+                + (snap.pendingBreak ?? 0)
             let projectedEnd = recordedEnd.addingTimeInterval(remaining)
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
-            let r = size.height / 2
 
-            // The whole expected day as a faint capsule track.
-            ctx.fill(Path(roundedRect: CGRect(origin: .zero, size: size),
-                          cornerRadius: r),
-                     with: .color(.primary.opacity(0.18)))
+            // Capsule track; blocks butt squarely against each other inside
+            // it and inherit the rounding only at the track's outer ends.
+            let track = Path(roundedRect: CGRect(origin: .zero, size: size),
+                             cornerRadius: size.height / 2)
+            ctx.clip(to: track)
+            ctx.fill(track, with: .color(.primary.opacity(0.18)))
 
-            // Each block a capsule of its own — work solid, breaks dimmed.
             for seg in segments {
                 let x = seg.start.timeIntervalSince(dayStart) / span * size.width
                 let end = seg.end ?? recordedEnd
-                let w = max(size.height / 2, end.timeIntervalSince(seg.start) / span * size.width - 1.5)
-                let rect = CGRect(x: x, y: 0, width: w, height: size.height)
-                let path = Path(roundedRect: rect, cornerRadius: min(w, size.height) / 2)
-                ctx.fill(path, with: .color(.primary.opacity(seg.isBreak ? 0.35 : 0.9)))
+                let w = max(1, end.timeIntervalSince(seg.start) / span * size.width)
+                ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                         with: .color(.primary.opacity(seg.isBreak ? 0.35 : 0.9)))
             }
         }
     }
 
-    /// Worked total (live-ticking while working) and percent of target.
+    /// Worked total (live-ticking while working) and percent of target — one
+    /// concatenated Text so the greedy timer can never wrap the line.
     private func bottomLine(_ snap: WidgetSnapshot) -> some View {
         let asOf = snap.updatedAt
         let pct = Int((snap.workedTotal(now: asOf) / max(snap.target, 1) * 100).rounded())
-        return HStack(spacing: 4) {
+        return Group {
             if snap.state == .working, let start = snap.stretchStart {
                 // Anchor shifted back by the banked time so the ticking
                 // value reads the whole day's total.
-                Text(timerInterval: start.addingTimeInterval(-snap.workedBase)...Date.distantFuture,
-                     countsDown: false)
+                (Text(timerInterval: start.addingTimeInterval(-snap.workedBase)...Date.distantFuture,
+                      countsDown: false)
+                    + Text(" · \(pct)%"))
                     .monospacedDigit()
             } else {
-                Text(hm(snap.workedTotal(now: asOf)))
+                Text("\(hm(snap.workedTotal(now: asOf))) · \(pct)%")
                     .monospacedDigit()
             }
-            Text("worked · \(pct)%")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func hm(_ interval: TimeInterval) -> String {
