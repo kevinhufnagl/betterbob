@@ -847,6 +847,45 @@ expect(Fmt.parseClock("abc") == nil, "letters → nil")
 expect(Fmt.parseClock("") == nil, "empty → nil")
 expect(Fmt.parseClock("12345") == nil, "too many digits → nil")
 
+// MARK: - WidgetSnapshot
+
+print("AttendanceLogic.widgetSnapshot")
+
+let snapWorking = AttendanceLogic.widgetSnapshot(
+    entries: [work(9, nil)], signedIn: true, target: sixH, breakEnds: nil, now: t(11))
+expect(snapWorking.state == .working, "working: state")
+expect(snapWorking.stretchStart == t(9), "working: timer anchors at stretch start")
+expect(abs(snapWorking.workedBase) < 1, "working: base excludes the open stretch")
+expect(abs(snapWorking.workedTotal(now: t(11)) - 2 * 3600) < 1, "working: total = base + elapsed")
+
+let snapBreak = AttendanceLogic.widgetSnapshot(
+    entries: [work(9, 12), brk(12, nil)], signedIn: true, target: sixH,
+    breakEnds: t(12.5), now: t(12.25))
+expect(snapBreak.state == .onBreak, "break: state")
+expect(snapBreak.stretchStart == nil, "break: no ticking timer")
+expect(abs(snapBreak.workedBase - 3 * 3600) < 1, "break: base is worked-so-far")
+expect(snapBreak.breakEnds == t(12.5), "break: carries the auto-break end")
+
+let snapOut = AttendanceLogic.widgetSnapshot(
+    entries: [work(9, 12)], signedIn: true, target: sixH, breakEnds: nil, now: t(14))
+expect(snapOut.state == .clockedOut, "out: state")
+expect(abs(snapOut.workedTotal(now: t(14)) - 3 * 3600) < 1, "out: total frozen")
+
+let snapSignedOut = AttendanceLogic.widgetSnapshot(
+    entries: [], signedIn: false, target: sixH, breakEnds: nil, now: t(10))
+expect(snapSignedOut.state == .signedOut, "signed out: state")
+
+print("AttendanceLogic.nextBackgroundRefresh")
+
+expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: nil) == t(10).addingTimeInterval(15 * 60),
+       "no break due: default cadence")
+expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: t(10.1)) == t(10.1),
+       "break due inside the window: wake exactly then")
+expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: t(10).addingTimeInterval(10)) == t(10).addingTimeInterval(60),
+       "break due immediately: never sooner than a minute out")
+expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: t(12)) == t(10).addingTimeInterval(15 * 60),
+       "break due far out: default cadence wins")
+
 // MARK: - Summary
 
 print("")

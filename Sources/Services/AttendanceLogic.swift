@@ -452,4 +452,41 @@ enum AttendanceLogic {
             return autoStart.addingTimeInterval(breakLength)
         }
     }
+
+    // MARK: - iOS widget / background support
+
+    /// Snapshot of the current attendance state for the widgets and Live
+    /// Activity. `breakEnds` is engine state (BobState.autoBreakEnds), not
+    /// derivable from entries, so it's passed through.
+    static func widgetSnapshot(entries: [AttendanceEntry], signedIn: Bool,
+                               target: TimeInterval, breakEnds: Date?,
+                               now: Date) -> WidgetSnapshot {
+        guard signedIn else {
+            return WidgetSnapshot(state: .signedOut, stretchStart: nil, workedBase: 0,
+                                  target: target, breakEnds: nil, updatedAt: now)
+        }
+        let worked = workedToday(entries: entries, now: now)
+        switch state(entries: entries, now: now) {
+        case .working(let since):
+            return WidgetSnapshot(state: .working, stretchStart: since,
+                                  workedBase: worked - now.timeIntervalSince(since),
+                                  target: target, breakEnds: nil, updatedAt: now)
+        case .onBreak:
+            return WidgetSnapshot(state: .onBreak, stretchStart: nil, workedBase: worked,
+                                  target: target, breakEnds: breakEnds, updatedAt: now)
+        case .clockedOut:
+            return WidgetSnapshot(state: .clockedOut, stretchStart: nil, workedBase: worked,
+                                  target: target, breakEnds: nil, updatedAt: now)
+        }
+    }
+
+    /// When the next background refresh should run: at the auto-break
+    /// boundary when that's sooner than the regular cadence, but never
+    /// sooner than a minute from now.
+    static func nextBackgroundRefresh(now: Date, breakDue: Date?,
+                                      cadence: TimeInterval = 15 * 60) -> Date {
+        let regular = now.addingTimeInterval(cadence)
+        guard let due = breakDue, due < regular else { return regular }
+        return max(due, now.addingTimeInterval(60))
+    }
 }
