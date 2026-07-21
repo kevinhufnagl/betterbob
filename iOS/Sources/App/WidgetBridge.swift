@@ -49,18 +49,8 @@ final class WidgetBridge {
                 : Int(summary.days.reduce(0) { $0 + ($1.target ?? 0) * 60 })
             snap.cycleBalanceMinutes = summary.overUnderMinutes
 
-            // Mon…Fri of the current week as worked/target fractions.
-            let cal = Calendar(identifier: .iso8601)
-            if let week = cal.dateInterval(of: .weekOfYear, for: Date()) {
-                var fractions = [Double](repeating: 0, count: 5)
-                for day in summary.days {
-                    guard let date = DayFmt.date(day.date), week.contains(date) else { continue }
-                    let weekday = (cal.component(.weekday, from: date) + 5) % 7   // Mon = 0
-                    guard weekday < 5 else { continue }
-                    fractions[weekday] = min(1, day.worked / max(day.target ?? 8, 0.1))
-                }
-                snap.weekFractions = fractions
-            }
+            snap.weekFractions = AttendanceLogic.weekFractions(days: summary.days,
+                                                               today: Date())
         }
 
         // The vacation-style balance, same pick as the Time Off pool.

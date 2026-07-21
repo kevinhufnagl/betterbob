@@ -489,6 +489,24 @@ public enum AttendanceLogic {
         }
     }
 
+    /// Mon…Fri of `today`'s ISO week as worked/target fractions for the
+    /// widgets' week bars. Values over 1 mean the day beat its target — the
+    /// renderer decides how to badge that. Duplicate rows for a day merge by
+    /// max, so a stray empty row from HiBob can't erase a worked day.
+    public static func weekFractions(days: [DayHours], today: Date) -> [Double] {
+        let cal = Calendar(identifier: .iso8601)
+        var fractions = [Double](repeating: 0, count: 5)
+        guard let week = cal.dateInterval(of: .weekOfYear, for: today) else { return fractions }
+        for day in days {
+            guard let date = DayFmt.date(day.date), week.contains(date) else { continue }
+            let weekday = (cal.component(.weekday, from: date) + 5) % 7   // Mon = 0
+            guard weekday < 5 else { continue }
+            fractions[weekday] = max(fractions[weekday],
+                                     day.worked / max(day.target ?? 8, 0.1))
+        }
+        return fractions
+    }
+
     /// When the next background refresh should run: at the auto-break
     /// boundary when that's sooner than the regular cadence, but never
     /// sooner than a minute from now.

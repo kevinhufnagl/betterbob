@@ -881,6 +881,24 @@ let snapSignedOut = AttendanceLogic.widgetSnapshot(
     entries: [], signedIn: false, target: sixH, breakEnds: nil, now: t(10))
 expect(snapSignedOut.state == .signedOut, "signed out: state")
 
+print("AttendanceLogic.weekFractions")
+
+// The test anchor (2026-07-16) is a Thursday; its ISO week runs Mon 13th – Sun 19th.
+let weekDays = [
+    DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),   // Monday, full
+    DayHours(date: "2026-07-13", worked: 0, target: 8, overtime: nil),   // duplicate row, empty
+    DayHours(date: "2026-07-14", worked: 10, target: 8, overtime: nil),  // Tuesday, over target
+    DayHours(date: "2026-07-16", worked: 4, target: 8, overtime: nil),   // Thursday, half
+    DayHours(date: "2026-07-12", worked: 8, target: 8, overtime: nil),   // Sunday before — other week
+    DayHours(date: "2026-07-18", worked: 3, target: 8, overtime: nil),   // Saturday — not a bar
+]
+let fractions = AttendanceLogic.weekFractions(days: weekDays, today: t(10))
+expect(fractions.count == 5, "week: five bars Mon-Fri")
+expect(abs(fractions[0] - 1) < 0.01, "week: Monday full — duplicate empty row can't erase it")
+expect(abs(fractions[1] - 1.25) < 0.01, "week: over-target day keeps its overshoot")
+expect(abs(fractions[3] - 0.5) < 0.01, "week: Thursday half")
+expect(fractions[2] == 0 && fractions[4] == 0, "week: unworked days empty")
+
 print("AttendanceLogic.nextBackgroundRefresh")
 
 expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: nil) == t(10).addingTimeInterval(15 * 60),

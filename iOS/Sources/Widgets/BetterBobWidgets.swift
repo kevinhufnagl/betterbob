@@ -10,7 +10,6 @@ struct BetterBobWidgets: WidgetBundle {
         DayStripWidget()
         MonthProgressWidget()
         CycleBalanceWidget()
-        WeekStripWidget()
         DoneByWidget()
         HolidayPoolWidget()
         NextTimeOffWidget()

@@ -28,7 +28,9 @@ struct WaveFill: View {
 }
 
 /// Five capsule bars, one per workday Mon–Fri, filled against the day's
-/// target; today is drawn solid, the rest dimmed.
+/// target; today is drawn solid, the rest dimmed. The fill is clipped to the
+/// track so a low fill inherits the rounded bottom, and a day past its
+/// target earns a dot above its bar.
 struct WeekBars: View {
     var fractions: [Double]
     var date: Date
@@ -37,11 +39,22 @@ struct WeekBars: View {
         let todayIndex = (Calendar(identifier: .iso8601).component(.weekday, from: date) + 5) % 7
         HStack(spacing: 3) {
             ForEach(0..<5, id: \.self) { i in
-                GeometryReader { geo in
-                    ZStack(alignment: .bottom) {
-                        Capsule().fill(.primary.opacity(0.18))
-                        Capsule().fill(.primary.opacity(i == todayIndex ? 0.9 : 0.55))
-                            .frame(height: max(3, geo.size.height * (i < fractions.count ? fractions[i] : 0)))
+                let f = i < fractions.count ? fractions[i] : 0
+                let tone = 0.9 * (i == todayIndex ? 1 : 0.6)
+                VStack(spacing: 1.5) {
+                    Circle()
+                        .fill(.primary.opacity(tone))
+                        .frame(width: 3, height: 3)
+                        .opacity(f > 1 ? 1 : 0)
+                    GeometryReader { geo in
+                        ZStack(alignment: .bottom) {
+                            Capsule().fill(.primary.opacity(0.18))
+                            if f > 0.01 {
+                                Capsule().fill(.primary.opacity(tone))
+                                    .frame(height: max(geo.size.height * min(1, f), 4))
+                            }
+                        }
+                        .clipShape(Capsule())
                     }
                 }
             }
@@ -149,45 +162,6 @@ struct CycleBalanceView: View {
             }
         } else {
             Label("Open BetterBob", systemImage: "scalemass")
-                .font(.caption)
-        }
-    }
-}
-
-// MARK: - Week strip
-
-struct WeekStripWidget: Widget {
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "WeekStrip", provider: SnapshotProvider()) { entry in
-            WeekStripView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
-        }
-        .configurationDisplayName("Week")
-        .description("Monday to Friday against each day's target.")
-        .supportedFamilies([.accessoryRectangular])
-    }
-}
-
-struct WeekStripView: View {
-    let entry: SnapshotEntry
-
-    private let labels = ["M", "T", "W", "T", "F"]
-
-    var body: some View {
-        if let fractions = entry.snapshot?.weekFractions {
-            VStack(spacing: 2) {
-                WeekBars(fractions: fractions, date: entry.date)
-                HStack(spacing: 3) {
-                    ForEach(0..<5, id: \.self) { i in
-                        Text(labels[i])
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-            }
-        } else {
-            Label("Open BetterBob", systemImage: "calendar")
                 .font(.caption)
         }
     }
