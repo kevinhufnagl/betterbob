@@ -28,6 +28,7 @@ targets:
           - "UI/Components.swift"
           - "UI/PillControls.swift"
           - "UI/BobMascot.swift"
+          - "Features/Settings/SSOSignIn.swift"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios

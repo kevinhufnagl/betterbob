@@ -1,5 +1,8 @@
+#if os(macOS)
 import AppKit
+#endif
 import WebKit
+import SwiftUI
 
 /// Embedded-browser sign-in for SSO tenants (Okta & co.). The user signs in as
 /// they would in Safari; after every page load the app copies the `hibob.com`
@@ -39,7 +42,7 @@ enum SignInFactor: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegate {
+final class SSOSignInController: NSObject, ObservableObject, WKNavigationDelegate {
     static let shared = SSOSignInController()
 
     /// How the sign-in window drives itself.
@@ -53,7 +56,12 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
     /// The factor the assisted flow drives to (set by `presentAssisted`).
     private var factor: SignInFactor = .googleAuthenticator
 
+    #if os(macOS)
     private var window: NSWindow?
+    #else
+    /// Published while a sign-in runs — the iOS app root presents it in a sheet.
+    @Published private(set) var sheetWebView: WKWebView?
+    #endif
     private var webView: WKWebView?
     /// The one-time code the user typed into the inline field (assisted mode).
     /// Injected into the OTP field; never sourced from the Keychain.
@@ -75,18 +83,21 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
         self.drive = .manual
         makeSession(visible: true)
         load()
+        #if os(macOS)
         NSApp.setActivationPolicy(.regular)
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        #endif
         startAutofill()
     }
 
-    /// Assisted sign-in: the browser runs hidden (transparent, off-list) and
-    /// auto-fills + advances email and password, exactly like the old headless
-    /// flow — but at the authenticator step it stops and waits. The one-time
-    /// code comes only from the inline field the app shows (driven by
-    /// `BobState.awaitingOTP`); it is injected into the hidden page. Generous
+    /// Assisted sign-in: the browser auto-fills + advances email and password
+    /// on its own, then stops at the authenticator step and waits. On macOS it
+    /// runs hidden (transparent, off-list) with the one-time code coming from
+    /// the inline field the app shows (driven by `BobState.awaitingOTP`); on
+    /// iOS there is no hidden-window trick, so the same drive runs in a
+    /// visible sheet and the user finishes the OTP right in the page. Generous
     /// deadline since a human is in the loop.
     func presentAssisted(factor: SignInFactor, onFinish: @escaping (Bool) -> Void) {
         teardown()
@@ -123,6 +134,15 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
     private func makeSession(visible: Bool) {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        #if os(iOS)
+        // One hosting strategy for both modes on iOS: a visible sheet. The
+        // autofill timer still drives assisted mode inside it.
+        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 720),
+                            configuration: config)
+        web.navigationDelegate = self
+        webView = web
+        sheetWebView = web
+        #else
         let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 680), configuration: config)
         web.navigationDelegate = self
         let win = NSWindow(contentRect: web.frame,
@@ -144,6 +164,7 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
         }
         window = win
         webView = web
+        #endif
     }
 
     private func load() {
@@ -153,9 +174,13 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
     /// Close the window/timer only — no callbacks.
     private func closeWindow() {
         stopAutofill()
+        #if os(macOS)
         window?.orderOut(nil)
         window?.close()
         window = nil
+        #else
+        sheetWebView = nil
+        #endif
         webView = nil
         enteredCode = nil
         codeStepSince = nil
@@ -406,11 +431,6 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
         }
     }
 
-    func windowWillClose(_ notification: Notification) {
-        // A visible manual window the user closed.
-        if drive == .manual { stopAutofill() }
-    }
-
     // MARK: - Inline one-time-code entry (assisted mode)
 
     /// Inject the code the user typed into the inline field. Clears the OTP
@@ -436,3 +456,12 @@ final class SSOSignInController: NSObject, WKNavigationDelegate, NSWindowDelegat
     /// Cancel an in-progress sign-in (inline Cancel button).
     func cancel() { finish(false) }
 }
+
+#if os(macOS)
+extension SSOSignInController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        // A visible manual window the user closed.
+        if drive == .manual { stopAutofill() }
+    }
+}
+#endif
