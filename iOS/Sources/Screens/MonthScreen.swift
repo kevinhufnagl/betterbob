@@ -65,8 +65,7 @@ struct MonthScreen: View {
             StatTile(value: Fmt.hm(monthWorkedSecs),
                      caption: "Worked this cycle")
             StatTile(value: (balance >= 0 ? "+" : "−") + Fmt.hm(TimeInterval(abs(balance) * 60)),
-                     caption: "Balance",
-                     tint: balance >= 0 ? .primary : .bobOrange)
+                     caption: "Balance")
             if potential > 0 {
                 StatTile(value: Fmt.hm(TimeInterval(potential * 60)),
                          caption: "Cycle target")
