@@ -172,29 +172,6 @@ final class Prefs: ObservableObject {
         didSet { UserDefaults.standard.set(popoverShowTimeline, forKey: "popoverShowTimeline") }
     }
 
-    /// Serve the live stats page to phones on the local network.
-    @Published var phoneViewEnabled: Bool {
-        didSet { UserDefaults.standard.set(phoneViewEnabled, forKey: "phoneViewEnabled") }
-    }
-
-    /// Whether the phone page may clock in/out and start/end breaks.
-    @Published var phoneViewActionsEnabled: Bool {
-        didSet { UserDefaults.standard.set(phoneViewActionsEnabled, forKey: "phoneViewActionsEnabled") }
-    }
-
-    /// Secret path segment of the phone-view URL; regenerating it cuts off
-    /// anyone holding an old link.
-    @Published var phoneViewToken: String {
-        didSet { UserDefaults.standard.set(phoneViewToken, forKey: "phoneViewToken") }
-    }
-
-    /// 8 chars, no lookalike characters — it rides in a QR code, but stays
-    /// readable if someone ever has to type it.
-    static func newPhoneViewToken() -> String {
-        let chars = Array("abcdefghjkmnpqrstuvwxyz23456789")
-        return String((0..<8).map { _ in chars.randomElement()! })
-    }
-
     /// Tint the menu-bar icon by clock state (green working / orange break).
     @Published var colorMenuBarIcon: Bool {
         didSet {
@@ -265,15 +242,6 @@ final class Prefs: ObservableObject {
         self.menuBarTextOut = d.string(forKey: "menuBarTextOut")
             .flatMap(MenuBarTextOut.init) ?? seed.2
         self.showStateBadge = d.object(forKey: "showStateBadge") as? Bool ?? true
-        self.phoneViewEnabled = d.object(forKey: "phoneViewEnabled") as? Bool ?? false
-        self.phoneViewActionsEnabled = d.object(forKey: "phoneViewActionsEnabled") as? Bool ?? true
-        if let token = d.string(forKey: "phoneViewToken") {
-            self.phoneViewToken = token
-        } else {
-            let token = Self.newPhoneViewToken()
-            self.phoneViewToken = token
-            d.set(token, forKey: "phoneViewToken")
-        }
         self.colorMenuBarIcon = d.object(forKey: "colorMenuBarIcon") as? Bool ?? false
         self.popoverWidth = d.string(forKey: "popoverWidth")
             .flatMap(PopoverWidth.init) ?? .regular

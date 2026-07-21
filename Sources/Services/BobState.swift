@@ -267,8 +267,10 @@ final class BobState: ObservableObject {
         // and never blanks while the server catches up.
         expectedAfterPunch = head.action
         applyOptimistic(head.action)
+        var punched = false
         do {
             try await client.punch(head.action, employeeID: id)
+            punched = true
             lastPunchAt = Date()
             if head.action == .endBreak { autoBreakStartedAt = nil }
             lastError = nil
@@ -287,6 +289,13 @@ final class BobState: ObservableObject {
             tries += 1
         }
         if expectedAfterPunch != nil { expectedAfterPunch = nil; await reconcile() }
+        // Clocking in after a closed break left a clocked-out hole (auto-break
+        // ended before the user actually came back): stretch the break to the
+        // clock-in so the day stays contiguous. Same opt-in as the other fixes.
+        if punched, head.action == .clockIn, Prefs.shared.autoFixGapsOverlaps,
+           let fixed = AttendanceLogic.extendingBreakToClockIn(entries: entries) {
+            saveDay(fixed, on: today)
+        }
         recomputeQueueTimes()
         scheduleQueue()   // next item, or clears `busy` when empty
     }

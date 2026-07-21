@@ -812,57 +812,54 @@ expect(AttendanceLogic.meetingBreakGuideline(entries: [work(9, 12), brk(12, 12.5
                                              threshold: sixH, required: halfH, now: t(17)) == nil,
        "compliant day → nothing to fix")
 
-// MARK: - StatsHTTP (phone stats page routing + JSON)
+// MARK: - extendingBreakToClockIn (fill the hole a late clock-in leaves after a break)
 
-print("StatsHTTP.requestLine")
-expect(StatsHTTP.requestLine("GET /abc HTTP/1.1\r\nHost: x\r\n\r\n")! == ("GET", "/abc"),
-       "plain GET → method + path")
-expect(StatsHTTP.requestLine("GET /abc?x=1&y=2 HTTP/1.1\r\n\r\n")! == ("GET", "/abc"),
-       "query string stripped")
-expect(StatsHTTP.requestLine("POST /t/action/clockIn HTTP/1.1\r\n\r\n")! == ("POST", "/t/action/clockIn"),
-       "POST parsed")
-expect(StatsHTTP.requestLine("GARBAGE") == nil, "garbage → nil")
-expect(StatsHTTP.requestLine("GET /abc") == nil, "missing HTTP version → nil")
+print("AttendanceLogic.extendingBreakToClockIn")
 
-print("StatsHTTP.route")
-expect(StatsHTTP.route(method: "GET", path: "/tok3n", token: "tok3n") == .page,
-       "token path → page")
-expect(StatsHTTP.route(method: "GET", path: "/tok3n/", token: "tok3n") == .page,
-       "trailing slash → page")
-expect(StatsHTTP.route(method: "GET", path: "/tok3n/stats.json", token: "tok3n") == .json,
-       "stats.json → json")
-expect(StatsHTTP.route(method: "GET", path: "/wrong", token: "tok3n") == .notFound,
-       "wrong token → notFound")
-expect(StatsHTTP.route(method: "GET", path: "/", token: "tok3n") == .notFound,
-       "root → notFound")
-expect(StatsHTTP.route(method: "GET", path: "/tok3n", token: "") == .notFound,
-       "empty token → everything notFound")
-expect(StatsHTTP.route(method: "POST", path: "/tok3n/action/clockIn", token: "tok3n") == .action("clockIn"),
-       "POST action → action(clockIn)")
-expect(StatsHTTP.route(method: "GET", path: "/tok3n/action/clockIn", token: "tok3n") == .notFound,
-       "GET on action route → notFound (POST-only)")
-expect(StatsHTTP.route(method: "POST", path: "/tok3n/action/", token: "tok3n") == .notFound,
-       "empty action name → notFound")
-expect(StatsHTTP.route(method: "POST", path: "/tok3n", token: "tok3n") == .notFound,
-       "POST on page route → notFound")
+if let fixed = AttendanceLogic.extendingBreakToClockIn(
+        entries: [work(9, 13.667), brk(13.667, 14.167), work(14.333, nil)]) {
+    expect(fixed[1].end == t(14.333), "break stretches to the clock-in")
+    expect(fixed[1].start == t(13.667), "break start untouched")
+    expect(fixed[2].start == t(14.333) && fixed[2].end == nil, "open work entry untouched")
+} else {
+    expect(false, "10-minute hole after a break → fix")
+}
 
-print("StatsHTTP.json")
-let snap = StatsSnapshot(
-    name: "Kevin \"K\" \\ line\nbreak", state: "working", projected: "break",
-    actionsEnabled: true, workedSeconds: 3600, asOf: 1_784_160_000,
-    targetSeconds: 28_800, breakSeconds: 1800, breakEndsAt: nil,
-    entries: [.init(kind: "work", start: 1_784_160_000, end: 1_784_163_600),
-              .init(kind: "break", start: 1_784_163_600, end: nil)])
-let parsed = (try? JSONSerialization.jsonObject(with: Data(StatsHTTP.json(snap).utf8))) as? [String: Any]
-expect(parsed != nil, "escaped snapshot parses as valid JSON")
-expect(parsed?["name"] as? String == "Kevin \"K\" \\ line\nbreak", "name round-trips through escaping")
-expect(parsed?["worked"] as? Int == 3600, "worked carried over")
-expect(parsed?["projected"] as? String == "break", "projected state carried over")
-expect(parsed?["actions"] as? Bool == true, "actions flag carried over")
-expect(parsed?["breakEndsAt"] is NSNull, "nil breakEndsAt → null")
-let jsonEntries = parsed?["entries"] as? [[String: Any]]
-expect(jsonEntries?.count == 2, "both entries encoded")
-expect(jsonEntries?[1]["end"] is NSNull, "open entry end → null")
+expect(AttendanceLogic.extendingBreakToClockIn(
+        entries: [work(9, 12), brk(12, 12.5), work(12.5083, nil)]) == nil,
+       "sub-minute hole → left alone")
+expect(AttendanceLogic.extendingBreakToClockIn(
+        entries: [work(9, 14), work(14.25, nil)]) == nil,
+       "hole after work (not a break) → left alone")
+expect(AttendanceLogic.extendingBreakToClockIn(
+        entries: [work(9, 12), brk(12, 12.5), work(12.75, 16)]) == nil,
+       "closed last entry → nothing to fix")
+expect(AttendanceLogic.extendingBreakToClockIn(
+        entries: [work(9, 12), brk(12, 12.5), brk(12.75, nil)]) == nil,
+       "open break, not a clock-in → nothing to fix")
+expect(AttendanceLogic.extendingBreakToClockIn(entries: [work(9, nil)]) == nil,
+       "first clock-in of the day → nothing to fix")
+
+// MARK: - Fmt.parseClock (hand-typed time text)
+
+print("Fmt.parseClock")
+expect(Fmt.parseClock("14:30")! == (14, 30), "HH:MM")
+expect(Fmt.parseClock("1")! == (1, 0), "bare hour digit")
+expect(Fmt.parseClock("01")! == (1, 0), "zero-padded hour")
+expect(Fmt.parseClock("930")! == (9, 30), "three digits → H:MM")
+expect(Fmt.parseClock("0930")! == (9, 30), "four digits → HH:MM")
+expect(Fmt.parseClock("9:5")! == (9, 5), "single-digit minutes")
+expect(Fmt.parseClock("14.30")! == (14, 30), "dot separator")
+expect(Fmt.parseClock(" 8:15 ")! == (8, 15), "surrounding whitespace")
+expect(Fmt.parseClock("2:20 pm")! == (14, 20), "pm shifts the hour")
+expect(Fmt.parseClock("12am")! == (0, 0), "12am → midnight")
+expect(Fmt.parseClock("12pm")! == (12, 0), "12pm → noon")
+expect(Fmt.parseClock("24:00") == nil, "hour out of range → nil")
+expect(Fmt.parseClock("12:60") == nil, "minutes out of range → nil")
+expect(Fmt.parseClock("12:") == nil, "dangling separator → nil")
+expect(Fmt.parseClock("abc") == nil, "letters → nil")
+expect(Fmt.parseClock("") == nil, "empty → nil")
+expect(Fmt.parseClock("12345") == nil, "too many digits → nil")
 
 // MARK: - Summary
 

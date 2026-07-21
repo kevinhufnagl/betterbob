@@ -259,6 +259,26 @@ enum AttendanceLogic {
         return out
     }
 
+    /// After a clock-in that follows a closed break with a clocked-out hole
+    /// between them (typically the auto-break's fixed end passed before the
+    /// user actually returned), stretch that break to meet the clock-in so
+    /// the day stays contiguous. Returns the fixed day, or nil when there is
+    /// nothing to fix. Gaps under a minute are left alone — not worth a
+    /// whole-day rewrite.
+    static func extendingBreakToClockIn(entries: [AttendanceEntry]) -> [AttendanceEntry]? {
+        let sorted = entries.sorted { $0.start < $1.start }
+        guard sorted.count >= 2,
+              let last = sorted.last, last.kind == .work, last.end == nil
+        else { return nil }
+        let prev = sorted[sorted.count - 2]
+        guard prev.kind == .breakTime, let prevEnd = prev.end,
+              last.start.timeIntervalSince(prevEnd) >= 60
+        else { return nil }
+        var fixed = sorted
+        fixed[fixed.count - 2].end = last.start
+        return fixed
+    }
+
     /// Make a day's entries strictly contiguous — no gaps, no overlaps.
     /// Entries are sorted by start, then each is snapped to the end of the one
     /// before it. `anchor` (the id of the entry the user just edited) is

@@ -1,0 +1,54 @@
+{
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.03000,0.08000,0.20000,1.00000",
+          "srgb:0.08000,0.22000,0.42000,1.00000"
+        ],
+        "orientation" : {
+          "start" : { "x" : 0, "y" : 0 },
+          "stop" : { "x" : 1, "y" : 1 }
+        }
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.02000,0.05000,0.13000,1.00000",
+          "srgb:0.05000,0.14000,0.27000,1.00000"
+        ],
+        "orientation" : {
+          "start" : { "x" : 0, "y" : 0 },
+          "stop" : { "x" : 1, "y" : 1 }
+        }
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "AppIcon-foreground.png",
+          "name" : "AppIcon-foreground",
+          "position" : {
+            "scale" : 0.86
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

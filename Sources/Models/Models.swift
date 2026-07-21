@@ -264,4 +264,41 @@ enum Fmt {
     static func clock(_ date: Date) -> String {
         date.formatted(.dateTime.hour().minute())
     }
+
+    /// Parse hand-typed clock text into (hour, minute) — tolerant of the ways
+    /// people actually type times: "9" → 9:00, "09" → 9:00, "930" / "0930" →
+    /// 9:30, "9:5" → 9:05, "14.30" → 14:30, and a trailing am/pm. nil when it
+    /// doesn't read as a time of day.
+    static func parseClock(_ s: String) -> (hour: Int, minute: Int)? {
+        var text = s.trimmingCharacters(in: .whitespaces).lowercased()
+        var pmShift = 0
+        if text.hasSuffix("pm") || text.hasSuffix("am") {
+            let isPM = text.hasSuffix("pm")
+            text = String(text.dropLast(2)).trimmingCharacters(in: .whitespaces)
+            pmShift = isPM ? 12 : -12   // applied only to 1–11 below
+        }
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+            .flatMap { $0.split(separator: ".", omittingEmptySubsequences: false) }
+        guard !parts.isEmpty, parts.count <= 2,
+              parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) })
+        else { return nil }
+        var h: Int, m: Int
+        if parts.count == 2 {
+            guard parts[0].count <= 2, parts[1].count <= 2,
+                  let hh = Int(parts[0]), let mm = Int(parts[1]) else { return nil }
+            h = hh; m = mm
+        } else {
+            let digits = parts[0]
+            switch digits.count {
+            case 1, 2: h = Int(digits)!; m = 0
+            case 3:    h = Int(digits.prefix(1))!; m = Int(digits.suffix(2))!
+            case 4:    h = Int(digits.prefix(2))!; m = Int(digits.suffix(2))!
+            default:   return nil
+            }
+        }
+        if pmShift == 12, (1...11).contains(h) { h += 12 }        // 2pm → 14
+        if pmShift == -12, h == 12 { h = 0 }                       // 12am → 0
+        guard (0...23).contains(h), (0...59).contains(m) else { return nil }
+        return (h, m)
+    }
 }

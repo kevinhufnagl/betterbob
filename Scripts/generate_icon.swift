@@ -10,9 +10,15 @@ import ImageIO
 import UniformTypeIdentifiers
 
 let args = CommandLine.arguments
-let outDir = args.count >= 2 ? args[1] : "AppIcon.iconset"
+// --foreground <path>: render just Bob on transparency at 1024px — the
+// layer image for the macOS 26 layered icon (Resources/AppIcon.icon), whose
+// background fill lives in icon.json instead.
+let foregroundMode = args.contains("--foreground")
+let outDir = args.count >= 2 && !foregroundMode ? args[1] : "AppIcon.iconset"
 
-try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+if !foregroundMode {
+    try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+}
 
 let macSizes: [(name: String, px: Int)] = [
     ("icon_16x16.png", 16),       ("icon_16x16@2x.png", 32),
@@ -22,7 +28,7 @@ let macSizes: [(name: String, px: Int)] = [
     ("icon_512x512.png", 512),    ("icon_512x512@2x.png", 1024),
 ]
 
-func render(size px: Int) -> Data? {
+func render(size px: Int, foregroundOnly: Bool = false) -> Data? {
     let s = CGFloat(px)
     let rep = NSBitmapImageRep(
         bitmapDataPlanes: nil,
@@ -70,27 +76,31 @@ func render(size px: Int) -> Data? {
         return p
     }
 
-    // ── Background: rounded square, deep rose → amber diagonal gradient.
+    // ── Background: rounded square, brand gradient. Skipped in foreground
+    //    mode — the layered icon's fill comes from icon.json.
     let radius = s * 0.225
-    ctx.saveGState()
-    ctx.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: s, height: s),
-                       cornerWidth: radius, cornerHeight: radius, transform: nil))
-    ctx.clip()
+    if !foregroundOnly {
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: s, height: s),
+                           cornerWidth: radius, cornerHeight: radius, transform: nil))
+        ctx.clip()
 
-    // Brand ramp — the liquid hero's deep blue → teal, diagonal.
-    let bgColors = [
-        c(0.04, 0.12, 0.26), c(0.06, 0.30, 0.36), c(0.12, 0.56, 0.58),
-    ] as CFArray
-    let bgGrad = CGGradient(colorsSpace: cs, colors: bgColors, locations: [0.0, 0.55, 1.0])!
-    ctx.drawLinearGradient(bgGrad, start: CGPoint(x: 0, y: s), end: CGPoint(x: s, y: 0), options: [])
+        // Brand ramp — deep navy → dark blue, diagonal. Kept dark so the
+        // face-and-cap foreground carries the color.
+        let bgColors = [
+            c(0.03, 0.08, 0.20), c(0.05, 0.14, 0.30), c(0.08, 0.22, 0.42),
+        ] as CFArray
+        let bgGrad = CGGradient(colorsSpace: cs, colors: bgColors, locations: [0.0, 0.55, 1.0])!
+        ctx.drawLinearGradient(bgGrad, start: CGPoint(x: 0, y: s), end: CGPoint(x: s, y: 0), options: [])
 
-    // Faint horizontal timeline stripes — the timesheet Bob keeps.
-    ctx.setStrokeColor(c(1, 1, 1, 0.05))
-    ctx.setLineWidth(max(0.5, s * 0.0015))
-    var gy: CGFloat = 0
-    while gy <= s { ctx.move(to: .init(x: 0, y: gy)); ctx.addLine(to: .init(x: s, y: gy)); gy += s * 0.10 }
-    ctx.strokePath()
-    ctx.restoreGState()
+        // Faint horizontal timeline stripes — the timesheet Bob keeps.
+        ctx.setStrokeColor(c(1, 1, 1, 0.05))
+        ctx.setLineWidth(max(0.5, s * 0.0015))
+        var gy: CGFloat = 0
+        while gy <= s { ctx.move(to: .init(x: 0, y: gy)); ctx.addLine(to: .init(x: s, y: gy)); gy += s * 0.10 }
+        ctx.strokePath()
+        ctx.restoreGState()
+    }
 
     // Palette (matches BobPalette in the app).
     let furLight = c(0.64, 0.44, 0.28), fur = c(0.55, 0.36, 0.22), furDark = c(0.42, 0.27, 0.16)
@@ -98,19 +108,13 @@ func render(size px: Int) -> Data? {
     let nose = c(0.28, 0.18, 0.13), pupil = c(0.16, 0.10, 0.07)
     let blush = c(0.93, 0.55, 0.48), outline = c(0.20, 0.12, 0.07)
 
-    // ── Little arms (behind the body).
-    for ux in [0.24, 0.76] { fillEllipse(ell(ux, 0.31, 0.13, 0.18), fur) }
-
-    // ── Body (rounded) with a lighter belly, behind the head.
-    let bodyRect = ell(0.5, 0.27, 0.48, 0.44)
+    // ── Just the face and cap, zoomed to fill the canvas (no body — bigger
+    //    reads better at icon sizes). The face spans y 0.37–1.0, so zoom
+    //    around its centre (0.5, 0.685).
     ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -s * 0.012), blur: s * 0.04, color: c(0, 0, 0, 0.22))
-    fillRoundRect(bodyRect, s * 0.20, fur)
-    ctx.restoreGState()
-    fillEllipse(ell(0.5, 0.23, 0.28, 0.30), muzzle.copy(alpha: 0.8)!)
-
-    // ── Feet.
-    for ux in [0.40, 0.60] { fillEllipse(ell(ux, 0.07, 0.16, 0.10), furDark) }
+    ctx.translateBy(x: 0.5 * s, y: 0.5 * s)
+    ctx.scaleBy(x: 1.22, y: 1.22)
+    ctx.translateBy(x: -0.5 * s, y: -0.685 * s)
 
     // ── Ears — set wide so they poke out well beyond the cap's sides.
     for ux in [0.21, 0.79] {
@@ -190,16 +194,33 @@ func render(size px: Int) -> Data? {
         ctx.addPath(CGPath(roundedRect: tr, cornerWidth: s * 0.012, cornerHeight: s * 0.012, transform: nil))
         ctx.strokePath()
     }
+    ctx.restoreGState()   // end face zoom
 
-    // Inner edge stroke on the rounded square.
-    ctx.setStrokeColor(c(1, 1, 1, 0.10))
-    ctx.setLineWidth(max(1, s * 0.005))
-    ctx.addPath(CGPath(roundedRect: CGRect(x: 0.5, y: 0.5, width: s - 1, height: s - 1),
-                       cornerWidth: radius, cornerHeight: radius, transform: nil))
-    ctx.strokePath()
+    // Inner edge stroke on the rounded square (full icon only).
+    if !foregroundOnly {
+        ctx.setStrokeColor(c(1, 1, 1, 0.10))
+        ctx.setLineWidth(max(1, s * 0.005))
+        ctx.addPath(CGPath(roundedRect: CGRect(x: 0.5, y: 0.5, width: s - 1, height: s - 1),
+                           cornerWidth: radius, cornerHeight: radius, transform: nil))
+        ctx.strokePath()
+    }
 
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])
+}
+
+if foregroundMode {
+    let path = args.last.flatMap { $0.hasSuffix(".png") ? $0 : nil }
+        ?? "Resources/AppIcon.icon/Assets/AppIcon-foreground.png"
+    guard let data = render(size: 1024, foregroundOnly: true) else {
+        FileHandle.standardError.write("Failed to render foreground\n".data(using: .utf8)!)
+        exit(1)
+    }
+    try? FileManager.default.createDirectory(
+        atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+    try? data.write(to: URL(fileURLWithPath: path))
+    print("wrote \(path) (\(data.count) bytes)")
+    exit(0)
 }
 
 for (name, px) in macSizes {

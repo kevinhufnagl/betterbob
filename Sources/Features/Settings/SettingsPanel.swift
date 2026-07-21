@@ -24,7 +24,6 @@ struct SettingsPanel: View {
             SettingsGroup(title: "Notifications") { notificationsContent }
             SettingsGroup(title: "Menu bar") { menuBarContent }
             SettingsGroup(title: "Popover") { popoverContent }
-            SettingsGroup(title: "Phone view") { PhoneViewCard(prefs: prefs) }
             SettingsGroup(title: "General") { generalContent }
             SettingsGroup(title: "Updates") { UpdatesCard() }
             if let err = state.lastError {
@@ -514,76 +513,5 @@ private struct UpdatesCard: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Phone view
-
-/// The local-network phone page: master toggle, actions toggle, and the QR
-/// code that carries the tokened URL.
-struct PhoneViewCard: View {
-    @ObservedObject var prefs: Prefs
-    @ObservedObject private var phone = PhoneView.shared
-
-    var body: some View {
-        Toggle("Show live stats on your phone", isOn: $prefs.phoneViewEnabled)
-            .font(.system(size: 12))
-
-        if prefs.phoneViewEnabled {
-            Toggle("Allow clock in/out and breaks from the phone", isOn: $prefs.phoneViewActionsEnabled)
-                .font(.system(size: 12))
-
-            if let url = phone.url {
-                HStack(alignment: .top, spacing: 14) {
-                    if let qr = qrImage(url) {
-                        Image(nsImage: qr)
-                            .interpolation(.none)
-                            .resizable().frame(width: 108, height: 108)
-                            .padding(8)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Scan with your phone camera — same Wi-Fi as this Mac.")
-                            .font(.system(size: 11, weight: .medium))
-                        Text(url)
-                            .font(.system(size: 11, design: .monospaced))
-                            .textSelection(.enabled)
-                        if let ip = phone.ipURL {
-                            Text("If the address doesn't resolve: \(ip)")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-                        Button("New link") { prefs.phoneViewToken = Prefs.newPhoneViewToken() }
-                            .controlSize(.small)
-                        Text("Regenerating cuts off anyone holding the old link.")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-            } else {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Starting server…").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-            }
-        }
-
-        Text("Serves a read-only page (plus the buttons above, if allowed) to devices on your network. The link's secret token is the key — nothing shows without it. macOS may ask once to allow incoming connections.")
-            .font(.system(size: 10)).foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// Crisp black-on-white QR so any camera app locks on instantly.
-    private func qrImage(_ string: String) -> NSImage? {
-        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
-        filter.setValue(Data(string.utf8), forKey: "inputMessage")
-        filter.setValue("M", forKey: "inputCorrectionLevel")
-        guard let output = filter.outputImage else { return nil }
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
-        let rep = NSCIImageRep(ciImage: scaled)
-        let image = NSImage(size: rep.size)
-        image.addRepresentation(rep)
-        return image
     }
 }

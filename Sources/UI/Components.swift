@@ -136,7 +136,14 @@ extension Color {
     /// and the popover's system blue.
     static func primaryAccent(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? systemAccentHued(sat: 0.65, bri: 0.85)
-                        : systemAccentHued(sat: 0.90, bri: 0.40)
+                        : systemAccentHued(sat: 0.85, bri: 0.50)
+    }
+    /// A brighter cut of the accent for control fills and borders — close to
+    /// the raw system accent native filled controls wear. Text should keep
+    /// `primaryAccent`, which is deepened for legibility.
+    static func controlAccent(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? systemAccentHued(sat: 0.60, bri: 0.95)
+                        : systemAccentHued(sat: 0.80, bri: 0.72)
     }
     /// Fixed mid-tone for contexts that can't read the color scheme
     /// (menu-bar tint, clock-state dots) — legible on both appearances.

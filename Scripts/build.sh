@@ -34,6 +34,10 @@ if [[ ! -f "$ICON_ICNS" ]]; then
   iconutil -c icns "$ICON_SET" -o "$ICON_ICNS"
 fi
 cp "$ICON_ICNS" "$RESOURCES/AppIcon.icns"
+# macOS 26 layered icon (light/dark/tinted variants) — shipped as the raw
+# Icon Composer document; the .icns above stays as the fallback.
+rm -rf "$RESOURCES/AppIcon.icon"
+cp -R Resources/AppIcon.icon "$RESOURCES/AppIcon.icon"
 
 echo "==> Compiling Swift sources (target $TARGET)"
 SWIFT_FILES=()

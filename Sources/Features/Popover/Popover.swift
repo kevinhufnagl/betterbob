@@ -560,6 +560,7 @@ private struct PopoverActionButton: View {
     /// Explicit height so row-mates match; nil sizes to the content.
     var height: CGFloat? = nil
     let action: () -> Void
+    @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
 
     var body: some View {
@@ -578,8 +579,11 @@ private struct PopoverActionButton: View {
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
             .frame(height: height ?? (trailing == nil ? 34 : 40))
-            .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
-            .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
+            // Split roles: vivid control cut for the fill/border, deepened
+            // legible tone for the label.
+            .background(Capsule().fill(Color.controlAccent(scheme).opacity(hovering ? 0.26 : 0.18)))
+            .overlay(Capsule().strokeBorder(Color.controlAccent(scheme).opacity(hovering ? 0.65 : 0.45),
+                                            lineWidth: 0.8))
             .contentShape(Capsule())
         }
         .buttonStyle(PressablePillStyle())

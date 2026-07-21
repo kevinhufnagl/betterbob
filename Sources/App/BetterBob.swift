@@ -11,7 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         BobState.shared.start()
         Updater.shared.start()
-        PhoneView.shared.start()
 
         // Throwaway dev scaffold: `--capture-endpoints` opens the attendance
         // page in the signed-in browser and records the API calls so the

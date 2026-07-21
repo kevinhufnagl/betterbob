@@ -155,8 +155,38 @@ struct EntryRowView: View {
     /// Inline HH:MM field — no nested popover (the pill's own popover rendered
     /// broken inside this one), no spinner arrows.
     private func timeField(_ value: Binding<Date>) -> some View {
-        DatePicker("", selection: value, displayedComponents: .hourAndMinute)
-            .datePickerStyle(.field).labelsHidden().fixedSize()
+        TimeTextField(date: value)
+    }
+}
+
+/// Hand-rolled time field: NSDatePicker's field variant re-normalizes after
+/// every keystroke, which made ordinary typing ("1", a leading "01")
+/// impossible. This one lets you type freely; anything parseable updates the
+/// bound date as you go (so Save always has the latest value), and on
+/// submit / focus loss the text snaps to the formatted time — nonsense
+/// reverts to the last valid one.
+private struct TimeTextField: View {
+    @Binding var date: Date
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("HH:MM", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 12).monospacedDigit())
+            .multilineTextAlignment(.center)
+            .frame(width: 72)
+            .focused($focused)
+            .onAppear { text = Fmt.clock(date) }
+            .onChange(of: text) { _, t in
+                if focused, let (h, m) = Fmt.parseClock(t),
+                   let new = Calendar.current.date(bySettingHour: h, minute: m,
+                                                   second: 0, of: date) {
+                    date = new
+                }
+            }
+            .onChange(of: focused) { _, f in if !f { text = Fmt.clock(date) } }
+            .onSubmit { text = Fmt.clock(date) }
     }
 }
 
@@ -481,12 +511,9 @@ struct CyclePane: View {
     private var kpiGrid: some View {
         let s = state.cycleSummary
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
-            StatTile(value: s?.totalHoursDisplay ?? "—", caption: "Month worked",
-                     tint: .workAccent(scheme), symbol: "sum")
+            StatTile(value: s?.totalHoursDisplay ?? "—", caption: "Month worked", symbol: "sum")
             StatTile(value: s.map { signedHours(Double($0.overUnderMinutes) / 60) } ?? "—",
-                     caption: "Cycle balance",
-                     tint: (s?.overUnderMinutes ?? 0) >= 0 ? .workAccent(scheme) : .breakAccent(scheme),
-                     symbol: "plusminus")
+                     caption: "Cycle balance", symbol: "plusminus")
             StatTile(value: s.map { "\($0.payableTimePercent)%" } ?? "—", caption: "Progress", symbol: "chart.pie")
             StatTile(value: deadlineText, caption: "Locks in", symbol: "lock")
             StatTile(value: "\(s?.breakViolations ?? 0)", caption: "Break issues",

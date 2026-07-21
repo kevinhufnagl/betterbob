@@ -55,7 +55,8 @@ struct EditableDayStrip: View {
 
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(Color.primary.opacity(0.03))
+                    .glassEffect(.regular, in: .rect(cornerRadius: radius))
                 ForEach(Array(shown.enumerated()), id: \.offset) { i, e in
                     block(e, first: i == 0, last: i == shown.count - 1,
                           start: start, span: span, w: w, radius: radius)
@@ -105,7 +106,13 @@ struct EditableDayStrip: View {
             bottomTrailingRadius: last ? radius : 0, topTrailingRadius: last ? radius : 0,
             style: .continuous)
         return shape
-            .fill(accent)
+            .fill(LinearGradient(colors: [accent.opacity(0.96), accent.opacity(0.78)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay {
+                // Glassy top light, like the system's liquid glass sheen.
+                shape.fill(LinearGradient(colors: [.white.opacity(0.28), .clear],
+                                          startPoint: .top, endPoint: .center))
+            }
             .frame(width: max(2, bw), height: height)
             .overlay { if isHover { shape.fill(Color.white.opacity(0.16)) } }   // hover = draggable
             .overlay { if !isDragging { blockLabel(e, width: bw) } }
@@ -225,9 +232,10 @@ struct EditableDayStrip: View {
             Rectangle().fill(Color.bobTeal).frame(width: 2, height: height)
                 .offset(x: max(0, min(w - 2, x)))
             Text(text)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(Capsule().fill(.regularMaterial))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .padding(.horizontal, 7).padding(.vertical, 2.5)
+                .glassEffect(.regular, in: .capsule)
                 .overlay(Capsule().strokeBorder(Color.bobTeal.opacity(0.6), lineWidth: 0.8))
                 .fixedSize()
                 .offset(x: max(0, min(w - 92, x - (dur > 0 ? 45 : 22))), y: -4)
@@ -244,10 +252,11 @@ struct EditableDayStrip: View {
             : bw > 34 ? dur : nil
         if let text {
             Text(text)
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(.primary)
-                .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(Capsule().fill(.regularMaterial))
+                .padding(.horizontal, 7).padding(.vertical, 2.5)
+                .glassEffect(.regular, in: .capsule)
                 .fixedSize()
         }
     }

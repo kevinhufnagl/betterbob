@@ -158,6 +158,7 @@ private struct ActionButton: View {
     /// Explicit height so row-mates match; nil sizes to the content.
     var height: CGFloat? = nil
     let act: () -> Void
+    @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
 
     var body: some View {
@@ -174,8 +175,12 @@ private struct ActionButton: View {
                 }
             }
             .frame(maxWidth: .infinity).frame(height: height ?? (trailing == nil ? 34 : 40))
-            .background(Capsule().fill(tint.opacity(hovering ? 0.22 : 0.16)))
-            .overlay(Capsule().strokeBorder(tint.opacity(hovering ? 0.55 : 0.4), lineWidth: 0.8))
+            // Split roles: the fill/border wear the vivid control cut of the
+            // accent (like native buttons); the label keeps the deepened,
+            // legible text tone.
+            .background(Capsule().fill(Color.controlAccent(scheme).opacity(hovering ? 0.26 : 0.18)))
+            .overlay(Capsule().strokeBorder(Color.controlAccent(scheme).opacity(hovering ? 0.65 : 0.45),
+                                            lineWidth: 0.8))
             .foregroundStyle(tint)
         }
         .buttonStyle(PressablePillStyle())
@@ -822,7 +827,9 @@ struct BuoyBob: View {
     var body: some View {
         content(blink: sleeping ? 1 : blink)
             .rotationEffect(.degrees(sway ? 4.5 : -4.5))
-            .offset(y: dip ? 2.5 : -2.5)
+            // Scaled to Bob's size — a fixed ±2.5pt was too much travel for
+            // the popover's small swimmer.
+            .offset(y: (dip ? 1 : -1) * size * 0.035)
             .overlay(alignment: .topTrailing) { if sleeping { DriftingZs() } }
             .frame(width: size, height: size)
             .trackWindowVisibility { visible in
@@ -892,9 +899,11 @@ struct BuoyBob: View {
                 .mask(alignment: .top) { Rectangle().frame(height: size * 0.56) }
             if onBreak {
                 BobShades(size: size)
+                // Standing on the ring's tube beside his ear, leaning
+                // slightly outward with it.
                 TropicalDrink(size: size)
-                    .rotationEffect(.degrees(-8))
-                    .offset(x: size * 0.56, y: size * 0.14)
+                    .rotationEffect(.degrees(8))
+                    .offset(x: size * 0.40, y: -size * 0.02)
             }
         }
     }
