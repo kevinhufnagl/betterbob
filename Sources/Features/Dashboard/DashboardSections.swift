@@ -9,11 +9,10 @@ struct EntriesTable: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Card(title: "Entries") {
-            if state.entries.isEmpty {
-                Text("No entries yet today.").font(.system(size: 12)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-            } else {
+        // No header, no empty placeholder — the card only exists when the
+        // day has entries.
+        if !state.entries.isEmpty {
+            Card {
                 DayEntriesList(state: state, entries: state.entries,
                                date: Calendar.current.startOfDay(for: Date()),
                                newestFirst: true)
