@@ -80,12 +80,17 @@ public struct StatusPill: View {
 /// auto-tag as its caption); the alternative rides along as a quiet glass
 /// one. Buttons offer the state *after* everything queued, so you can line
 /// up several punches; they fire a minute apart on their own.
-struct ActionDock: View {
+public struct ActionDock: View {
     @ObservedObject var state: BobState
+
+    public init(state: BobState, now: Date) {
+        self.state = state
+        self.now = now
+    }
     var now = Date()
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    public var body: some View {
         // The ZStack lets the outgoing pair cross-fade over the incoming one
         // instead of stacking beside it mid-transition.
         ZStack {

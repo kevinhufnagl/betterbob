@@ -1,16 +1,39 @@
 import BetterBobShared
 import SwiftUI
 
-/// Standard screen chrome: the shared BetterBob gradient behind the content,
-/// hidden scroll background, large navigation title. Toolbars are left
-/// untouched so iOS 26's own scroll-aware glass takes over.
+/// The app-wide backdrop: the shared BetterBob gradient with two soft glows —
+/// the accent up top, a faint warm counterpoint below — so the Liquid Glass
+/// surfaces have real color to refract instead of a flat grey.
+struct BobBackdrop: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack {
+            DashboardBG()
+            RadialGradient(
+                colors: [Color.accentColor.opacity(scheme == .dark ? 0.32 : 0.20), .clear],
+                center: .init(x: 0.15, y: 0.02), startRadius: 0, endRadius: 480)
+            RadialGradient(
+                colors: [Color.bobOrange.opacity(scheme == .dark ? 0.14 : 0.09), .clear],
+                center: .init(x: 1.05, y: 0.85), startRadius: 0, endRadius: 420)
+            RadialGradient(
+                colors: [Color.accentColor.opacity(scheme == .dark ? 0.16 : 0.10), .clear],
+                center: .init(x: 0.9, y: 0.35), startRadius: 0, endRadius: 360)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// Standard screen chrome: the backdrop behind the content, hidden scroll
+/// background, large navigation title. Toolbars are left untouched so
+/// iOS 26's own scroll-aware glass takes over.
 struct BobScreen: ViewModifier {
     var title: String
 
     func body(content: Content) -> some View {
         content
             .scrollContentBackground(.hidden)
-            .background(DashboardBG().ignoresSafeArea())
+            .background(BobBackdrop())
             .navigationTitle(title)
     }
 }

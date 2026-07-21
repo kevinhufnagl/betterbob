@@ -12,8 +12,23 @@ struct TodayScreen: View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 let vals = TodayVals(state, now: ctx.date)
                 VStack(spacing: 16) {
-                    hero(vals, now: ctx.date)
-                    actions(vals)
+                    if state.signedIn {
+                        // The dock straddles the hero's bottom edge, like the
+                        // Mac popover — the padding reserves its lower half.
+                        hero(vals, now: ctx.date)
+                            .padding(.bottom, 25)
+                            .overlay(alignment: .bottom) {
+                                ActionDock(state: state, now: ctx.date)
+                            }
+                        if let queued = state.queue.first {
+                            Text("\(state.queue.count) queued · fires \(Fmt.clock(queued.fireAt))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        hero(vals, now: ctx.date)
+                        signedOutCard
+                    }
                     if !state.entries.isEmpty {
                         timelineCard(now: ctx.date)
                     }
@@ -51,48 +66,7 @@ struct TodayScreen: View {
             .glassSurface()
     }
 
-    // MARK: Clock actions
-
-    @ViewBuilder private func actions(_ v: TodayVals) -> some View {
-        if !state.signedIn {
-            signedOutCard
-        } else {
-            HStack(spacing: 10) {
-                switch state.projectedClockState {
-                case .clockedOut:
-                    glassAction("Clock in", symbol: "play.fill", prominent: true) { state.clockIn() }
-                case .working:
-                    glassAction("Take a break", symbol: "pause.fill", prominent: false) { state.startManualBreak() }
-                    glassAction("Clock out", symbol: "stop.fill", prominent: true) { state.clockOut() }
-                case .onBreak:
-                    glassAction("End break", symbol: "play.fill", prominent: true) { state.endBreak() }
-                    glassAction("Clock out", symbol: "stop.fill", prominent: false) { state.clockOut() }
-                }
-            }
-            if let queued = state.queue.first {
-                Label("Queued — lands \(Fmt.clock(queued.fireAt))", systemImage: "clock.badge")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func glassAction(_ title: String, symbol: String, prominent: Bool,
-                             action: @escaping () -> Void) -> some View {
-        let label = Label(title, systemImage: symbol)
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 30)
-        if prominent {
-            Button(action: action) { label }
-                .buttonStyle(.glassProminent)
-                .controlSize(.large)
-        } else {
-            Button(action: action) { label }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-        }
-    }
+    // MARK: Signed out
 
     private var signedOutCard: some View {
         GlassCard {

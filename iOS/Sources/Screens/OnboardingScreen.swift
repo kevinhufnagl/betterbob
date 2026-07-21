@@ -18,7 +18,7 @@ struct OnboardingScreen: View {
 
     var body: some View {
         ZStack {
-            DashboardBG().ignoresSafeArea()
+            BobBackdrop()
             ScrollView {
                 VStack(spacing: 24) {
                     hero
@@ -44,6 +44,21 @@ struct OnboardingScreen: View {
                 .padding(.top, 28)
                 .padding(.bottom, 32)
             }
+        }
+        // Full-screen covers have no swipe-to-dismiss — without this the
+        // screen is a trap when opened from Settings.
+        .overlay(alignment: .topTrailing) {
+            Button {
+                onDone()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.glass)
+            .clipShape(Circle())
+            .padding(.trailing, 16)
+            .padding(.top, 8)
         }
         .onAppear {
             load()
