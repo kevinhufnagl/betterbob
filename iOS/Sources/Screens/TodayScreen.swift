@@ -139,10 +139,11 @@ struct TodayScreen: View {
 
     @ViewBuilder private var warnings: some View {
         if state.signedIn {
+            // One wand at a time: an over-long stretch implies the shortfall
+            // too, and adding the missing break resolves both.
             if state.hasOverLongStretch(state.entries) {
                 fixButton("Add the missing break") { state.addMissingBreak() }
-            }
-            if let shortfall = state.breakGuidelineShortfall {
+            } else if let shortfall = state.breakGuidelineShortfall {
                 fixButton("Fix break — \(Fmt.hm(shortfall)) short of the guideline") {
                     state.fixBreakGuideline()
                 }
@@ -158,6 +159,7 @@ struct TodayScreen: View {
         Button(action: action) {
             Label(title, systemImage: "wand.and.rays")
                 .font(.body.weight(.semibold))
+                .foregroundStyle(Color.bobOrange)
                 .frame(maxWidth: .infinity, minHeight: 28)
         }
         .buttonStyle(.glass)
