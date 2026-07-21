@@ -877,23 +877,22 @@ struct BuoyBob: View {
     var onBreak = false
     var size: CGFloat = 72
     @State private var windowVisible = true
-    @State private var sway = false
-    @State private var dip = false
+    @State private var swayAngle: Double = 0
+    @State private var dipOffset: CGFloat = 0
     @State private var blink: CGFloat = 0
     // Fresh float character on every appearance, like the wave's seeds —
-    // bounded above by the old fixed values, so he never swings wider or
-    // dips deeper than before.
-    @State private var swayAmp = Double.random(in: 3.0...4.5)
+    // bounded so he never swings wider or dips deeper than before.
+    @State private var swayAmp = Double.random(in: 2.0...3.2)
     @State private var swayDur = Double.random(in: 2.0...2.8)
     @State private var dipAmp = CGFloat.random(in: 0.024...0.035)
     @State private var dipDur = Double.random(in: 1.45...2.1)
 
     var body: some View {
         content(blink: sleeping ? 1 : blink)
-            .rotationEffect(.degrees(sway ? swayAmp : -swayAmp))
+            .rotationEffect(.degrees(swayAngle))
             // Scaled to Bob's size — a fixed ±2.5pt was too much travel for
             // the popover's small swimmer.
-            .offset(y: (dip ? 1 : -1) * size * dipAmp)
+            .offset(y: dipOffset)
             .overlay(alignment: .topTrailing) { if sleeping { DriftingZs() } }
             .frame(width: size, height: size)
             .trackWindowVisibility { visible in
@@ -914,13 +913,21 @@ struct BuoyBob: View {
     }
 
     private func applyFloat() {
+        var t = Transaction()
+        t.disablesAnimations = true
         if windowVisible && !Motion.reduce {
-            withAnimation(.easeInOut(duration: swayDur).repeatForever(autoreverses: true)) { sway = true }
-            withAnimation(.easeInOut(duration: dipDur).repeatForever(autoreverses: true)) { dip = true }
+            // Jump to one extreme unanimated, then ping-pong to the other —
+            // the animated value never rests at an extreme when paused,
+            // which used to leave him frozen with a permanent left tilt.
+            withTransaction(t) { swayAngle = -swayAmp; dipOffset = -size * dipAmp }
+            withAnimation(.easeInOut(duration: swayDur).repeatForever(autoreverses: true)) {
+                swayAngle = swayAmp
+            }
+            withAnimation(.easeInOut(duration: dipDur).repeatForever(autoreverses: true)) {
+                dipOffset = size * dipAmp
+            }
         } else {
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) { sway = false; dip = false }
+            withTransaction(t) { swayAngle = 0; dipOffset = 0 }
         }
     }
 

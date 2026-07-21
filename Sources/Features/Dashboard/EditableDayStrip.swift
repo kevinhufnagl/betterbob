@@ -61,22 +61,6 @@ struct EditableDayStrip: View {
                     block(e, first: i == 0, last: i == shown.count - 1,
                           start: start, span: span, w: w, radius: radius)
                 }
-                if hasOpen {
-                    // Live edge: a glowing dot riding the open block's "now"
-                    // boundary, advancing with the caller's 1s tick.
-                    let openKind = shown.last { $0.end == nil }?.kind
-                    let liveTint = openKind == .breakTime
-                        ? Color.breakAccent(scheme) : Color.workAccent(scheme)
-                    let nx = CGFloat(min(max(0, now.timeIntervalSince(start)), span) / span) * w
-                    ZStack {
-                        Circle().fill(liveTint.opacity(0.40)).frame(width: 11, height: 11)
-                        Circle().fill(.white).frame(width: 5, height: 5)
-                    }
-                    .shadow(color: liveTint.opacity(0.8), radius: 3)
-                    .position(x: min(nx, w - 4), y: height / 2)
-                    .allowsHitTesting(false)
-                    .zIndex(8)
-                }
                 if let he = hoverEdge, dragID == nil, edgeGrab == nil {
                     edgeHandle(he, shown: shown, start: start, span: span, w: w).zIndex(9)
                 }

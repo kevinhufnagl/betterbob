@@ -9,7 +9,7 @@ struct EntriesTable: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Card(title: "Entries", symbol: "list.bullet") {
+        Card(title: "Entries") {
             if state.entries.isEmpty {
                 Text("No entries yet today.").font(.system(size: 12)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
