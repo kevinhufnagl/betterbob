@@ -45,9 +45,11 @@ struct TodayScreen: View {
         .refreshable { await state.reconcile() }
         .sheet(item: $editingEntry) { edit in
             EntryEditSheet(entry: edit.entry,
+                           reasonOptions: state.reasonOptions,
                            onSave: { start, end in
                                state.updateEntryTimes(edit.entry, start: start, end: end)
                            },
+                           onReason: { state.setReason(for: edit.entry, to: $0) },
                            onDelete: { state.deleteEntry(edit.entry) })
                 .presentationDetents([.medium])
         }

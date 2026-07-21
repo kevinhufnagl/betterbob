@@ -52,9 +52,14 @@ struct DayDetailScreen: View {
             .sheet(item: $editingEntry) { edit in
                 if let day {
                     EntryEditSheet(entry: edit.entry,
+                                   reasonOptions: state.reasonOptions,
                                    onSave: { start, end in
                                        state.updateEntryTimes(edit.entry, in: day.entries,
                                                               on: day.date, start: start, end: end)
+                                   },
+                                   onReason: {
+                                       state.setReason(for: edit.entry, in: day.entries,
+                                                       on: day.date, to: $0)
                                    },
                                    onDelete: {
                                        state.deleteEntry(edit.entry, in: day.entries, on: day.date)
