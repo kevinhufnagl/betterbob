@@ -129,6 +129,44 @@ public struct FreshDayWelcome: View {
 
     private var target: TimeInterval { TodayVals(state, now: Date()).targetSecs }
 
+    /// Whether today's summary row carries a positive target. TodayVals falls
+    /// back to 8h when it's missing, so the raw row is checked here — no
+    /// target means a weekend / non-working day. While the summary hasn't
+    /// loaded, assume a workday rather than celebrating early.
+    private var hasTarget: Bool {
+        guard let day = state.cycleSummary?.days.first(where: { $0.date == DayFmt.today() }) else {
+            return true
+        }
+        return (day.target ?? 0) > 0
+    }
+
+    /// A booked, still-active leave covering today.
+    private var todaysTimeOff: TimeOffRequest? {
+        let today = Calendar.current.startOfDay(for: Date())
+        return state.timeOffRequests.first { r in
+            let s = r.status.lowercased()
+            guard !s.contains("cancel"), !s.contains("declin"), !s.contains("reject"),
+                  let start = DayFmt.date(r.startDate), let end = DayFmt.date(r.endDate)
+            else { return false }
+            return start <= today && today <= end
+        }
+    }
+
+    // TEMPORARY: forces the off-day scene for review — remove together with
+    // the corner button below.
+    @State private var previewOffDay = false
+
+    /// Weekend or booked leave: the scene relaxes — shades on, no work chips.
+    private var isOffDay: Bool { previewOffDay || todaysTimeOff != nil || !hasTarget }
+
+    private var subtitle: String {
+        if let off = todaysTimeOff { return "\(off.typeName) — enjoy your day off" }
+        if !hasTarget || previewOffDay {
+            return "It's \(Date().formatted(.dateTime.weekday(.wide))) — nothing on the clock"
+        }
+        return "Ready when you are"
+    }
+
     /// Bob's distance from the leading edge, tuned per surface.
     private var bobLeading: CGFloat {
         #if os(iOS)
@@ -227,9 +265,10 @@ public struct FreshDayWelcome: View {
 
                 // Bob floats at the waterline, off to the side — clear of the
                 // centered dock. The phone hugs him near the edge; the Mac's
-                // wider surfaces sit him further in.
+                // wider surfaces sit him further in. Off days earn him the
+                // shades and the drink.
                 HStack {
-                    BuoyBob(size: compact ? 58 : 84)
+                    BuoyBob(onBreak: isOffDay, size: compact ? 58 : 84)
                     Spacer()
                 }
                 .padding(.leading, bobLeading)
@@ -245,7 +284,7 @@ public struct FreshDayWelcome: View {
                     Text(greeting)
                         .font(compact ? .title2.bold() : .largeTitle.bold())
                         .multilineTextAlignment(.center)
-                    Text("Ready when you are")
+                    Text(subtitle)
                         .font(compact ? .footnote : .body)
                         .foregroundStyle(.secondary)
                     Spacer().frame(height: compact ? 10 : 16)
@@ -253,15 +292,19 @@ public struct FreshDayWelcome: View {
                     // today could look like, where the cycle stands, and
                     // what there is to look forward to. Chips share a row
                     // when they fit, wrap when they don't — uniform spacing.
+                    // Off days drop the work chips; the subtitle carries the
+                    // day's story instead.
                     ChipFlow(spacing: 6) {
-                        chip("\(spoken(Int(target / 60))) today", symbol: "target")
-                        if let doneByText {
-                            chip(doneByText, symbol: "clock.badge.checkmark")
+                        if !isOffDay {
+                            chip("\(spoken(Int(target / 60))) today", symbol: "target")
+                            if let doneByText {
+                                chip(doneByText, symbol: "clock.badge.checkmark")
+                            }
                         }
                         if let balanceText {
                             chip(balanceText, symbol: "scalemass")
                         }
-                        if let nextTimeOffText {
+                        if let nextTimeOffText, todaysTimeOff == nil {
                             chip(nextTimeOffText, symbol: "sun.max")
                         }
                     }
@@ -274,6 +317,17 @@ public struct FreshDayWelcome: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // TEMPORARY: off-day preview switch for review — remove with the
+        // `previewOffDay` state above.
+        .overlay(alignment: .topTrailing) {
+            Button(previewOffDay ? "Preview: off day" : "Preview: work day") {
+                previewOffDay.toggle()
+            }
+            .buttonStyle(.plain)
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .padding(10)
+        }
         // Time off normally loads when its tab opens — fetch it here too, or
         // the next-time-off chip pops in late (or not at all) on a fresh day.
         .task {
