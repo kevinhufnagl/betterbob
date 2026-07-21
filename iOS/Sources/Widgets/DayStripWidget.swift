@@ -48,36 +48,28 @@ struct DayStripWidgetView: View {
             let lastEnd = segments.compactMap(\.end).max() ?? snap.updatedAt
             let recordedEnd = open ? max(snap.updatedAt, lastEnd) : lastEnd
 
-            // Project from the snapshot's own timestamp, NOT the render time:
-            // widgets re-render hours after the last data push, and measuring
-            // "worked so far" at render time would assume non-stop work since
-            // then — collapsing the remaining track to nothing. The track
-            // always spans the expected day — clocking out early leaves the
-            // shortfall visibly unfilled.
-            let asOf = snap.updatedAt
-            let remaining = max(0, snap.target - snap.workedTotal(now: asOf))
-            let projectedEnd = max(recordedEnd, asOf.addingTimeInterval(remaining))
+            // Measure "worked so far" at the snapshot's own timestamp (a
+            // render hours later must not assume non-stop work since), and
+            // append the remaining work directly after the LAST RECORDED
+            // entry — anchoring it at the push time would insert a phantom
+            // empty gap when the snapshot lands long after a clock-out.
+            let remaining = max(0, snap.target - snap.workedTotal(now: snap.updatedAt))
+            let projectedEnd = recordedEnd.addingTimeInterval(remaining)
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
-            let r: CGFloat = 4
+            let r = size.height / 2
 
-            // The whole expected day as a faint track.
+            // The whole expected day as a faint capsule track.
             ctx.fill(Path(roundedRect: CGRect(origin: .zero, size: size),
                           cornerRadius: r),
                      with: .color(.primary.opacity(0.18)))
 
-            for (i, seg) in segments.enumerated() {
+            // Each block a capsule of its own — work solid, breaks dimmed.
+            for seg in segments {
                 let x = seg.start.timeIntervalSince(dayStart) / span * size.width
                 let end = seg.end ?? recordedEnd
-                let w = max(2, end.timeIntervalSince(seg.start) / span * size.width - 1)
-                // Round only edges that coincide with the track's ends.
-                let atTrackEnd = remaining <= 0 && i == segments.count - 1
+                let w = max(size.height / 2, end.timeIntervalSince(seg.start) / span * size.width - 1.5)
                 let rect = CGRect(x: x, y: 0, width: w, height: size.height)
-                let path = Path(roundedRect: rect,
-                                cornerRadii: RectangleCornerRadii(
-                                    topLeading: i == 0 ? r : 1,
-                                    bottomLeading: i == 0 ? r : 1,
-                                    bottomTrailing: atTrackEnd ? r : 1,
-                                    topTrailing: atTrackEnd ? r : 1))
+                let path = Path(roundedRect: rect, cornerRadius: min(w, size.height) / 2)
                 ctx.fill(path, with: .color(.primary.opacity(seg.isBreak ? 0.35 : 0.9)))
             }
         }
