@@ -49,16 +49,21 @@ struct DayStripWidgetView: View {
             let recordedEnd = open ? max(snap.updatedAt, lastEnd) : lastEnd
 
             let dayOver = snap.state == .clockedOut || snap.state == .signedOut
-            let remaining = max(0, snap.target - snap.workedTotal(now: entry.date))
+            // Project from the snapshot's own timestamp, NOT the render time:
+            // widgets re-render hours after the last data push, and measuring
+            // "worked so far" at render time would assume non-stop work since
+            // then — collapsing the remaining track to nothing.
+            let asOf = snap.updatedAt
+            let remaining = max(0, snap.target - snap.workedTotal(now: asOf))
             let projectedEnd = dayOver ? recordedEnd
-                                       : max(recordedEnd, entry.date.addingTimeInterval(remaining))
+                                       : max(recordedEnd, asOf.addingTimeInterval(remaining))
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
             let r: CGFloat = 4
 
             // The whole expected day as a faint track.
             ctx.fill(Path(roundedRect: CGRect(origin: .zero, size: size),
                           cornerRadius: r),
-                     with: .color(.primary.opacity(0.14)))
+                     with: .color(.primary.opacity(0.18)))
 
             for (i, seg) in segments.enumerated() {
                 let x = seg.start.timeIntervalSince(dayStart) / span * size.width
