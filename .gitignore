@@ -4,3 +4,5 @@ Resources/AppIcon.iconset/
 .DS_Store
 .idea/
 iOS/BetterBob-iOS.xcodeproj/
+Packages/*/.build/
+.build/
