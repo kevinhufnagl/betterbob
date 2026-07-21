@@ -152,16 +152,12 @@ public struct FreshDayWelcome: View {
         }
     }
 
-    // TEMPORARY: forces the off-day scene for review — remove together with
-    // the corner button below.
-    @State private var previewOffDay = false
-
     /// Weekend or booked leave: the scene relaxes — shades on, no work chips.
-    private var isOffDay: Bool { previewOffDay || todaysTimeOff != nil || !hasTarget }
+    private var isOffDay: Bool { todaysTimeOff != nil || !hasTarget }
 
     private var subtitle: String {
         if let off = todaysTimeOff { return "\(off.typeName) — enjoy your day off" }
-        if !hasTarget || previewOffDay {
+        if !hasTarget {
             return "It's \(Date().formatted(.dateTime.weekday(.wide))) — nothing on the clock"
         }
         return "Ready when you are"
@@ -317,17 +313,6 @@ public struct FreshDayWelcome: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // TEMPORARY: off-day preview switch for review — remove with the
-        // `previewOffDay` state above.
-        .overlay(alignment: .topTrailing) {
-            Button(previewOffDay ? "Preview: off day" : "Preview: work day") {
-                previewOffDay.toggle()
-            }
-            .buttonStyle(.plain)
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-            .padding(10)
-        }
         // Time off normally loads when its tab opens — fetch it here too, or
         // the next-time-off chip pops in late (or not at all) on a fresh day.
         .task {
