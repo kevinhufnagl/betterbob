@@ -47,10 +47,12 @@ struct TodayScreen: View {
     // MARK: Hero — the wave, untouched
 
     private func hero(_ v: TodayVals, now: Date) -> some View {
+        // Tall enough that the text block clears the dock straddling the
+        // bottom edge; bottomInset reserves the covered strip inside the hero.
         LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                   compact: true, cornerRadius: 18)
+                   compact: true, cornerRadius: 18, bottomInset: 30)
             .statusTint(state.heroLimitTint)
-            .frame(height: 190)
+            .frame(height: 215)
             .overlay(alignment: .topLeading) {
                 if v.fraction >= 0.15 {
                     BuoyBob(sleeping: state.clockState == .clockedOut,

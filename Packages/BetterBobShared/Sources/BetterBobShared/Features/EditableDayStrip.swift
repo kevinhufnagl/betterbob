@@ -78,6 +78,9 @@ public struct EditableDayStrip: View {
                     marker(at: dropStart, start: start, span: span, w: w).zIndex(10)
                 }
             }
+            // Blocks are laid out by time and can land flush against the
+            // strip's ends — clip so they never square off the corners.
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .contentShape(Rectangle())
             #if os(macOS)
             .onContinuousHover { phase in

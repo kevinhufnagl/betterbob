@@ -122,9 +122,10 @@ struct MainWindow: View {
                     AutoLoginInline(state: state)
                 } else {
                     if state.canAutoSignIn {
-                        Button { state.startAutoSignIn() } label: {
-                            Label("Log in automatically", systemImage: "wand.and.rays")
-                        }.buttonStyle(.borderedProminent)
+                        // One button per second factor, like the popover — a
+                        // bare "log in automatically" silently assumed Google
+                        // Authenticator.
+                        SignInFactorGroup(state: state)
                     }
                     Button { state.startSSOSignIn() } label: {
                         Label("Sign in with browser…", systemImage: "safari")

@@ -1,11 +1,16 @@
 import BetterBobShared
 import SwiftUI
 
-/// The app-wide backdrop: the shared BetterBob gradient with two soft glows —
-/// the accent up top, a faint warm counterpoint below — so the Liquid Glass
-/// surfaces have real color to refract instead of a flat grey.
+/// The app-wide backdrop: the shared BetterBob gradient with soft glows in
+/// the brand's blues — the accent up top, a deeper navy below — so the
+/// Liquid Glass surfaces have real color to refract instead of a flat grey.
 struct BobBackdrop: View {
     @Environment(\.colorScheme) private var scheme
+
+    /// The icon background's deep navy, one register darker than the accent.
+    private var deepNavy: Color {
+        Color(red: 0.05, green: 0.14, blue: 0.22)
+    }
 
     var body: some View {
         ZStack {
@@ -14,7 +19,7 @@ struct BobBackdrop: View {
                 colors: [Color.accentColor.opacity(scheme == .dark ? 0.32 : 0.20), .clear],
                 center: .init(x: 0.15, y: 0.02), startRadius: 0, endRadius: 480)
             RadialGradient(
-                colors: [Color.bobOrange.opacity(scheme == .dark ? 0.14 : 0.09), .clear],
+                colors: [deepNavy.opacity(scheme == .dark ? 0.55 : 0.16), .clear],
                 center: .init(x: 1.05, y: 0.85), startRadius: 0, endRadius: 420)
             RadialGradient(
                 colors: [Color.accentColor.opacity(scheme == .dark ? 0.16 : 0.10), .clear],

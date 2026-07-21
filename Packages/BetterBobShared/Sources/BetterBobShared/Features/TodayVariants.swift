@@ -162,22 +162,37 @@ private struct DockButton: View {
     @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
 
+    // Touch targets get a size up from the Mac's pointer-sized capsules.
+    #if os(iOS)
+    private let symSize: CGFloat = 14
+    private let labelSize: CGFloat = 15
+    private let captionSize: CGFloat = 11
+    private let dockHeight: CGFloat = 48
+    private let padH: CGFloat = 20
+    #else
+    private let symSize: CGFloat = 12
+    private let labelSize: CGFloat = 13
+    private let captionSize: CGFloat = 9
+    private let dockHeight: CGFloat = 40
+    private let padH: CGFloat = 16
+    #endif
+
     var body: some View {
         Button(action: act) {
             VStack(spacing: 1) {
                 HStack(spacing: 6) {
-                    Image(systemName: sym).font(.system(size: 12, weight: .bold))
-                    Text(label).font(.system(size: 13, weight: .semibold))
+                    Image(systemName: sym).font(.system(size: symSize, weight: .bold))
+                    Text(label).font(.system(size: labelSize, weight: .semibold))
                 }
                 if let caption {
                     Text(caption)
-                        .font(.system(size: 9, weight: .medium)).opacity(0.75)
+                        .font(.system(size: captionSize, weight: .medium)).opacity(0.75)
                 }
             }
             .foregroundStyle(prominent ? AnyShapeStyle(.white)
                                        : AnyShapeStyle(Color.primary.opacity(0.85)))
-            .padding(.horizontal, 16)
-            .frame(height: 40)
+            .padding(.horizontal, padH)
+            .frame(height: dockHeight)
             .background(
                 // Solid fill sits a notch deeper than controlAccent in dark
                 // mode so the white label keeps its contrast.
