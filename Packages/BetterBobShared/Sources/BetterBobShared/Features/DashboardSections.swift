@@ -417,10 +417,12 @@ public struct CyclePane: View {
             }
             kpiGrid
             CalendarHeatmap(state: state, onOpenToday: onOpenToday)
-            byDayList
             BalanceTrendCard(state: state)
             rhythm
             compliance
+            // Last — the heatmap above already carries the per-day picture;
+            // this is the drill-down list.
+            byDayList
         }
         .task { await state.loadCycleData() }
     }
