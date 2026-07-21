@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// An SF Symbol for a leave policy, chosen from its display name.
-func policyIcon(_ name: String) -> String {
+public func policyIcon(_ name: String) -> String {
     let n = name.lowercased()
     if n.contains("holiday") || n.contains("vacation") || n.contains("sunny") { return "sun.max.fill" }
     if n.contains("sick") { return "cross.case.fill" }
@@ -306,9 +306,14 @@ public struct TimeOffPane: View {
 
 /// Month calendar showing time off, with click-a-day and drag-to-select-range
 /// to open the request modal with those dates preselected.
-struct TimeOffCalendar: View {
+public struct TimeOffCalendar: View {
     @ObservedObject var state: BobState
     var onSelect: (Date, Date) -> Void
+
+    public init(state: BobState, onSelect: @escaping (Date, Date) -> Void) {
+        self.state = state
+        self.onSelect = onSelect
+    }
     @Environment(\.colorScheme) private var scheme
 
     @State private var month = Date()
@@ -335,7 +340,7 @@ struct TimeOffCalendar: View {
         return arr
     }
 
-    var body: some View {
+    public var body: some View {
         Card {
             VStack(spacing: 10) {
                 header
@@ -508,14 +513,14 @@ struct TimeOffCalendar: View {
 }
 
 /// Modal to request time off: type + range, with a live preview and submit.
-struct TimeOffBookingSheet: View {
+public struct TimeOffBookingSheet: View {
     @ObservedObject var state: BobState
     @Environment(\.dismiss) private var dismiss
     @State private var policy: TimeOffPolicyType?
     @State private var start: Date
     @State private var end: Date
 
-    init(state: BobState, start: Date = Date(), end: Date = Date()) {
+    public init(state: BobState, start: Date = Date(), end: Date = Date()) {
         self.state = state
         _start = State(initialValue: start)
         _end = State(initialValue: end)
@@ -528,7 +533,7 @@ struct TimeOffBookingSheet: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Request time off").font(.system(size: 17, weight: .bold))
 

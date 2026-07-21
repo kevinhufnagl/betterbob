@@ -21,9 +21,7 @@ struct RootTabs: View {
             .tag(BobTab.month)
 
             NavigationStack {
-                ScrollView { TimeOffPane(state: state).padding(16) }
-                    .background(DashboardBG())
-                    .navigationTitle("Time Off")
+                TimeOffScreen(state: state)
             }
             .tabItem { Label("Time Off", systemImage: "sun.max.fill") }
             .tag(BobTab.timeOff)
