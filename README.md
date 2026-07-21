@@ -11,10 +11,22 @@ company in the menu bar.
 
 BetterBob is Apple Silicon + macOS 26 (Tahoe).
 
+One command:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kevinhufnagl/betterbob/main/Scripts/install.sh | bash
+```
+
+It downloads the latest release into **Applications**, clears the quarantine
+flag (the app is self-signed, not notarized), and launches it — Bob appears in
+your menu bar; click him and sign in to HiBob.
+
+Or by hand:
+
 1. Download the latest **`BetterBob-x.y.zip`** from the
    [**Releases**](https://github.com/kevinhufnagl/betterbob/releases/latest) page.
 2. Unzip it and drag **BetterBob.app** into your **Applications** folder.
-3. It's ad-hoc signed (not notarized), so the *first* launch needs a one-time
+3. It's self-signed (not notarized), so the *first* launch needs a one-time
    Gatekeeper OK: **right-click BetterBob → Open → Open**. (Only the first time.)
 4. Bob appears in your menu bar — click him and sign in to HiBob.
 
