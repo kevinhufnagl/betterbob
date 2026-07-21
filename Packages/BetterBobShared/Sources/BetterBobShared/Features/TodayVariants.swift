@@ -1149,11 +1149,14 @@ public struct PeekingBob: View {
     }
 
     private var paw: some View {
+        // Solid fur fill + solid darker rim — no partial-opacity stroke, which
+        // read as see-through paws against the bright water.
         Ellipse()
             .fill(Color(red: 0.64, green: 0.44, blue: 0.28))
             .overlay(Ellipse().strokeBorder(
-                Color(red: 0.42, green: 0.27, blue: 0.16).opacity(0.55), lineWidth: 1.2))
+                Color(red: 0.42, green: 0.27, blue: 0.16), lineWidth: 1.2))
             .frame(width: size * 0.19, height: size * 0.13)
+            .compositingGroup()
     }
 }
 
