@@ -495,11 +495,10 @@ final class BobState: ObservableObject {
     /// True when today has an uninterrupted run past the max non-break time.
     var overMaxNonBreak: Bool { hasOverLongStretch(entries) }
 
-    /// A day with work logged but no reason on any of its work entries — i.e.
+    /// A day where at least one work entry has no reason set — i.e. some
     /// untagged time. Used to flag past days in the month grid.
     func missingReason(_ dayEntries: [AttendanceEntry]) -> Bool {
-        let work = dayEntries.filter { $0.kind == .work }
-        return !work.isEmpty && work.allSatisfy { ($0.reason ?? "").isEmpty }
+        dayEntries.contains { $0.kind == .work && ($0.reason ?? "").isEmpty }
     }
 
     /// Whether a day's total worked time is past the daily max (default 10h).

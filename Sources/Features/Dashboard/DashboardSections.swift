@@ -593,7 +593,7 @@ struct CalendarHeatmap: View {
             .first(where: { $0.dateKey == day.date })
             .map { state.isOverDailyMax($0.entries) }
             ?? (day.worked * 3600 > Prefs.shared.maxDayLimit)
-        // A past day whose work entries carry no reason (untagged) — violet, the
+        // A past day with any untagged work entry (no reason) — violet, the
         // mildest flag, so a real break/max issue still wins the cell color.
         let missingReason = day.date < DayFmt.today()
             && (state.monthDays.first(where: { $0.dateKey == day.date })
@@ -618,7 +618,7 @@ struct CalendarHeatmap: View {
         if hasTarget { helpText += " / \(hoursText(day.target!)) target" }
         if breakIssue { helpText += " · break issue — needs a break" }
         if overMax { helpText += " · over the daily max" }
-        if missingReason { helpText += " · no reason set on the work entries" }
+        if missingReason { helpText += " · a work entry has no reason set" }
         return RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(fill)
             .frame(height: 40)
