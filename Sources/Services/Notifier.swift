@@ -51,6 +51,20 @@ enum Notifier {
         post(title: "BetterBob couldn't reach HiBob", body: message)
     }
 
+    /// Notification identifier for "enter your code" — the tap handler opens
+    /// the popover when it sees this.
+    static let awaitingCodeID = "betterbob.awaitingCode"
+
+    /// The HiBob session expired and automatic re-login is set up — nudge the
+    /// user to reconnect. Tapping opens BetterBob and starts the sign-in so they
+    /// can enter their authenticator code.
+    static func awaitingCode() {
+        guard Prefs.shared.notifyAwaitingCode else { return }
+        post(title: "Sign back in to HiBob",
+             body: "Your session expired — click to reconnect and enter your authenticator code.",
+             identifier: awaitingCodeID)
+    }
+
     /// Once per version — a new BetterBob build was installed in the background.
     static func updateInstalled(version: String) {
         guard UserDefaults.standard.string(forKey: "updateNotifiedVersion") != version else { return }
@@ -59,11 +73,11 @@ enum Notifier {
              body: "The update applies the next time BetterBob starts.")
     }
 
-    private static func post(title: String, body: String) {
+    private static func post(title: String, body: String, identifier: String = UUID().uuidString) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        let request = UNNotificationRequest(identifier: UUID().uuidString,
+        let request = UNNotificationRequest(identifier: identifier,
                                             content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }

@@ -426,10 +426,10 @@ enum BobLines {
 
 @MainActor
 enum BobIcon {
-    /// Corner badge showing the clock state: play while working, pause while
-    /// on a break, none when clocked out (plain Bob).
+    /// Corner badge: play while working, pause on a break, a lock when signed
+    /// out, none when clocked out (plain Bob).
     enum StateBadge: String {
-        case none, play, pause
+        case none, play, pause, lock
     }
 
     /// Cached template image of Bob for the menu bar.
@@ -502,6 +502,17 @@ enum BobIcon {
                 case .pause:
                     ctx.addPath(round(ell(cx - 0.055, cy, 0.05, 0.20), s * 0.015))
                     ctx.addPath(round(ell(cx + 0.055, cy, 0.05, 0.20), s * 0.015))
+                case .lock:
+                    // Padlock: a rounded body, punched, with a stroked shackle
+                    // arc above it. Drawn here (fill + stroke) so the shared
+                    // fillPath below is a no-op for this case.
+                    ctx.addPath(round(ell(cx, cy - 0.045, 0.20, 0.15), s * 0.03))
+                    ctx.fillPath()
+                    ctx.setLineWidth(s * 0.038)
+                    ctx.setStrokeColor(CGColor(gray: 0, alpha: 1))
+                    ctx.addArc(center: CGPoint(x: cx * s, y: (cy + 0.03) * s),
+                               radius: 0.062 * s, startAngle: 0, endAngle: .pi, clockwise: false)
+                    ctx.strokePath()
                 case .none:
                     break
                 }

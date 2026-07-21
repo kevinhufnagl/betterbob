@@ -65,6 +65,9 @@ struct MainWindow: View {
         .onChange(of: state.signedIn) { _, signedIn in
             if signedIn, tab == .settings { tab = .today }
         }
+        // Only pull the heavy dashboard data (month grid, activity, time off)
+        // while this window is actually on screen — see BobState.reconcile.
+        .trackWindowVisibility { state.setDashboardActive($0) }
     }
 
     private func row(_ t: MainTab) -> some View {
@@ -122,11 +125,7 @@ struct MainWindow: View {
         BobPlaceholder(title: "Bob's off the clock", lines: BobLines.signedOut, sleeping: true) {
             VStack(spacing: 8) {
                 if state.autoLoginInProgress {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text(state.autoLoginStatus.isEmpty ? "Signing you in…" : state.autoLoginStatus)
-                            .font(.system(size: 12))
-                    }
+                    AutoLoginInline(state: state)
                 } else {
                     if state.canAutoSignIn {
                         Button { state.startAutoSignIn() } label: {

@@ -29,7 +29,9 @@ final class Prefs: ObservableObject {
         didSet { UserDefaults.standard.set(autofillEnabled, forKey: "autofillEnabled") }
     }
 
-    /// Silently run the headless sign-in the moment the session expires.
+    /// Automatically start re-login when the session expires. The hidden browser
+    /// fills email + password; the user types the one-time code into a native
+    /// prompt (no authenticator seed is ever stored).
     @Published var autoReloginOnExpiry: Bool {
         didSet { UserDefaults.standard.set(autoReloginOnExpiry, forKey: "autoReloginOnExpiry") }
     }
@@ -40,6 +42,12 @@ final class Prefs: ObservableObject {
 
     @Published var notifyFailures: Bool {
         didSet { UserDefaults.standard.set(notifyFailures, forKey: "notifyFailures") }
+    }
+
+    /// Notify when a background re-login is waiting for the authenticator code,
+    /// so the user knows to open BetterBob and enter it.
+    @Published var notifyAwaitingCode: Bool {
+        didSet { UserDefaults.standard.set(notifyAwaitingCode, forKey: "notifyAwaitingCode") }
     }
 
     /// Notify once when today's worked time reaches the day's target.
@@ -191,6 +199,7 @@ final class Prefs: ObservableObject {
         self.autoReloginOnExpiry = d.object(forKey: "autoReloginOnExpiry") as? Bool ?? false
         self.notifyAutoBreak = d.object(forKey: "notifyAutoBreak") as? Bool ?? true
         self.notifyFailures = d.object(forKey: "notifyFailures") as? Bool ?? true
+        self.notifyAwaitingCode = d.object(forKey: "notifyAwaitingCode") as? Bool ?? true
         self.notifyTargetReached = d.object(forKey: "notifyTargetReached") as? Bool ?? true
         self.notifyDeadline = d.object(forKey: "notifyDeadline") as? Bool ?? true
         self.notifyOverMax = d.object(forKey: "notifyOverMax") as? Bool ?? true

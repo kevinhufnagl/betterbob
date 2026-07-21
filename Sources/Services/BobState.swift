@@ -46,10 +46,33 @@ final class BobState: ObservableObject {
     /// False until the first reconcile after signing in has fully settled, so
     /// the UI can show a loading placeholder instead of a half-loaded day.
     @Published private(set) var ready = false
+    /// True while a window showing the full dashboard is on screen. The
+    /// background poll skips the heavy fetches (month grid, activity feed,
+    /// time off, per-poll cycle summary) unless something is actually
+    /// displaying them — that's the bulk of the idle request traffic.
+    private(set) var dashboardActive = false
+    /// When the cycle summary was last fetched, to rate-limit it in the
+    /// background (it only feeds notifications + the midnight fallback there).
+    private var lastCycleSummaryAt: Date?
     /// True while a headless auto re-login is running (drives its loading state).
     @Published private(set) var autoLoginInProgress = false
     /// A user-friendly line describing the current auto sign-in step.
     @Published var autoLoginStatus = ""
+    /// True once the hidden sign-in browser is sitting on the authenticator
+    /// step and needs the one-time code — the UI shows an inline code field.
+    @Published var awaitingOTP = false
+    /// True while an Okta Verify push is out and we're waiting for the user to
+    /// approve it on their phone — the UI shows an "approve on your phone" state.
+    @Published var pushPending = false
+    /// The factor the in-progress sign-in is using, so the inline UI knows from
+    /// the start whether to show a code field or the push-approval state (rather
+    /// than briefly flashing the code field before the push screen loads).
+    @Published var signInFactor: SignInFactor?
+    /// True from the moment the user submits a code until it's accepted or
+    /// rejected — drives the inline field's "Verifying…" state.
+    @Published var otpSubmitting = false
+    /// Set when a submitted code was rejected, so the inline field can say so.
+    @Published var otpError: String?
     private var lastPunchAt: Date? {
         get {
             let t = UserDefaults.standard.double(forKey: "lastPunchAt")
@@ -85,6 +108,9 @@ final class BobState: ObservableObject {
     // MARK: - Lifecycle
 
     func start() {
+        // Older versions could store the authenticator seed; it's no longer
+        // used or accepted, so clear any lingering item on launch.
+        Keychain.wipeLegacyTOTPSecret()
         Notifier.requestAuthorization()
         // Reading the Wi-Fi SSID needs Location authorization on modern macOS.
         if Prefs.shared.wifiAutoReasonEnabled { WiFiMonitor.shared.requestAccess() }
@@ -118,18 +144,31 @@ final class BobState: ObservableObject {
         }
     }
 
-    /// True when a headless re-login is possible (autofill on + a password saved).
+    /// True when a re-login can be started from stored credentials (autofill on
+    /// + a password saved). Completion still needs the user to type the current
+    /// authenticator code into the native prompt.
     var canAutoSignIn: Bool { Prefs.shared.autofillEnabled && Keychain.has(.password) }
 
-    /// Headless re-login using the stored credentials; drives a loading state.
-    func startAutoSignIn() {
+    /// Re-login using the stored password: the hidden browser fills email +
+    /// password and advances to the authenticator step, where the inline field
+    /// collects the one-time code from the user. Drives a loading state.
+    ///
+    /// Started on demand (when the user opens BetterBob and asks to sign in),
+    /// never pre-emptively on expiry — Okta's login transaction expires in a
+    /// few minutes, so driving to the code step only when the user is actually
+    /// there keeps that transaction fresh when they submit the code.
+    func startAutoSignIn(factor: SignInFactor = .googleAuthenticator) {
         guard canAutoSignIn, !autoLoginInProgress else { return }
         autoLoginInProgress = true
+        signInFactor = factor
         autoLoginStatus = "Opening HiBob…"
         lastError = nil
-        SSOSignInController.shared.presentHeadless { [weak self] success in
+        SSOSignInController.shared.presentAssisted(factor: factor) { [weak self] success in
             guard let self else { return }
             self.autoLoginInProgress = false
+            self.awaitingOTP = false
+            self.pushPending = false
+            self.signInFactor = nil
             self.autoLoginStatus = ""
             if success {
                 Task { await self.completeSSOSignIn() }
@@ -140,17 +179,27 @@ final class BobState: ObservableObject {
         }
     }
 
-    /// First-run onboarding: save the auto-login credentials, turn on autofill +
-    /// auto-relogin, and kick off a headless sign-in straight away.
-    func setupAutoLogin(email: String, password: String, secret: String) {
+    /// Feed the code the user typed into the inline field to the sign-in browser.
+    func submitOTP(_ code: String) {
+        otpError = nil
+        otpSubmitting = true
+        SSOSignInController.shared.submitCode(code)
+    }
+
+    /// Abort an in-progress auto sign-in (inline Cancel).
+    func cancelAutoSignIn() {
+        SSOSignInController.shared.cancel()
+    }
+
+    /// First-run onboarding: save the auto-login credentials and turn on autofill
+    /// + auto-relogin. Only the password is stored — the authenticator code is
+    /// always typed (or push-approved) at sign-in. Does NOT start signing in;
+    /// the user then picks a method (Google / Okta code / Okta push).
+    func setupAutoLogin(email: String, password: String) {
         UserDefaults.standard.set(email, forKey: "lastAccountEmail")
         Keychain.set(password, for: .password)
-        // Accept a pasted otpauth:// URL, storing just the base32 secret.
-        let totp = TOTP.base32Secret(from: secret)
-        Keychain.set(totp.isEmpty ? nil : totp, for: .totpSecret)
         Prefs.shared.autofillEnabled = true
         Prefs.shared.autoReloginOnExpiry = true
-        startAutoSignIn()
     }
 
     /// Cookie-only session check — also how the SSO window knows it's done.
@@ -207,7 +256,8 @@ final class BobState: ObservableObject {
         } catch {
             signedIn = false
             lastError = BobError.sessionExpired.localizedDescription
-            if Prefs.shared.autoReloginOnExpiry, canAutoSignIn { startAutoSignIn() }
+            // Re-login starts on demand (see startAutoSignIn) — just nudge.
+            if Prefs.shared.autoReloginOnExpiry, canAutoSignIn { Notifier.awaitingCode() }
         }
     }
 
@@ -531,6 +581,34 @@ final class BobState: ObservableObject {
         }
     }
 
+    /// Today's clock/edit history for the activity feed.
+    func loadActivity() async {
+        guard let id = employeeID else { return }
+        if let acts = try? await client.fetchActivity(employeeID: id, date: Date()) {
+            activity = acts
+        }
+    }
+
+    /// Cycle summary + month grid, loaded on demand when the This-month pane
+    /// appears (the background poll no longer fetches the grid every minute).
+    func loadCycleData() async {
+        guard let id = employeeID else { return }
+        if let (c, s) = try? await client.fetchCycleSummary(employeeID: id) {
+            cycle = c
+            cycleSummary = s
+            lastCycleSummaryAt = now
+        }
+        await loadMonthDays()
+    }
+
+    /// Called by the dashboard window as it shows/hides. Turning active kicks a
+    /// full reconcile so the panes fill in immediately.
+    func setDashboardActive(_ active: Bool) {
+        guard active != dashboardActive else { return }
+        dashboardActive = active
+        if active { Task { await reconcile() } }
+    }
+
     // MARK: - Time off
 
     func loadTimeOff() async {
@@ -590,12 +668,10 @@ final class BobState: ObservableObject {
 
     func reconcile() async {
         guard signedIn, let id = employeeID else {
-            // Logged out: keep retrying the silent re-login on each wake/poll (not
-            // just the one that first noticed the expiry), so waking on Monday
-            // signs you back in on its own when auto-relogin is enabled.
-            if !signedIn, Prefs.shared.autoReloginOnExpiry, canAutoSignIn, !autoLoginInProgress {
-                startAutoSignIn()
-            }
+            // Logged out: nothing to poll. Re-login needs the user to type a
+            // one-time code, so we don't auto-open the prompt on every poll —
+            // it's offered once when the session first expires (see below) and
+            // otherwise started from the sign-in button.
             return
         }
         do {
@@ -635,21 +711,35 @@ final class BobState: ObservableObject {
                 lastError = error.localizedDescription
             }
 
-            // Dashboard figures (cycle + per-day summary) — also feed the
-            // midnight fallback below, so load them before resolving entries.
-            if let (c, s) = try? await client.fetchCycleSummary(employeeID: id) {
+            // Cycle + per-day summary feed the target/deadline notifications
+            // and the near-midnight fallback below. Refresh every poll while
+            // the dashboard is open; in the background only every 10 minutes,
+            // since nothing on screen depends on it minute-to-minute.
+            let cycleStale = lastCycleSummaryAt.map { now.timeIntervalSince($0) > 600 } ?? true
+            if dashboardActive || cycleStale,
+               let (c, s) = try? await client.fetchCycleSummary(employeeID: id) {
                 cycle = c
                 cycleSummary = s
+                lastCycleSummaryAt = now
             }
-            await loadMonthDays()
+            // The month grid is a heavy fetch + parse. Load it every poll only
+            // when the dashboard is open; otherwise leave it to CyclePane's own
+            // loader and the targeted fallback just below.
+            if dashboardActive { await loadMonthDays() }
 
             // Resolve today's entries ONCE and assign only when they actually
             // change, so a refresh never blanks the timeline. Prefer clockStatus;
             // near midnight it reports the UTC day (empty for the local today),
-            // so fall back to the per-day timesheet the web uses.
+            // so fall back to the per-day timesheet the web uses — fetching it
+            // on demand if the background poll skipped it.
             var resolved = entriesForToday(status.entries)
-            if resolved.isEmpty, let md = monthDays.first(where: { $0.dateKey == todayKey }) {
-                resolved = md.entries
+            if resolved.isEmpty {
+                if monthDays.first(where: { $0.dateKey == todayKey }) == nil {
+                    await loadMonthDays()
+                }
+                if let md = monthDays.first(where: { $0.dateKey == todayKey }) {
+                    resolved = md.entries
+                }
             }
             // Hold the optimistic post-punch state until the server reflects it,
             // rather than briefly reverting to stale data.
@@ -665,18 +755,23 @@ final class BobState: ObservableObject {
             lastSync = Date()
             lastError = nil
             maybeNotifyReminders()
-            if let acts = try? await client.fetchActivity(employeeID: id, date: Date()) {
-                activity = acts
+            // Activity feed + time off are dashboard-only; ActivityPane and
+            // TimeOffPane load them on appear, so the background poll skips them.
+            if dashboardActive {
+                await loadActivity()
+                await loadTimeOff()
             }
-            await loadTimeOff()
         } catch BobError.sessionExpired {
             // Okta session gone — flip to signed-out so the popover offers
             // the sign-in button instead of erroring forever.
             signedIn = false
             lastError = BobError.sessionExpired.localizedDescription
-            // Silently re-login in the background if the user opted in.
+            // Start re-login on demand (not here) so the Okta login transaction
+            // is fresh when the user actually enters the code — see note in
+            // startAutoSignIn. Just nudge them to reconnect; the drive begins
+            // when they open BetterBob and hit "Sign in automatically".
             if Prefs.shared.autoReloginOnExpiry, canAutoSignIn {
-                startAutoSignIn()
+                Notifier.awaitingCode()
             } else {
                 Notifier.failure(BobError.sessionExpired.localizedDescription)
             }

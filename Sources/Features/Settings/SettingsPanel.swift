@@ -13,7 +13,6 @@ struct SettingsPanel: View {
                        subtitle: state.signedIn ? state.accountEmail : "Not signed in")
 
             SettingsGroup(title: "Account") { accountContent }
-            SettingsGroup(title: "Automatic sign-in") { AutoSignInCard(state: state, prefs: prefs) }
             SettingsGroup(title: "Automatic break") { autoBreakContent }
             SettingsGroup(title: "Daily limit") { dailyLimitContent }
             if state.signedIn {
@@ -47,6 +46,8 @@ struct SettingsPanel: View {
                     Text("Signed in as \(state.accountEmail ?? "—")")
                         .font(.system(size: 12))
                     Spacer()
+                    Button("Sign-in setup…") { OnboardingController.shared.present() }
+                        .controlSize(.small)
                     Button("Sign out") { state.signOut() }
                         .controlSize(.small)
                 }
@@ -61,7 +62,7 @@ struct SettingsPanel: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(state.autoLoginInProgress)
 
-                Text("Opens the sign-in window where you choose automatic sign-in (password + authenticator code, stored in your Keychain) or a browser sign-in (Okta Verify push included). You can change how it's set up any time below.")
+                Text("Opens the sign-in window where you set up automatic sign-in (your password is stored in the Keychain; you type the one-time code) or sign in with a browser (Okta Verify push included). Edit or forget your saved sign-in there any time.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -233,6 +234,8 @@ struct SettingsPanel: View {
                 .font(.system(size: 12))
             Toggle("Something failed (sign-in, HiBob unreachable)", isOn: $prefs.notifyFailures)
                 .font(.system(size: 12))
+            Toggle("Authenticator code needed to reconnect", isOn: $prefs.notifyAwaitingCode)
+                .font(.system(size: 12))
         }
     }
 
@@ -347,141 +350,6 @@ struct SettingsPanel: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-}
-
-/// Store the HiBob password + TOTP secret (in the Keychain) for autofilling the
-/// SSO sign-in form. Kept in its own view so it can hold the editable fields.
-private struct AutoSignInCard: View {
-    @Environment(\.colorScheme) private var scheme
-    @ObservedObject var state: BobState
-    @ObservedObject var prefs: Prefs
-    @State private var email = ""
-    @State private var password = ""
-    @State private var secret = ""
-    @State private var editing = false
-
-    private var hasSaved: Bool { Keychain.has(.password) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Toggle("Fill my details on the sign-in screen", isOn: $prefs.autofillEnabled)
-                .font(.system(size: 12))
-            Toggle("Re-login automatically when the session expires", isOn: $prefs.autoReloginOnExpiry)
-                .font(.system(size: 12))
-                .disabled(!prefs.autofillEnabled)
-
-            if editing || !hasSaved {
-                editor
-            } else {
-                savedSummary
-            }
-
-            Text("Stored only in your macOS login Keychain and used only against the HiBob login form — never sent anywhere else. Signing in itself happens from the sign-in window (the “Sign in…” button above). If Okta changes their login page this may stop — sign in with a browser that day.")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear(perform: load)
-    }
-
-    // MARK: Saved summary
-
-    private var savedSummary: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            summaryRow("envelope.fill", email.isEmpty ? "No email set" : email)
-            summaryRow("key.fill", "Password ••••••••")
-            if secret.isEmpty {
-                summaryRow("lock.rotation", "No authenticator code")
-            } else if let code = TOTP.code(secretBase32: secret) {
-                summaryRow("lock.rotation", "Code \(code)", mono: true)
-            } else {
-                summaryRow("exclamationmark.triangle.fill", "Invalid TOTP secret", tint: .orange)
-            }
-            HStack(spacing: 8) {
-                Label("Saved to Keychain", systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 10)).foregroundStyle(Color.primaryAccent(scheme))
-                Spacer()
-                Button("Clear", role: .destructive) { clearAll() }.controlSize(.small)
-                Button("Edit") { editing = true }.controlSize(.small).buttonStyle(.borderedProminent)
-            }
-            .padding(.top, 2)
-        }
-        .disabled(!prefs.autofillEnabled)
-    }
-
-    private func summaryRow(_ symbol: String, _ text: String, mono: Bool = false, tint: Color = .secondary) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(tint).frame(width: 16)
-            Text(text)
-                .font(.system(size: 12, design: mono ? .monospaced : .default))
-                .foregroundStyle(text.hasPrefix("No ") || text.hasPrefix("Invalid") ? .secondary : .primary)
-        }
-    }
-
-    // MARK: Editor
-
-    private var editor: some View {
-        Group {
-            field("Email") {
-                TextField("you@company.com", text: $email)
-                    .textFieldStyle(.roundedBorder).textContentType(.username)
-            }
-            field("Password") {
-                SecureField("HiBob / Okta password", text: $password).textFieldStyle(.roundedBorder)
-            }
-            field("TOTP secret") {
-                VStack(alignment: .leading, spacing: 4) {
-                    SecureField("Base32 secret or otpauth:// URL", text: $secret)
-                        .textFieldStyle(.roundedBorder)
-                    if !secret.isEmpty {
-                        if let code = TOTP.code(secretBase32: secret) {
-                            Text("Current code: \(code)")
-                                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                        } else {
-                            Text("Not a valid base32 secret")
-                                .font(.system(size: 10)).foregroundStyle(.orange)
-                        }
-                    }
-                }
-            }
-            HStack(spacing: 8) {
-                Spacer()
-                if hasSaved { Button("Cancel") { load(); editing = false }.controlSize(.small) }
-                Button("Save") { save() }
-                    .controlSize(.small).buttonStyle(.borderedProminent)
-                    .disabled(email.isEmpty || password.isEmpty)
-            }
-        }
-        .disabled(!prefs.autofillEnabled)
-    }
-
-    private func field<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {
-        HStack(alignment: .top) {
-            Text(label).font(.system(size: 12)).frame(width: 96, alignment: .leading).padding(.top, 4)
-            content()
-        }
-    }
-
-    // MARK: Load / save
-
-    private func load() {
-        email = UserDefaults.standard.string(forKey: "lastAccountEmail") ?? ""
-        password = Keychain.get(.password) ?? ""
-        secret = Keychain.get(.totpSecret) ?? ""
-    }
-    private func save() {
-        UserDefaults.standard.set(email, forKey: "lastAccountEmail")
-        Keychain.set(password, for: .password)
-        // Accept a pasted otpauth:// URL, storing just the base32 secret.
-        Keychain.set(TOTP.base32Secret(from: secret), for: .totpSecret)
-        editing = false
-    }
-    private func clearAll() {
-        email = ""; password = ""; secret = ""
-        UserDefaults.standard.removeObject(forKey: "lastAccountEmail")
-        Keychain.set(nil, for: .password); Keychain.set(nil, for: .totpSecret)
-        editing = true
     }
 }
 

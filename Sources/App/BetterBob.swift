@@ -1,16 +1,19 @@
 import SwiftUI
 import AppKit
 import Combine
+import UserNotifications
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var titleTimer: Timer?
+    private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         BobState.shared.start()
         Updater.shared.start()
+        UNUserNotificationCenter.current().delegate = self
 
         // Throwaway dev scaffold: `--capture-endpoints` opens the attendance
         // page in the signed-in browser and records the API calls so the
@@ -32,6 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
+        // While signing in, keep the popover open when focus leaves the app —
+        // otherwise invoking 1Password (which comes forward to fill the code)
+        // would dismiss a .transient popover and drop the code field.
+        BobState.shared.$autoLoginInProgress
+            .sink { [weak self] inProgress in
+                self?.popover.behavior = inProgress ? .semitransient : .transient
+            }
+            .store(in: &cancellables)
         // Content is built on show and torn down on close (see togglePopover /
         // popoverDidClose) so its SwiftUI view — and Bob's animation clock —
         // isn't kept alive burning CPU while the popover is closed.
@@ -91,16 +102,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func togglePopover(_ sender: Any?) {
-        guard let button = statusItem.button else { return }
-        if popover.isShown {
-            popover.performClose(sender)
-        } else {
-            let host = NSHostingController(rootView: PopoverRootView(state: BobState.shared))
-            host.sizingOptions = [.preferredContentSize]
-            popover.contentViewController = host
-            Task { await BobState.shared.reconcile() }
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+        if popover.isShown { popover.performClose(sender) } else { showPopover() }
+    }
+
+    /// Show the popover anchored to the menu-bar item (also used when the user
+    /// taps the "enter your code" notification).
+    private func showPopover() {
+        guard let button = statusItem.button, !popover.isShown else { return }
+        let host = NSHostingController(rootView: PopoverRootView(state: BobState.shared))
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = host
+        Task { await BobState.shared.reconcile() }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    // MARK: - Notification taps
+
+    /// Show our notifications even when BetterBob is the frontmost app.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions { [.banner, .sound] }
+
+    /// Tapping the "enter your code" notification opens the popover with the
+    /// waiting code field.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
+        if response.notification.request.identifier == Notifier.awaitingCodeID {
+            NSApp.activate(ignoringOtherApps: true)
+            // Open the popover so the user picks a sign-in method; the drive
+            // starts on that click, keeping the Okta transaction fresh.
+            showPopover()
         }
     }
 
@@ -119,13 +151,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let state = BobState.shared.clockState
 
         // Bob himself, as a template silhouette (auto-adapts to the menu bar),
-        // with an optional play/pause corner badge while the clock is running.
+        // with a corner badge: a lock when signed out, else the play/pause
+        // clock-state badge while the clock is running.
         let onBreak: Bool = { if case .onBreak = state { return true }; return false }()
-        let badge: BobIcon.StateBadge = !Prefs.shared.showStateBadge || state == .clockedOut
-            ? .none : (onBreak ? .pause : .play)
+        let signedIn = BobState.shared.signedIn
+        let badge: BobIcon.StateBadge
+        if !signedIn {
+            badge = .lock   // shown regardless of the play/pause preference
+        } else if !Prefs.shared.showStateBadge || state == .clockedOut {
+            badge = .none
+        } else {
+            badge = onBreak ? .pause : .play
+        }
         let bob = BobIcon.menuBar(height: 18, badge: badge)
 
-        if Prefs.shared.colorMenuBarIcon, state != .clockedOut {
+        if Prefs.shared.colorMenuBarIcon, signedIn, state != .clockedOut {
             // Tinted (non-template) Bob by clock state; working follows the
             // system accent like the rest of the brand colors.
             let workingTint: NSColor = {

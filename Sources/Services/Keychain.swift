@@ -9,7 +9,6 @@ enum Keychain {
 
     enum Key: String {
         case password = "hibobPassword"
-        case totpSecret = "hibobTOTPSecret"
     }
 
     static func set(_ value: String?, for key: Key) {
@@ -57,6 +56,17 @@ enum Keychain {
     }
 
     static func has(_ key: Key) -> Bool { get(key) != nil }
+
+    /// One-time cleanup for the authenticator seed earlier versions stored under
+    /// this service. The feature is gone; delete any lingering item so the seed
+    /// doesn't sit on disk unused.
+    static func wipeLegacyTOTPSecret() {
+        SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: "hibobTOTPSecret",
+        ] as CFDictionary)
+    }
 
     /// Delete every item under the service in one call — the uninstaller's
     /// half of the cleanup. Silent, because this build created the items.

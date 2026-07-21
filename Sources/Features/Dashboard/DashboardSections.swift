@@ -406,6 +406,7 @@ struct CyclePane: View {
             rhythm
             compliance
         }
+        .task { await state.loadCycleData() }
     }
 
     private var byDayList: some View {
@@ -732,6 +733,7 @@ struct ActivityPane: View {
                 }
             }
         }
+        .task { await state.loadActivity() }
     }
     private func glyph(_ k: ActivityEvent.Kind) -> String {
         switch k {

@@ -198,3 +198,162 @@ extension ClockState {
         }
     }
 }
+
+/// The three second-factor methods as one tied-together button group; each
+/// starts the automatic sign-in for that factor (one click, code field or push
+/// wait appears in place). Shared by the popover and the sign-in window.
+struct SignInFactorGroup: View {
+    @ObservedObject var state: BobState
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(SignInFactor.allCases.enumerated()), id: \.element.id) { i, factor in
+                if i > 0 { Divider().frame(height: 34) }
+                Button { state.startAutoSignIn(factor: factor) } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: factor.icon).font(.system(size: 13, weight: .semibold))
+                        Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(Color.primary.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
+/// Inline auto sign-in card: shown wherever auto sign-in is started (popover,
+/// onboarding, dashboard, settings) instead of a separate window. The code
+/// field is available right away so the user can enter it while the hidden
+/// browser is still filling email + password in the background; a small step
+/// line tracks progress, and the button shows a "verifying" state after submit.
+struct AutoLoginInline: View {
+    @ObservedObject var state: BobState
+    /// Fill the container width (popover) instead of the capped card width used
+    /// in wide windows.
+    var fillWidth = false
+    @State private var code = ""
+    @FocusState private var focused: Bool
+
+    private var trimmed: String { code.trimmingCharacters(in: .whitespaces) }
+    private var canSubmit: Bool { trimmed.count >= 4 && !state.otpSubmitting }
+    /// This sign-in uses push (no code field at any point).
+    private var isPush: Bool { state.signInFactor?.isPush == true }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(Color.accentColor.opacity(0.15)).frame(width: 30, height: 30)
+                    Image(systemName: isPush ? "bell.badge.fill" : "lock.shield.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(headerTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(substatus)
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .contentTransition(.opacity)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if isPush {
+                // Push sign-in: no code field ever — just wait for phone approval.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(state.pushPending
+                         ? "Waiting for you to approve the push in Okta Verify."
+                         : "A push is on its way to your phone.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    // Plain field (not secure) marked as a one-time code: enables
+                    // macOS AutoFill and 1Password Universal Autofill (Cmd-\).
+                    TextField("000000", text: $code)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.center)
+                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                        .textContentType(.oneTimeCode)
+                        .focused($focused)
+                        .disabled(state.otpSubmitting)
+                        .frame(maxWidth: .infinity)
+                        // Vertical padding rather than a fixed height, so the glyphs
+                        // (and the placeholder) are never clipped when unfocused.
+                        .padding(.vertical, 9)
+                        .padding(.horizontal, 8)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.primary.opacity(0.06)))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.accentColor.opacity(focused ? 0.5 : 0.12), lineWidth: 1))
+                        .onSubmit(submit)
+
+                    Button(action: submit) {
+                        Group {
+                            if state.otpSubmitting {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Text("Sign in")
+                            }
+                        }
+                        .frame(width: 56, height: 20)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(!canSubmit)
+                    .keyboardShortcut(.defaultAction)
+                }
+
+                if let err = state.otpError {
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10)).foregroundStyle(Color.bobOrange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Button("Cancel", action: state.cancelAutoSignIn)
+                .buttonStyle(.plain)
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(14)
+        .frame(maxWidth: fillWidth ? .infinity : 300)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color.primary.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+        .animation(.easeInOut(duration: 0.15), value: state.otpSubmitting)
+        .animation(.easeInOut(duration: 0.15), value: state.autoLoginStatus)
+        .animation(.easeInOut(duration: 0.15), value: state.otpError)
+        .animation(.easeInOut(duration: 0.15), value: state.pushPending)
+        .onAppear { if !isPush { focused = true } }
+    }
+
+    private var headerTitle: String {
+        if isPush { return state.pushPending ? "Approve on your phone" : "Signing you in…" }
+        return "Two-factor code"
+    }
+
+    private var substatus: String {
+        if isPush { return state.pushPending ? "Sent to your phone" : (state.autoLoginStatus.isEmpty ? "Connecting…" : state.autoLoginStatus) }
+        if state.otpSubmitting { return "Verifying your code…" }
+        if state.awaitingOTP { return "Ready — enter the code from your app" }
+        return state.autoLoginStatus.isEmpty ? "Signing you in…" : state.autoLoginStatus
+    }
+
+    private func submit() {
+        guard canSubmit else { return }
+        state.submitOTP(trimmed)
+    }
+}

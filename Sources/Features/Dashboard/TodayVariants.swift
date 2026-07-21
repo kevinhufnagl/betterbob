@@ -360,11 +360,30 @@ func slimBar(_ fraction: Double, tint: Color, height: CGFloat = 8) -> some View 
 struct TodayTimeline: View {
     @ObservedObject var state: BobState
     @Environment(\.colorScheme) private var scheme
+    // The 1Hz clock only exists to tick the live worked-time counter. A closed
+    // Window scene keeps its view tree (and this clock) alive in SwiftUI, so
+    // gate it on real window visibility — otherwise it re-lays-out the whole
+    // Today pane every second in the background, burning CPU for nobody.
+    @State private var windowVisible = true
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            let v = TodayVals(state, now: ctx.date)
-            VStack(alignment: .leading, spacing: 16) {
+        Group {
+            if windowVisible {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    content(now: ctx.date)
+                }
+            } else {
+                content(now: Date())
+            }
+        }
+        .trackWindowVisibility { windowVisible = $0 }
+    }
+
+    @ViewBuilder
+    private func content(now: Date) -> some View {
+        let ctxDate = now
+        let v = TodayVals(state, now: ctxDate)
+        VStack(alignment: .leading, spacing: 16) {
                 // Bob straddles the hero's top edge: the ring floats on the
                 // waterline (the card's boundary), his head is out of the
                 // water above it, his body inside.
@@ -415,7 +434,7 @@ struct TodayTimeline: View {
                 // so it never overlaps the next card.
                 .padding(.bottom, 25)
                 .overlay(alignment: .bottom) {
-                    ActionDock(state: state, now: ctx.date)
+                    ActionDock(state: state, now: ctxDate)
                 }
 
                 // The day strip floats naked on the page — no card box — with
@@ -423,15 +442,15 @@ struct TodayTimeline: View {
                 // nothing here; the entries card carries the empty message.)
                 if !state.entries.isEmpty {
                     VStack(spacing: 5) {
-                        EditableDayStrip(entries: state.entries, now: ctx.date, height: 40) { updated in
+                        EditableDayStrip(entries: state.entries, now: ctxDate, height: 40) { updated in
                             state.saveDay(updated, on: Date())
                         }
-                        BoundaryLabels(entries: state.entries, now: ctx.date)
+                        BoundaryLabels(entries: state.entries, now: ctxDate)
                     }
                     .padding(.horizontal, 2)
                 }
 
-                if case .onBreak = state.clockState { breakBanner(ctx.date).transition(.bobBanner) }
+                if case .onBreak = state.clockState { breakBanner(ctxDate).transition(.bobBanner) }
                 if state.overMaxNonBreak { missingBreakBanner.transition(.bobBanner) }
                 if !state.overMaxNonBreak, let short = state.breakGuidelineShortfall {
                     shortBreakBanner(short).transition(.bobBanner)
@@ -440,12 +459,11 @@ struct TodayTimeline: View {
 
                 EntriesTable(state: state)
             }
-            .animation(Motion.standard, value: state.clockState)
-            .animation(Motion.standard, value: state.overMaxNonBreak)
-            .animation(Motion.standard, value: state.breakGuidelineShortfall)
-            .animation(Motion.standard, value: state.overDailyMax)
-            .animation(Motion.standard, value: state.entries)
-        }
+        .animation(Motion.standard, value: state.clockState)
+        .animation(Motion.standard, value: state.overMaxNonBreak)
+        .animation(Motion.standard, value: state.breakGuidelineShortfall)
+        .animation(Motion.standard, value: state.overDailyMax)
+        .animation(Motion.standard, value: state.entries)
     }
 
     /// Shown while on a break — makes clear whether Bob will clock you back in.

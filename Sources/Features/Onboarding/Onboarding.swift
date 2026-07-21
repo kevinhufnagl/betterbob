@@ -48,18 +48,26 @@ final class OnboardingController {
     private func cleanup() {
         OnboardingController.completed = true
         window = nil
-        // Signed in during onboarding → drop back to the menu-bar-only mode.
-        if BobState.shared.signedIn { NSApp.setActivationPolicy(.accessory) }
+        // Drop back to menu-bar-only mode only when onboarding was the sole
+        // window (first run). If the main window is still open — e.g. onboarding
+        // was opened from Settings' "Sign-in setup…" — stay regular, or going
+        // accessory would order that window out and look like it closed.
+        let mainWindowOpen = NSApp.windows.contains {
+            $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible
+        }
+        if BobState.shared.signedIn && !mainWindowOpen {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 }
 
 struct OnboardingView: View {
     @ObservedObject var state: BobState
+    @ObservedObject private var prefs = Prefs.shared
     var onDone: () -> Void
 
     @State private var email = ""
     @State private var password = ""
-    @State private var secret = ""
     @State private var editing = false
     @Environment(\.colorScheme) private var scheme
 
@@ -114,7 +122,7 @@ struct OnboardingView: View {
         OnboardingCard(
             symbol: "wand.and.rays", tint: .accentColor,
             title: "Sign in automatically", badge: "Recommended", tag: "Hands-off",
-            blurb: "Save your HiBob password and 6-digit authenticator code. Bob signs you in on his own — after sleep, on restart, or whenever the session expires."
+            blurb: "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Best when your login is a password + authenticator code. For Okta Verify push approvals, use the browser option below.",
@@ -129,13 +137,7 @@ struct OnboardingView: View {
                 }
 
                 if state.autoLoginInProgress {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text(state.autoLoginStatus.isEmpty ? "Signing you in…" : state.autoLoginStatus)
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                            .contentTransition(.opacity)
-                    }
-                    .animation(.easeInOut(duration: 0.15), value: state.autoLoginStatus)
+                    AutoLoginInline(state: state, fillWidth: true)
                 } else if let err = state.lastError {
                     Label(err, systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 10)).foregroundStyle(.orange)
@@ -170,26 +172,29 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             summaryRow("envelope.fill", email.isEmpty ? "No email set" : email)
             summaryRow("key.fill", "Password ••••••••")
-            if secret.isEmpty {
-                summaryRow("lock.rotation", "No authenticator code")
-            } else if let code = TOTP.code(secretBase32: secret) {
-                summaryRow("lock.rotation", "Code \(code)", mono: true)
-            } else {
-                summaryRow("exclamationmark.triangle.fill", "Invalid authenticator secret", tint: .orange)
-            }
+            summaryRow("keyboard", "You type the code at sign-in")
             if !state.autoLoginInProgress {
-                HStack(spacing: 8) {
-                    Button { state.startAutoSignIn() } label: {
-                        Label("Sign in automatically", systemImage: "wand.and.rays")
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(maxWidth: .infinity)
+                VStack(spacing: 8) {
+                    SignInFactorGroup(state: state)
+                    HStack(spacing: 8) {
+                        Spacer()
+                        Button("Edit") { editing = true }.controlSize(.small)
+                        Button("Forget", role: .destructive) { forget() }.controlSize(.small)
                     }
-                    .controlSize(.large).buttonStyle(.borderedProminent)
-                    Button("Edit") { editing = true }.controlSize(.large)
                 }
                 .padding(.top, 2)
             }
         }
+    }
+
+    /// Remove the stored credentials and turn automatic sign-in off.
+    private func forget() {
+        Keychain.set(nil, for: .password)
+        UserDefaults.standard.removeObject(forKey: "lastAccountEmail")
+        Prefs.shared.autofillEnabled = false
+        Prefs.shared.autoReloginOnExpiry = false
+        email = ""; password = ""
+        editing = true
     }
 
     private func summaryRow(_ symbol: String, _ text: String, mono: Bool = false, tint: Color = .secondary) -> some View {
@@ -211,27 +216,17 @@ struct OnboardingView: View {
             field("Password") {
                 SecureField("HiBob / Okta password", text: $password).textFieldStyle(.roundedBorder)
             }
-            field("Auth code") {
-                VStack(alignment: .leading, spacing: 3) {
-                    SecureField("Base32 secret or otpauth:// URL", text: $secret)
-                        .textFieldStyle(.roundedBorder)
-                    if !secret.isEmpty {
-                        if let code = TOTP.code(secretBase32: secret) {
-                            Text("Current code: \(code)")
-                                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                        } else {
-                            Text("Not a valid base32 secret")
-                                .font(.system(size: 10)).foregroundStyle(.orange)
-                        }
-                    }
-                }
-            }
+            Label("Bob saves your password, then you pick how to sign in. He fills your email + password automatically and stops at the authenticator step so you type the current code (or approve a push). Your code is never stored.",
+                  systemImage: "keyboard")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if !state.autoLoginInProgress {
                 HStack(spacing: 8) {
                     Button {
-                        state.setupAutoLogin(email: email, password: password, secret: secret)
+                        state.setupAutoLogin(email: email, password: password)
+                        editing = false
                     } label: {
-                        Label("Set up & sign in", systemImage: "checkmark.circle.fill")
+                        Label("Save & choose a method", systemImage: "checkmark.circle.fill")
                             .font(.system(size: 12, weight: .semibold))
                             .frame(maxWidth: .infinity)
                     }
@@ -246,7 +241,6 @@ struct OnboardingView: View {
     private func load() {
         email = UserDefaults.standard.string(forKey: "lastAccountEmail") ?? ""
         password = Keychain.get(.password) ?? ""
-        secret = Keychain.get(.totpSecret) ?? ""
         editing = false
     }
 

@@ -413,23 +413,29 @@ struct PopoverRootView: View {
             AnimatedBob(sleeping: true).frame(width: 54, height: 54)
             Text("Bob's off the clock")
                 .font(.system(size: 12, weight: .semibold))
-            Text("Sign in to HiBob to get going")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
+            // Hidden while the code field is up — the card carries its own copy.
+            if !state.autoLoginInProgress {
+                Text("Sign in to HiBob to get going")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
             if state.autoLoginInProgress {
-                VStack(spacing: 2) {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("Signing you in…").font(.system(size: 11, weight: .medium))
+                AutoLoginInline(state: state, fillWidth: true)
+            } else if state.canAutoSignIn {
+                // Credentials on file: one click per second-factor method — the
+                // code field (or push wait) appears in place. Or open the window
+                // for browser / other options.
+                VStack(spacing: 8) {
+                    SignInFactorGroup(state: state)
+                    Button("More options") {
+                        NotificationCenter.default.post(name: .closePopover, object: nil)
+                        OnboardingController.shared.present()
                     }
-                    if !state.autoLoginStatus.isEmpty {
-                        Text(state.autoLoginStatus).font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
-                .animation(.easeInOut(duration: 0.15), value: state.autoLoginStatus)
             } else {
-                // One button — the sign-in window is where you pick automatic
-                // vs browser (and set up automatic sign-in). Change it later in
-                // Settings.
+                // No stored credentials: the window is where you set up automatic
+                // or browser sign-in.
                 Button {
                     NotificationCenter.default.post(name: .closePopover, object: nil)
                     OnboardingController.shared.present()
