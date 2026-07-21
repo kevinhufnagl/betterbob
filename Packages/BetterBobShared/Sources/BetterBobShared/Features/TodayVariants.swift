@@ -1061,9 +1061,9 @@ public struct BuoyBob: View {
                     .overlay(Ellipse().strokeBorder(
                         Color(red: 0.42, green: 0.27, blue: 0.16),
                         lineWidth: max(1, size * 0.015)))
-                    .frame(width: size * 0.15, height: size * 0.105)
+                    .frame(width: size * 0.19, height: size * 0.13)
                     .rotationEffect(.degrees(14 * side))
-                    .offset(x: size * 0.26 * side, y: size * 0.01)
+                    .offset(x: size * 0.27 * side, y: size * 0.07)
             }
             if onBreak {
                 BobShades(size: size)
