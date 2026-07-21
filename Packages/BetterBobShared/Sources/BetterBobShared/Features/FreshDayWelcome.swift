@@ -156,20 +156,23 @@ public struct FreshDayWelcome: View {
             .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
     }
 
-    /// "Start now → done 17:23", counting the auto-break the engine would owe.
+    /// "Done by 17:23 if you start now", counting the auto-break the engine
+    /// would owe along the way.
     private var doneByText: String? {
         guard target > 0 else { return nil }
         let prefs = Prefs.shared
         let pendingBreak = prefs.autoBreakEnabled && target > prefs.threshold
             ? prefs.breakLength : 0
         let done = Date().addingTimeInterval(target + pendingBreak)
-        return "Start now → done \(Fmt.clock(done))"
+        return "Done by \(Fmt.clock(done)) if you start now"
     }
 
-    /// The cycle's running over/under, when the summary has arrived.
+    /// The cycle's running over/under, when the summary has arrived —
+    /// worded, not signed: "1:00 behind this month" beats "−1:00 this cycle".
     private var balanceText: String? {
         guard let minutes = state.cycleSummary?.overUnderMinutes, minutes != 0 else { return nil }
-        return (minutes > 0 ? "+" : "−") + Fmt.hm(TimeInterval(abs(minutes) * 60)) + " this cycle"
+        let amount = Fmt.hm(TimeInterval(abs(minutes) * 60))
+        return minutes > 0 ? "\(amount) ahead this month" : "\(amount) behind this month"
     }
 
     /// The next booked, still-active leave — something to look forward to.
@@ -185,7 +188,18 @@ public struct FreshDayWelcome: View {
             .min { $0.1 < $1.1 }
         guard let (request, start) = next else { return nil }
         let days = Calendar.current.dateComponents([.day], from: today, to: start).day ?? 0
-        let when = days == 0 ? "today" : days == 1 ? "tomorrow" : "in \(days)d"
+        let when: String
+        if days == 0 {
+            when = "today"
+        } else if days == 1 {
+            when = "tomorrow"
+        } else if Calendar(identifier: .iso8601).isDate(start, equalTo: today,
+                                                        toGranularity: .weekOfYear) {
+            // Same week: the weekday name beats counting days.
+            when = "this \(start.formatted(.dateTime.weekday(.wide)))"
+        } else {
+            when = "in \(days) days"
+        }
         return "\(request.typeName) \(when)"
     }
 
@@ -238,8 +252,7 @@ public struct FreshDayWelcome: View {
                         if let balanceText {
                             chip(balanceText, symbol: "scalemass")
                         }
-                        // The popover's fixed slot only has room for two.
-                        if let nextTimeOffText, !compact {
+                        if let nextTimeOffText {
                             chip(nextTimeOffText, symbol: "sun.max")
                         }
                     }
@@ -252,6 +265,13 @@ public struct FreshDayWelcome: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Time off normally loads when its tab opens — fetch it here too, or
+        // the next-time-off chip pops in late (or not at all) on a fresh day.
+        .task {
+            if state.timeOffRequests.isEmpty {
+                await state.loadTimeOff()
+            }
+        }
     }
 }
 
