@@ -207,11 +207,17 @@ struct BoundaryLabels: View {
             let span = max(1, end.timeIntervalSince(start))
             let w = geo.size.width
             ZStack(alignment: .topLeading) {
-                ForEach(marks(sorted, start: start, end: end, hasOpen: hasOpen,
-                              span: span, w: w), id: \.x) { m in
+                let all = marks(sorted, start: start, end: end, hasOpen: hasOpen,
+                                span: span, w: w)
+                ForEach(all, id: \.x) { m in
+                    // The day's bookends carry a little more weight than the
+                    // joints between blocks.
+                    let edge = m.x == all.first?.x || m.x == all.last?.x
                     Text(m.text)
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 9, weight: edge ? .semibold : .medium,
+                                      design: .monospaced))
+                        .foregroundStyle(edge ? AnyShapeStyle(.primary.opacity(0.7))
+                                              : AnyShapeStyle(.secondary))
                         .position(x: min(max(m.x, 15), w - 15), y: 6)
                 }
             }
@@ -874,13 +880,20 @@ struct BuoyBob: View {
     @State private var sway = false
     @State private var dip = false
     @State private var blink: CGFloat = 0
+    // Fresh float character on every appearance, like the wave's seeds —
+    // bounded above by the old fixed values, so he never swings wider or
+    // dips deeper than before.
+    @State private var swayAmp = Double.random(in: 3.0...4.5)
+    @State private var swayDur = Double.random(in: 2.0...2.8)
+    @State private var dipAmp = CGFloat.random(in: 0.024...0.035)
+    @State private var dipDur = Double.random(in: 1.45...2.1)
 
     var body: some View {
         content(blink: sleeping ? 1 : blink)
-            .rotationEffect(.degrees(sway ? 4.5 : -4.5))
+            .rotationEffect(.degrees(sway ? swayAmp : -swayAmp))
             // Scaled to Bob's size — a fixed ±2.5pt was too much travel for
             // the popover's small swimmer.
-            .offset(y: (dip ? 1 : -1) * size * 0.035)
+            .offset(y: (dip ? 1 : -1) * size * dipAmp)
             .overlay(alignment: .topTrailing) { if sleeping { DriftingZs() } }
             .frame(width: size, height: size)
             .trackWindowVisibility { visible in
@@ -902,8 +915,8 @@ struct BuoyBob: View {
 
     private func applyFloat() {
         if windowVisible && !Motion.reduce {
-            withAnimation(.easeInOut(duration: 2.3).repeatForever(autoreverses: true)) { sway = true }
-            withAnimation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true)) { dip = true }
+            withAnimation(.easeInOut(duration: swayDur).repeatForever(autoreverses: true)) { sway = true }
+            withAnimation(.easeInOut(duration: dipDur).repeatForever(autoreverses: true)) { dip = true }
         } else {
             var t = Transaction()
             t.disablesAnimations = true
