@@ -76,8 +76,8 @@ struct TodayScreen: View {
                 // up over the section's top edge (middle — the corners hold
                 // the status pill and worked-time text).
                 if v.fraction < 0.15, state.clockState != .clockedOut {
-                    PeekingBob(size: 64, onBreak: v.onBreak)
-                        .offset(y: -30)
+                    PeekingBob(size: 78, onBreak: v.onBreak)
+                        .offset(y: -46)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
