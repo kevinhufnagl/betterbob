@@ -577,14 +577,13 @@ public struct CalendarHeatmap: View {
     public var body: some View {
         Card(title: "Daily hours", symbol: "calendar") {
             if let days = state.cycleSummary?.days, !days.isEmpty {
-                let maxWorked = max(days.map(\.worked).max() ?? 1, 1)
                 VStack(spacing: 8) {
                     LazyVGrid(columns: cols, spacing: 6) {
                         ForEach(weekdays, id: \.self) { wd in
                             Text(wd).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                         }
                         ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 40) }
-                        ForEach(days, id: \.date) { day in cell(day, maxWorked: maxWorked) }
+                        ForEach(days, id: \.date) { day in cell(day) }
                     }
                     legend
                 }
@@ -599,8 +598,7 @@ public struct CalendarHeatmap: View {
         return (Calendar(identifier: .gregorian).component(.weekday, from: first) + 5) % 7
     }
 
-    private func cell(_ day: DayHours, maxWorked: Double) -> some View {
-        let ratio = day.worked / maxWorked
+    private func cell(_ day: DayHours) -> some View {
         let isToday = day.date == DayFmt.today()
         let hasTarget = (day.target ?? 0) > 0
         let worked = day.worked > 0
@@ -623,24 +621,47 @@ public struct CalendarHeatmap: View {
         let missingReason = day.date < DayFmt.today()
             && (state.monthDays.first(where: { $0.dateKey == day.date })
                 .map { state.missingReason($0.entries) } ?? false)
+        // Deviation from the day's own expectation is the sole color driver
+        // (not a workload heatmap): neutral grey inside a ±4% band around the
+        // target, then ramping fast to full strength at ±25% — over in the
+        // work accent, under in the break accent, the same over/under
+        // language as the balance trend chart.
+        let deviation: Double? = hasTarget ? (day.worked - (day.target ?? 0)) / (day.target ?? 1) : nil
+        let ramp: Double = {
+            guard worked else { return 0 }
+            guard let deviation else { return 0.5 }   // worked with no target: flat mild tint
+            return min(1, max(0, (abs(deviation) - 0.04) / 0.21))
+        }()
+        let deviationTint: Color? = {
+            guard worked else { return nil }
+            guard let deviation else { return Color.workAccent(scheme) }
+            guard ramp > 0 else { return nil }        // near target: neutral
+            return deviation > 0 ? Color.workAccent(scheme) : Color.breakAccent(scheme)
+        }()
+        let flagged = overMax || breakIssue || missingReason
         let accent = overMax ? Color.bobRed
                    : breakIssue ? Color.bobOrange
                    : missingReason ? Color.bobViolet
-                   : Color.workAccent(scheme)
-        // Same language as the time-off calendar: subtle tinted fill + strong
-        // border + bold tinted text — strengths scale with hours worked. On
-        // hover a worked cell stays green, just a stronger tint (same as the
-        // reserved cells in the time-off calendar).
-        let fill = worked ? accent.opacity(0.08 + 0.20 * ratio + (hov ? 0.12 : 0))
+                   : deviationTint ?? Color.primary
+        // Flag colors stay clearly visible regardless of deviation; neutral
+        // days sit at a fixed quiet strength.
+        let strength = !worked ? 0
+                     : flagged ? max(ramp, 0.5)
+                     : deviationTint == nil ? 0.3
+                     : ramp
+        let fill = worked ? accent.opacity(0.06 + 0.22 * strength + (hov ? 0.12 : 0))
                           : Color.primary.opacity(hov ? 0.09 : (hasTarget ? 0.04 : 0.015))
-        // Today uses the same green, just a thicker border.
-        let border = worked ? accent.opacity(0.30 + 0.45 * ratio + (hov ? 0.28 : 0))
-                     : isToday ? accent.opacity(0.55)
+        let border = worked ? accent.opacity(0.22 + 0.50 * strength + (hov ? 0.28 : 0))
+                     : isToday ? Color.primary.opacity(0.55)
                      : hov ? Color.primary.opacity(0.2)
                      : Color.clear
         // Built as a plain string — a 4-way inline concat trips the type-checker.
         var helpText = "\(day.date): \(hoursText(day.worked))"
         if hasTarget { helpText += " / \(hoursText(day.target!)) target" }
+        if let deviation, worked, abs(deviation) > 0.04 {
+            let delta = day.worked - (day.target ?? 0)
+            helpText += delta > 0 ? " · \(hoursText(delta)) over" : " · \(hoursText(-delta)) under"
+        }
         if breakIssue { helpText += " · break issue — needs a break" }
         if overMax { helpText += " · over the daily max" }
         if missingReason { helpText += " · a work entry has no reason set" }
@@ -681,11 +702,12 @@ public struct CalendarHeatmap: View {
 
     private var legend: some View {
         HStack(spacing: 6) {
-            Text("Fewer hours").font(.system(size: 9)).foregroundStyle(.secondary)
-            ForEach([0.18, 0.4, 0.65, 0.9], id: \.self) { o in
-                RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(o)).frame(width: 14, height: 10)
-            }
-            Text("More").font(.system(size: 9)).foregroundStyle(.secondary)
+            RoundedRectangle(cornerRadius: 3).fill(Color.breakAccent(scheme).opacity(0.6)).frame(width: 14, height: 10)
+            Text("Under").font(.system(size: 9)).foregroundStyle(.secondary)
+            RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.15)).frame(width: 14, height: 10)
+            Text("On target").font(.system(size: 9)).foregroundStyle(.secondary)
+            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.6)).frame(width: 14, height: 10)
+            Text("Over").font(.system(size: 9)).foregroundStyle(.secondary)
             Spacer()
             RoundedRectangle(cornerRadius: 3).fill(Color.bobViolet.opacity(0.6)).frame(width: 14, height: 10)
             Text("No reason").font(.system(size: 9)).foregroundStyle(.secondary)
