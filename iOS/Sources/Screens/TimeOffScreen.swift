@@ -38,27 +38,51 @@ struct TimeOffScreen: View {
         }
     }
 
-    // MARK: Pool hero — the draining vacation pool, same wave as the Mac
+    // MARK: Pool hero — the draining vacation pool, same math as the Mac
+
+    /// The balance the pool shows: the vacation-style policy if there is
+    /// one, otherwise the first balance HiBob returns.
+    private var mainBalance: TimeOffBalance? {
+        state.timeOffBalances.first {
+            let n = $0.displayName.lowercased()
+            return n.contains("holiday") || n.contains("vacation")
+                || n.contains("urlaub") || n.contains("sunny")
+        } ?? state.timeOffBalances.first
+    }
+
+    /// The year's whole pot: carryover plus this cycle's allowance, falling
+    /// back to the plain allowance when the metrics are missing.
+    private func poolTotal(for b: TimeOffBalance) -> Double {
+        let carry = b.prevBalance.flatMap(number) ?? 0
+        let annual = b.annualAllowance.flatMap(number)
+            ?? number(b.totalAllowance) ?? 0
+        return annual + max(0, carry)
+    }
 
     @ViewBuilder private var poolHero: some View {
-        if let main = state.timeOffBalances.first,
-           let left = number(main.currentBalance) {
-            let total = number(main.totalAllowance) ?? 0
+        if let b = mainBalance, let left = number(b.currentBalance) {
+            let pot = poolTotal(for: b)
             LiquidHero(worked: 0, target: 0,
                        cornerRadius: 18,
-                       customFraction: total > 0 ? max(0, min(1, left / total)) : 0,
-                       customBig: main.currentBalance,
-                       customLine2: total > 0 ? "of \(main.totalAllowance) \(main.unit) left"
-                                              : "\(main.unit) left",
-                       customLine3: main.displayName)
+                       customFraction: pot > 0 ? max(0, min(1, left / pot)) : 0,
+                       customBig: trimmed(left),
+                       customLine2: pot > 0 ? "of \(trimmed(pot)) \(b.unit) left"
+                                            : "\(b.unit) left",
+                       customLine3: b.displayName.replacingOccurrences(of: " (\(b.unit))", with: ""))
                 .frame(height: 150)
                 .glassSurface()
         }
     }
 
+    /// First number in a HiBob balance string ("12.5", "12,5 days", "+26").
     private func number(_ s: String) -> Double? {
-        Double(s.replacingOccurrences(of: ",", with: ".")
-                 .filter { "0123456789.".contains($0) })
+        let cleaned = s.filter { "0123456789.,-".contains($0) }
+            .replacingOccurrences(of: ",", with: ".")
+        return Double(cleaned)
+    }
+
+    private func trimmed(_ v: Double) -> String {
+        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
     }
 
     // MARK: Balances
@@ -70,13 +94,16 @@ struct TimeOffScreen: View {
                 ForEach(state.timeOffBalances) { balance in
                     GlassCard(padding: 14) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label(balance.displayName, systemImage: policyIcon(balance.displayName))
+                            Label(balance.displayName.replacingOccurrences(of: " (\(balance.unit))", with: ""),
+                                  systemImage: policyIcon(balance.displayName))
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                             Text(balance.currentBalance)
                                 .font(.title2.monospacedDigit().weight(.medium))
-                            Text("of \(balance.totalAllowance) \(balance.unit)")
+                            let pot = poolTotal(for: balance)
+                            Text(pot > 0 ? "of \(trimmed(pot)) \(balance.unit)"
+                                         : balance.cycleRange)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

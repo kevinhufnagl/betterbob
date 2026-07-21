@@ -57,8 +57,8 @@ struct DayDetailScreen: View {
             .reduce(0.0) { $0 + (($1.end ?? dayEnd).timeIntervalSince($1.start)) }
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
                          spacing: 12) {
-            StatTile(value: Fmt.hm(worked), caption: "Worked", symbol: "hammer.fill")
-            StatTile(value: Fmt.hm(breaks), caption: "Breaks", symbol: "cup.and.saucer.fill")
+            StatTile(value: Fmt.hm(worked), caption: "Worked")
+            StatTile(value: Fmt.hm(breaks), caption: "Breaks")
         }
     }
 
@@ -106,17 +106,22 @@ struct DayDetailScreen: View {
     }
 
     private func entryRow(_ entry: AttendanceEntry, day: DayEntries) -> some View {
-        HStack(spacing: 12) {
-            Text(entry.kind == .breakTime ? "Break" : "Work")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(entry.kind == .breakTime ? Color.bobOrange : Color.accentColor)
-                .frame(width: 56, alignment: .leading)
-            Text("\(Fmt.clock(entry.start)) – \(entry.end.map(Fmt.clock) ?? "open")")
-                .font(.body.monospacedDigit())
+        let tint = entry.kind == .breakTime ? Color.bobOrange : Color.accentColor
+        let duration = (entry.end ?? dayEnd).timeIntervalSince(entry.start)
+        return HStack(spacing: 12) {
+            Capsule().fill(tint).frame(width: 4, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(Fmt.clock(entry.start)) – \(entry.end.map(Fmt.clock) ?? "open")")
+                    .font(.body.monospacedDigit())
+                Text("\(entry.kind == .breakTime ? "Break" : "Work") · \(Fmt.hm(duration))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
             if let id = entry.id, state.deletingEntries.contains(id) {
                 ProgressView().controlSize(.small)
             } else if entry.kind == .work {
+                let hasReason = entry.reason?.isEmpty == false
                 Menu {
                     ForEach(state.reasonOptions, id: \.name) { opt in
                         Button(opt.name) {
@@ -124,12 +129,12 @@ struct DayDetailScreen: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(entry.reason?.isEmpty == false ? entry.reason! : "Add reason")
-                        Image(systemName: "chevron.up.chevron.down").font(.caption2)
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(entry.reason?.isEmpty == false ? Color.secondary : Color.accentColor)
+                    Text(hasReason ? entry.reason! : "Add reason")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(hasReason ? Color.primary : Color.accentColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.accentColor.opacity(hasReason ? 0.10 : 0.16)))
                 }
             }
         }

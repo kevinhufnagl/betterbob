@@ -55,16 +55,15 @@ struct MonthScreen: View {
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
                          spacing: 12) {
             StatTile(value: Fmt.hm(monthWorkedSecs),
-                     caption: "Worked this cycle", symbol: "hammer.fill")
+                     caption: "Worked this cycle")
             StatTile(value: (balance >= 0 ? "+" : "−") + Fmt.hm(TimeInterval(abs(balance) * 60)),
                      caption: "Balance",
-                     tint: balance >= 0 ? .primary : .bobOrange,
-                     symbol: "scalemass.fill")
+                     tint: balance >= 0 ? .primary : .bobOrange)
             if potential > 0 {
                 StatTile(value: Fmt.hm(TimeInterval(potential * 60)),
-                         caption: "Cycle target", symbol: "target")
+                         caption: "Cycle target")
                 StatTile(value: "\(summary?.days.count ?? 0)",
-                         caption: "Days recorded", symbol: "calendar")
+                         caption: "Days recorded")
             }
         }
     }

@@ -178,13 +178,18 @@ struct TodayScreen: View {
     }
 
     private func entryRow(_ entry: AttendanceEntry) -> some View {
-        HStack(spacing: 12) {
-            Text(entry.kind == .breakTime ? "Break" : "Work")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(entry.kind == .breakTime ? Color.bobOrange : Color.accentColor)
-                .frame(width: 56, alignment: .leading)
-            Text("\(Fmt.clock(entry.start)) – \(entry.end.map(Fmt.clock) ?? "now")")
-                .font(.body.monospacedDigit())
+        let tint = entry.kind == .breakTime ? Color.bobOrange : Color.accentColor
+        let end = entry.end
+        let duration = (end ?? Date()).timeIntervalSince(entry.start)
+        return HStack(spacing: 12) {
+            Capsule().fill(tint).frame(width: 4, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(Fmt.clock(entry.start)) – \(end.map(Fmt.clock) ?? "now")")
+                    .font(.body.monospacedDigit())
+                Text("\(entry.kind == .breakTime ? "Break" : "Work") · \(Fmt.hm(duration))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
             if let id = entry.id, state.deletingEntries.contains(id) {
                 ProgressView().controlSize(.small)
@@ -202,17 +207,18 @@ struct TodayScreen: View {
     }
 
     @ViewBuilder private func reasonMenu(_ entry: AttendanceEntry) -> some View {
+        let hasReason = entry.reason?.isEmpty == false
         Menu {
             ForEach(state.reasonOptions, id: \.name) { opt in
                 Button(opt.name) { state.setReason(for: entry, to: opt) }
             }
         } label: {
-            HStack(spacing: 4) {
-                Text(entry.reason?.isEmpty == false ? entry.reason! : "Add reason")
-                Image(systemName: "chevron.up.chevron.down").font(.caption2)
-            }
-            .font(.footnote)
-            .foregroundStyle(entry.reason?.isEmpty == false ? Color.secondary : Color.accentColor)
+            Text(hasReason ? entry.reason! : "Add reason")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(hasReason ? Color.primary : Color.accentColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.accentColor.opacity(hasReason ? 0.10 : 0.16)))
         }
     }
 }
