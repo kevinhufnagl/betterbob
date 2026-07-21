@@ -36,29 +36,43 @@ struct DayStripWidgetView: View {
         }
     }
 
-    /// Blocks laid out proportionally over the day span, like the app's
-    /// editable strip — work solid, breaks dimmed, ends rounded.
+    /// The expected day as a faint track, filling with blocks as it happens —
+    /// work solid, breaks dimmed. The track's length is the projected
+    /// clock-out (recorded time plus what's still owed toward the target), so
+    /// a fresh morning shows mostly empty and fills as you go.
     private func strip(_ snap: WidgetSnapshot) -> some View {
         Canvas { ctx, size in
             let segments = snap.segments
             guard let dayStart = segments.first?.start else { return }
             let open = segments.contains { $0.end == nil }
             let lastEnd = segments.compactMap(\.end).max() ?? snap.updatedAt
-            let dayEnd = open ? max(snap.updatedAt, lastEnd) : lastEnd
-            let span = max(1, dayEnd.timeIntervalSince(dayStart))
-            let count = segments.count
+            let recordedEnd = open ? max(snap.updatedAt, lastEnd) : lastEnd
+
+            let dayOver = snap.state == .clockedOut || snap.state == .signedOut
+            let remaining = max(0, snap.target - snap.workedTotal(now: entry.date))
+            let projectedEnd = dayOver ? recordedEnd
+                                       : max(recordedEnd, entry.date.addingTimeInterval(remaining))
+            let span = max(1, projectedEnd.timeIntervalSince(dayStart))
+            let r: CGFloat = 4
+
+            // The whole expected day as a faint track.
+            ctx.fill(Path(roundedRect: CGRect(origin: .zero, size: size),
+                          cornerRadius: r),
+                     with: .color(.primary.opacity(0.14)))
+
             for (i, seg) in segments.enumerated() {
                 let x = seg.start.timeIntervalSince(dayStart) / span * size.width
-                let end = seg.end ?? dayEnd
+                let end = seg.end ?? recordedEnd
                 let w = max(2, end.timeIntervalSince(seg.start) / span * size.width - 1)
-                let r: CGFloat = 4
+                // Round only edges that coincide with the track's ends.
+                let atTrackEnd = dayOver && i == segments.count - 1
                 let rect = CGRect(x: x, y: 0, width: w, height: size.height)
                 let path = Path(roundedRect: rect,
                                 cornerRadii: RectangleCornerRadii(
                                     topLeading: i == 0 ? r : 1,
                                     bottomLeading: i == 0 ? r : 1,
-                                    bottomTrailing: i == count - 1 ? r : 1,
-                                    topTrailing: i == count - 1 ? r : 1))
+                                    bottomTrailing: atTrackEnd ? r : 1,
+                                    topTrailing: atTrackEnd ? r : 1))
                 ctx.fill(path, with: .color(.primary.opacity(seg.isBreak ? 0.35 : 0.9)))
             }
         }
