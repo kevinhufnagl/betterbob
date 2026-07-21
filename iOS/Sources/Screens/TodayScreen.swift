@@ -139,15 +139,29 @@ struct TodayScreen: View {
 
     @ViewBuilder private var warnings: some View {
         if state.signedIn {
+            if state.hasOverLongStretch(state.entries) {
+                fixButton("Add the missing break") { state.addMissingBreak() }
+            }
             if let shortfall = state.breakGuidelineShortfall {
-                warningRow("Break \(Fmt.hm(shortfall)) short of the guideline — tap the wand in the entry list to fix.",
-                           symbol: "exclamationmark.triangle.fill", tint: .orange)
+                fixButton("Fix break — \(Fmt.hm(shortfall)) short of the guideline") {
+                    state.fixBreakGuideline()
+                }
             }
             if state.overDailyMax {
                 warningRow("Past the daily limit — only clocking out helps.",
                            symbol: "exclamationmark.octagon.fill", tint: .red)
             }
         }
+    }
+
+    private func fixButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "wand.and.rays")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 28)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.large)
     }
 
     private func warningRow(_ text: String, symbol: String, tint: Color) -> some View {
