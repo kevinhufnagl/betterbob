@@ -82,19 +82,21 @@ struct DayDetailScreen: View {
     }
 
     private func timelineCard(_ day: DayEntries) -> some View {
-        GlassCard(padding: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("TIMELINE")
-                    .font(.footnote.weight(.semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 7) {
+            Text("TIMELINE")
+                .font(.footnote.weight(.semibold))
+                .tracking(0.4)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 16)
+            GlassCard(padding: 14) {
                 EditableDayStrip(entries: day.entries, now: Date(), height: 52) { updated in
                     state.saveDay(updated, on: day.date)
                 }
-                Text("Drag a break to move it, or grab a boundary to resize — later entries shift along.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
+            Text("Drag a break to move it, or grab a boundary to resize — later entries shift along.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
         }
     }
 

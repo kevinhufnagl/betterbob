@@ -368,7 +368,7 @@ struct SleepingBob: View {
 
 /// A friendly full-pane placeholder: a gently bouncing Bob with a title and a
 /// rotating playful caption, plus optional trailing content (buttons/spinner).
-struct BobPlaceholder<Trailing: View>: View {
+public struct BobPlaceholder<Trailing: View>: View {
     let title: String
     let lines: [String]
     let size: CGFloat
@@ -377,13 +377,13 @@ struct BobPlaceholder<Trailing: View>: View {
 
     @State private var windowVisible = true
 
-    init(title: String, lines: [String] = [], size: CGFloat = 96, sleeping: Bool = false,
+    public init(title: String, lines: [String] = [], size: CGFloat = 96, sleeping: Bool = false,
          @ViewBuilder trailing: () -> Trailing) {
         self.title = title; self.lines = lines; self.size = size
         self.sleeping = sleeping; self.trailing = trailing()
     }
 
-    var body: some View {
+    public var body: some View {
         Group {
             if windowVisible {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
@@ -424,11 +424,11 @@ extension BobPlaceholder where Trailing == EmptyView {
 }
 
 /// Rotating captions for Bob's placeholders.
-enum BobLines {
-    static let loading = ["Gnawing through the data…", "Counting your hours…",
+public enum BobLines {
+    public static let loading = ["Gnawing through the data…", "Counting your hours…",
                           "Stacking today's logs…", "Consulting the dam records…",
                           "Fetching your timesheet…"]
-    static let signedOut = ["Bob's off the clock too", "No dam gets built without you",
+    public static let signedOut = ["Bob's off the clock too", "No dam gets built without you",
                             "Clock's waiting…", "Punch in to get started",
                             "Rise and grind? Sign in first"]
 }

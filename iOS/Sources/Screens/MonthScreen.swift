@@ -14,17 +14,25 @@ struct MonthScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if monthTargetSecs > 0 {
-                    LiquidHero(worked: monthWorkedSecs, target: monthTargetSecs,
-                               cornerRadius: 18)
-                        .frame(height: 150)
-                        .glassSurface()
-                }
-                statGrid
-                CalendarHeatmap(state: state, onOpenToday: onOpenToday,
-                                onOpenDay: { openDayKey = $0 })
-                if summary?.days.isEmpty == false {
-                    BalanceTrendCard(state: state)
+                if state.signedIn && summary == nil {
+                    BobPlaceholder(title: "Reading the month…", lines: BobLines.loading) {
+                        ProgressView().controlSize(.small).padding(.top, 2)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    if monthTargetSecs > 0 {
+                        LiquidHero(worked: monthWorkedSecs, target: monthTargetSecs,
+                                   cornerRadius: 18)
+                            .frame(height: 150)
+                            .glassSurface()
+                    }
+                    statGrid
+                    CalendarHeatmap(state: state, onOpenToday: onOpenToday,
+                                    onOpenDay: { openDayKey = $0 })
+                    if summary?.days.isEmpty == false {
+                        BalanceTrendCard(state: state)
+                    }
                 }
             }
             .padding(.horizontal, 16)

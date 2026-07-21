@@ -17,13 +17,21 @@ struct TimeOffScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                poolHero
-                balanceGrid
-                TimeOffCalendar(state: state) { start, end in
-                    booking = BookingRange(start: start, end: end)
+                if state.signedIn && state.timeOffBalances.isEmpty && state.timeOffRequests.isEmpty {
+                    BobPlaceholder(title: "Fetching your time off…", lines: BobLines.loading) {
+                        ProgressView().controlSize(.small).padding(.top, 2)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    poolHero
+                    balanceGrid
+                    TimeOffCalendar(state: state) { start, end in
+                        booking = BookingRange(start: start, end: end)
+                    }
+                    requestsSection
+                    bookButton
                 }
-                requestsSection
-                bookButton
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)

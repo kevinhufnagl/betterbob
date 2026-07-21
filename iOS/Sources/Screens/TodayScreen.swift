@@ -13,7 +13,15 @@ struct TodayScreen: View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 let vals = TodayVals(state, now: ctx.date)
                 VStack(spacing: 16) {
-                    if state.signedIn {
+                    if state.signedIn && !state.ready {
+                        // First reconcile still in flight — Bob holds the fort
+                        // instead of a screenful of zeroes.
+                        BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
+                            ProgressView().controlSize(.small).padding(.top, 2)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                    } else if state.signedIn {
                         // The dock straddles the hero's bottom edge, like the
                         // Mac popover — the padding reserves its lower half.
                         hero(vals, now: ctx.date)
@@ -30,11 +38,13 @@ struct TodayScreen: View {
                         hero(vals, now: ctx.date)
                         signedOutCard
                     }
-                    if !state.entries.isEmpty {
-                        timelineCard(now: ctx.date)
+                    if state.ready {
+                        if !state.entries.isEmpty {
+                            timelineCard(now: ctx.date)
+                        }
+                        warnings
+                        entriesSection
                     }
-                    warnings
-                    entriesSection
                 }
             }
             .padding(.horizontal, 16)
@@ -111,12 +121,13 @@ struct TodayScreen: View {
     // MARK: Timeline strip (drag to edit — same math as the Mac)
 
     private func timelineCard(now: Date) -> some View {
-        GlassCard(padding: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("TIMELINE")
-                    .font(.footnote.weight(.semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 7) {
+            Text("TIMELINE")
+                .font(.footnote.weight(.semibold))
+                .tracking(0.4)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 16)
+            GlassCard(padding: 14) {
                 EditableDayStrip(entries: state.entries, now: now, height: 48) { updated in
                     state.saveDay(updated, on: Date())
                 }
