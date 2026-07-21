@@ -147,7 +147,9 @@ extension Color {
             .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
         return Double(h)
         #else
-        return 0.529   // the icon cap: RGB(0.05, 0.24, 0.28)
+        // The icon's navy background gradient (its dominant color), not the
+        // cap — hue of srgb(0.08, 0.22, 0.42).
+        return 0.598
         #endif
     }
 

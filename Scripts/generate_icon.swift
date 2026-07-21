@@ -139,7 +139,7 @@ func render(size px: Int, foregroundOnly: Bool = false) -> Data? {
     //    poking out at the sides. Very dark teal — near-black with a teal
     //    lean — so the white wordmark carries maximum contrast; it separates
     //    from the navy background by hue, not brightness.
-    let capBlue = c(0.05, 0.24, 0.28), capDark = c(0.03, 0.14, 0.17)
+    let capBlue = c(0.05, 0.16, 0.30), capDark = c(0.03, 0.09, 0.18)
     // Visor — a wide, thin brim jutting over the brow.
     fillRoundRect(ell(0.5, 0.70, 0.72, 0.12), s * 0.05, capDark)
     // Crown — a rounded dome: fully round on top, flat where it meets the visor
