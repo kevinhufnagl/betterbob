@@ -138,6 +138,48 @@ public struct FreshDayWelcome: View {
         return part
     }
 
+    private func chip(_ text: String, symbol: String) -> some View {
+        Label(text, systemImage: symbol)
+            .font(compact ? .caption.weight(.medium) : .subheadline.weight(.medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, compact ? 6 : 8)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+    }
+
+    /// "Start now → done 17:23", counting the auto-break the engine would owe.
+    private var doneByText: String? {
+        guard target > 0 else { return nil }
+        let prefs = Prefs.shared
+        let pendingBreak = prefs.autoBreakEnabled && target > prefs.threshold
+            ? prefs.breakLength : 0
+        let done = Date().addingTimeInterval(target + pendingBreak)
+        return "Start now → done \(Fmt.clock(done))"
+    }
+
+    /// The cycle's running over/under, when the summary has arrived.
+    private var balanceText: String? {
+        guard let minutes = state.cycleSummary?.overUnderMinutes, minutes != 0 else { return nil }
+        return (minutes > 0 ? "+" : "−") + Fmt.hm(TimeInterval(abs(minutes) * 60)) + " this cycle"
+    }
+
+    /// The next booked, still-active leave — something to look forward to.
+    private var nextTimeOffText: String? {
+        let today = Calendar.current.startOfDay(for: Date())
+        let next = state.timeOffRequests
+            .filter { r in
+                let s = r.status.lowercased()
+                return !s.contains("cancel") && !s.contains("declin") && !s.contains("reject")
+            }
+            .compactMap { r in DayFmt.date(r.startDate).map { (r, $0) } }
+            .filter { $0.1 >= today }
+            .min { $0.1 < $1.1 }
+        guard let (request, start) = next else { return nil }
+        let days = Calendar.current.dateComponents([.day], from: today, to: start).day ?? 0
+        let when = days == 0 ? "today" : days == 1 ? "tomorrow" : "in \(days)d"
+        return "\(request.typeName) \(when)"
+    }
+
     public var body: some View {
         // A pool scene, not a banner: the lower part of the page IS the
         // water, Bob floats in it waiting, the clock-in dock rides the
@@ -174,12 +216,22 @@ public struct FreshDayWelcome: View {
                         .font(compact ? .footnote : .body)
                         .foregroundStyle(.secondary)
                     Spacer().frame(height: compact ? 10 : 16)
-                    Label("\(Fmt.hm(target)) today", systemImage: "target")
-                        .font(compact ? .caption.weight(.medium) : .subheadline.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+                    chip("\(Fmt.hm(target)) today", symbol: "target")
+                    // Morning glanceables: what today could look like, where
+                    // the cycle stands, and what there is to look forward to.
+                    VStack(spacing: 6) {
+                        if let doneByText {
+                            chip(doneByText, symbol: "clock.badge.checkmark")
+                        }
+                        if let balanceText {
+                            chip(balanceText, symbol: "scalemass")
+                        }
+                        // The popover's fixed slot only has room for two.
+                        if let nextTimeOffText, !compact {
+                            chip(nextTimeOffText, symbol: "sun.max")
+                        }
+                    }
+                    .padding(.top, 6)
                     Spacer()
                 }
                 .padding(.horizontal, 16)

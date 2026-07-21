@@ -26,7 +26,7 @@ struct PopoverRootView: View {
             } else if state.signedIn && state.entries.isEmpty && state.clockState == .clockedOut {
                 // A fresh day: the welcome, same as the dashboard and iOS.
                 FreshDayWelcome(state: state, compact: true)
-                    .frame(height: 300)
+                    .frame(height: 330)
                     .transition(.bobReplace)
             } else if state.signedIn {
                 // 1s tick keeps worked-time and the countdown live.
