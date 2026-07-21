@@ -39,8 +39,7 @@ struct TodayWidget: Widget {
         }
         .configurationDisplayName("Today")
         .description("Your clock state and time worked today.")
-        .supportedFamilies([.systemSmall, .accessoryRectangular,
-                            .accessoryCircular, .accessoryInline])
+        .supportedFamilies([.systemSmall, .accessoryInline])
     }
 }
 
@@ -62,8 +61,6 @@ struct TodayWidgetView: View {
     var body: some View {
         if let snap = entry.snapshot {
             switch family {
-            case .accessoryCircular: circular(snap)
-            case .accessoryRectangular: rectangular(snap)
             case .accessoryInline: inline(snap)
             default: small(snap)
             }
@@ -71,96 +68,6 @@ struct TodayWidgetView: View {
             Label("Open BetterBob", systemImage: "clock")
                 .font(.caption)
         }
-    }
-
-    // MARK: Circular — filling while working, draining on break, calm when done
-
-    @ViewBuilder private func circular(_ snap: WidgetSnapshot) -> some View {
-        switch snap.state {
-        case .working:
-            Gauge(value: fraction(snap)) {
-                BobFaceMark().frame(width: 20, height: 20)
-            }
-            .gaugeStyle(.accessoryCircularCapacity)
-        case .onBreak:
-            ZStack {
-                AccessoryWidgetBackground()
-                VStack(spacing: 0) {
-                    Image(systemName: "pause.fill").font(.caption2)
-                    if let ends = snap.breakEnds, ends > entry.date {
-                        Text(timerInterval: entry.date...ends, countsDown: true)
-                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                            .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.6)
-                    } else {
-                        Text("Break").font(.caption2)
-                    }
-                }
-            }
-        case .clockedOut, .signedOut:
-            ZStack {
-                AccessoryWidgetBackground()
-                VStack(spacing: 1) {
-                    BobFaceMark().frame(width: 16, height: 16)
-                    Text(snap.state == .signedOut ? "—" : hm(snap.workedBase))
-                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                }
-            }
-        }
-    }
-
-    // MARK: Rectangular — status, big timer, progress bar / context line
-
-    @ViewBuilder private func rectangular(_ snap: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            switch snap.state {
-            case .working:
-                Text(statusLine(snap))
-                    .font(.caption2.weight(.semibold))
-                if let start = snap.stretchStart {
-                    Text(timerInterval: start...Date.distantFuture, countsDown: false)
-                        .font(.headline.monospacedDigit())
-                }
-                Gauge(value: fraction(snap)) { EmptyView() }
-                    .gaugeStyle(.accessoryLinearCapacity)
-            case .onBreak:
-                Text("On a break")
-                    .font(.caption2.weight(.semibold))
-                if let ends = snap.breakEnds, ends > entry.date {
-                    Text(timerInterval: entry.date...ends, countsDown: true)
-                        .font(.headline.monospacedDigit())
-                    Text("back at \(clock(ends))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(hm(snap.workedBase))
-                        .font(.headline.monospacedDigit())
-                    Text("worked so far")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            case .clockedOut, .signedOut:
-                Text(snap.state == .signedOut ? "Signed out" : "Clocked out")
-                    .font(.caption2.weight(.semibold))
-                Text(hm(snap.workedBase))
-                    .font(.headline.monospacedDigit())
-                Text("of \(hm(snap.target))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// "Working", enriched with the next fixed point when one is known —
-    /// absolute times so a stale snapshot never shows a wrong countdown.
-    private func statusLine(_ snap: WidgetSnapshot) -> String {
-        if let due = snap.breakDue, due > entry.date {
-            return "Working · break \(clock(due))"
-        }
-        if let done = snap.doneBy(now: entry.date) {
-            return "Working · done \(clock(done))"
-        }
-        return "Working"
     }
 
     // MARK: Inline — one line above the clock
