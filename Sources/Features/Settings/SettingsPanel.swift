@@ -82,6 +82,10 @@ struct SettingsPanel: View {
         Group {
             Toggle("Insert a break automatically", isOn: $prefs.autoBreakEnabled)
                 .font(.system(size: 12))
+            Label("This is only to keep HiBob from flagging a missing break. Bob places it at the threshold — drag it to the time you actually took your break afterwards.",
+                  systemImage: "info.circle")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Group {
                 HStack {
