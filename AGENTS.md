@@ -14,22 +14,42 @@ macOS 26 toolchain (`xcrun --show-sdk-version` → 26.x).
 ./Scripts/release.sh 1.4    # cut a macOS release — see below
 ```
 
-## iOS app
+## Shared package + iOS app
 
-`iOS/` holds an XcodeGen project sharing `Sources/` with the Mac app —
-`iOS/project.yml` lists exactly which shared files compile for iOS (the
-`includes:` list), plus iOS-only code under `iOS/Sources/` (app shell,
-background refresh, App Group store, widgets, Live Activity).
+Cross-platform code lives in **`Packages/BetterBobShared`** (engine: BobState,
+Prefs, BobClient, AttendanceLogic, models, SSO controller — plus the shared
+UI: wave hero, Bob mascot family, color system, day strip, heatmap,
+calendars). It is consumed two ways:
 
+- The **Mac build** globs the package's `.swift` files straight into its
+  single `swiftc` module (`find Sources Packages …` in build.sh/test.sh) —
+  Mac code uses shared types with **no import**.
+- The **iOS app + widget** link it as a real SwiftPM dependency and
+  `import BetterBobShared`. Anything iOS touches must be `public` (views also
+  need an explicit `public init` and `public var body`).
+
+Mac-only code stays in `Sources/` (menu-bar app, Popover, MainWindow,
+WiFiMonitor, Updater, Uninstaller). `Sources/Intents/BobIntents.swift`
+compiles into BOTH app targets and uses `#if canImport(BetterBobShared)`.
+
+The iOS app (`iOS/`, XcodeGen — regenerate via `./Scripts/gen-ios.sh`) is a
+native iOS 26 Liquid Glass app:
+
+- `iOS/Sources/Common/` — glass primitives (`GlassCard`/`GlassSurface`,
+  `GlassGroupedSection`/`GlassRow`, `.bobScreen()` backdrop). One recipe:
+  `.glassEffect(.regular, in: rr18)` + 0.5pt white 8% hairline.
+- `iOS/Sources/Screens/` — native screens (Onboarding, Today, Month,
+  Activity, Time Off, Settings) composing shared components with Dynamic
+  Type styles — never the Mac's fixed 10–12pt fonts.
+- `iOS/Sources/App` — shell, lifecycle, BGAppRefreshTask, widget bridge;
+  `iOS/Sources/Widgets` — widget extension + Live Activity;
+  `iOS/Resources/Assets.xcassets` — Bob app icon + teal AccentColor.
 - Build/run on a device from Xcode (personal team, automatic signing):
   `./Scripts/gen-ios.sh && open iOS/BetterBob-iOS.xcodeproj`.
 - Verification builds go against the iOS simulator with
   `CODE_SIGNING_ALLOWED=NO`; xcodebuild's destination matching is flaky here —
   if `generic/platform=iOS Simulator` errors, retry with a concrete
   `platform=iOS Simulator,name=iPhone 17 Pro,OS=…` destination (or vice versa).
-- iOS-only code lives in `iOS/Sources/` — never under `Sources/`, which
-  build.sh/test.sh glob for the Mac build. New shared files must compile for
-  macOS 26 too, guarded with `#if os(macOS)` / `#if os(iOS)` where needed.
 - No hidden sign-in window on iOS: SSO runs in a visible sheet
   (`SSOSignInController.sheetWebView` + `SignInSheet.swift`).
 - Background auto-break is best-effort (`BGAppRefreshTask` chained around
