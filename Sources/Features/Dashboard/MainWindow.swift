@@ -89,33 +89,27 @@ struct MainWindow: View {
 
     @ViewBuilder private var detail: some View {
         ScrollView {
-            // ZStack so the outgoing pane cross-fades over the incoming one
-            // (a bare conditional would stack them during the transition).
-            ZStack(alignment: .top) {
-                Group {
-                    if tab == .settings {
-                        SettingsPanel(state: state, prefs: prefs)
-                    } else if !state.signedIn {
-                        signedOutPlaceholder
-                    } else if !state.ready {
-                        BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
-                            ProgressView().controlSize(.small).padding(.top, 2)
-                        }
-                        .padding(.top, 40)
-                    } else {
-                        switch tab {
-                        case .cycle:    CyclePane(state: state, onOpenToday: { tab = .today })
-                        case .timeOff:  TimeOffPane(state: state)
-                        case .activity: ActivityPane(state: state)
-                        default:        TodayTimeline(state: state)
-                        }
+            // Pane swaps are instant — the only staged entrance is the
+            // heroes' one-time water sweep, which the panes own themselves.
+            Group {
+                if tab == .settings {
+                    SettingsPanel(state: state, prefs: prefs)
+                } else if !state.signedIn {
+                    signedOutPlaceholder
+                } else if !state.ready {
+                    BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {
+                        ProgressView().controlSize(.small).padding(.top, 2)
+                    }
+                    .padding(.top, 40)
+                } else {
+                    switch tab {
+                    case .cycle:    CyclePane(state: state, onOpenToday: { tab = .today })
+                    case .timeOff:  TimeOffPane(state: state)
+                    case .activity: ActivityPane(state: state)
+                    default:        TodayTimeline(state: state)
                     }
                 }
-                .transition(.bobSection)
             }
-            .animation(Motion.lively, value: tab)
-            .animation(Motion.lively, value: state.signedIn)
-            .animation(Motion.lively, value: state.ready)
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
