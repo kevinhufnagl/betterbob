@@ -32,7 +32,7 @@ struct BetterBobApp: App {
                 Task { await BobState.shared.reconcile() }
             case .background:
                 BobState.shared.setDashboardActive(false)
-                // BackgroundRefresh.schedule()  ← wired in Task 8
+                BackgroundRefresh.schedule()
             default:
                 break
             }
@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         BobState.shared.start()
         UNUserNotificationCenter.current().delegate = self
-        // BackgroundRefresh.register()  ← wired in Task 8
+        BackgroundRefresh.register()
         return true
     }
 
