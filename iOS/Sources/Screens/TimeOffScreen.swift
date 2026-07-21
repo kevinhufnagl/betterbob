@@ -7,6 +7,7 @@ import SwiftUI
 struct TimeOffScreen: View {
     @ObservedObject var state: BobState
     @State private var booking: BookingRange?
+    @State private var selectedRequest: TimeOffRequest?
 
     private struct BookingRange: Identifiable {
         let id = UUID()
@@ -26,9 +27,9 @@ struct TimeOffScreen: View {
                 } else {
                     poolHero
                     balanceGrid
-                    TimeOffCalendar(state: state) { start, end in
+                    TimeOffCalendar(state: state, onSelect: { start, end in
                         booking = BookingRange(start: start, end: end)
-                    }
+                    }, onOpenRequest: { selectedRequest = $0 })
                     requestsSection
                     bookButton
                 }
@@ -43,6 +44,10 @@ struct TimeOffScreen: View {
         .sheet(item: $booking) { range in
             BookingSheet(state: state, start: range.start, end: range.end)
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $selectedRequest) { request in
+            RequestDetailSheet(state: state, request: request)
+                .presentationDetents([.medium])
         }
     }
 
@@ -158,11 +163,84 @@ struct TimeOffScreen: View {
                     .background(Capsule().fill(Color.accentColor.opacity(0.15)))
             }
         }
-        .contextMenu {
-            Button(role: .destructive) {
-                state.cancelTimeOff(request)
-            } label: {
-                Label("Cancel request", systemImage: "xmark.circle")
+        .contentShape(Rectangle())
+        .onTapGesture { selectedRequest = request }
+    }
+
+    // MARK: Request details
+
+    /// Tapping a booked day (or a request row) opens its details — the
+    /// time-off sibling of the heatmap's day sheet.
+    private struct RequestDetailSheet: View {
+        @ObservedObject var state: BobState
+        let request: TimeOffRequest
+        @Environment(\.dismiss) private var dismiss
+
+        /// Same rule as the calendar: not cancelled, starting in the future.
+        private var cancellable: Bool {
+            if request.status.lowercased().contains("cancel") { return false }
+            guard let start = DayFmt.date(request.startDate) else { return false }
+            return start > Calendar.current.startOfDay(for: Date())
+        }
+
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        GlassGroupedSection {
+                            GlassRow(showDivider: false) {
+                                Label(request.typeName, systemImage: policyIcon(request.typeName))
+                                    .font(.body.weight(.semibold))
+                            }
+                            GlassRow {
+                                LabeledContent("From") {
+                                    Text(request.startDate).foregroundStyle(.secondary)
+                                }
+                            }
+                            GlassRow {
+                                LabeledContent("Until") {
+                                    Text(request.endDate).foregroundStyle(.secondary)
+                                }
+                            }
+                            GlassRow {
+                                LabeledContent("Amount") {
+                                    Text(request.amount).foregroundStyle(.secondary)
+                                }
+                            }
+                            GlassRow {
+                                LabeledContent("Status") {
+                                    Text(request.status.capitalized).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        if cancellable {
+                            Button(role: .destructive) {
+                                state.cancelTimeOff(request)
+                                dismiss()
+                            } label: {
+                                if state.cancellingRequests.contains(request.id) {
+                                    ProgressView().controlSize(.small)
+                                        .frame(maxWidth: .infinity, minHeight: 28)
+                                } else {
+                                    Label("Cancel request", systemImage: "xmark.circle")
+                                        .font(.body.weight(.semibold))
+                                        .frame(maxWidth: .infinity, minHeight: 28)
+                                }
+                            }
+                            .buttonStyle(.glass)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 28)
+                }
+                .bobScreen(title: "Time off request")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
             }
         }
     }

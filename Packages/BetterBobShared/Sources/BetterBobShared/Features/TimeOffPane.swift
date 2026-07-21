@@ -310,10 +310,16 @@ public struct TimeOffCalendar: View {
     @ObservedObject var state: BobState
     var onSelect: (Date, Date) -> Void
 
-    public init(state: BobState, onSelect: @escaping (Date, Date) -> Void) {
+    public init(state: BobState, onSelect: @escaping (Date, Date) -> Void,
+                onOpenRequest: ((TimeOffRequest) -> Void)? = nil) {
         self.state = state
         self.onSelect = onSelect
+        self.onOpenRequest = onOpenRequest
     }
+    /// When set (iOS), tapping a reserved day hands the request to the host
+    /// instead of the built-in cancel dialog — the screens present their own
+    /// details sheet.
+    var onOpenRequest: ((TimeOffRequest) -> Void)?
     @Environment(\.colorScheme) private var scheme
 
     @State private var month = Date()
@@ -426,6 +432,8 @@ public struct TimeOffCalendar: View {
                     dragEnd = idx
                     if let sd = days[min(s, idx)], let ed = days[max(s, idx)] { onSelect(sd, ed) }
                     dragStart = nil; dragEnd = nil
+                } else if let r = requestFor(d), let onOpenRequest {
+                    onOpenRequest(r)
                 } else if let r = requestFor(d), canCancel(r) {
                     cancelTarget = r
                 } else {
