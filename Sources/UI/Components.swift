@@ -124,10 +124,29 @@ extension Color {
     /// — how every brand color stays legible in both appearances while
     /// following System Settings.
     static func systemAccentHued(sat: Double, bri: Double) -> Color {
+        Color(hue: accentHue, saturation: sat, brightness: bri)
+    }
+
+    /// The Mac's accent hue (0…1).
+    static var accentHue: Double {
         var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
             .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        return Color(hue: Double(h), saturation: sat, brightness: bri)
+        return Double(h)
+    }
+
+    /// Re-light any hue with our saturation/brightness recipe — used to build
+    /// the water in the accent hue, or in bobOrange/bobRed for over-limit days.
+    static func hued(_ hue: Double, sat: Double, bri: Double) -> Color {
+        Color(hue: hue, saturation: sat, brightness: bri)
+    }
+
+    /// This color's hue (0…1), so a fixed brand color can be re-lit by `hued`.
+    var hueComponent: Double {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        (NSColor(self).usingColorSpace(.deviceRGB) ?? .systemTeal)
+            .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Double(h)
     }
 
     /// BetterBob's primary accent — the system accent color (the same one

@@ -54,8 +54,13 @@ struct StatusPill: View {
             Text(state.clockState.title).font(.system(size: 12, weight: .semibold))
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(Capsule().fill(state.clockState.tint.opacity(0.12)))
-        .overlay(Capsule().strokeBorder(state.clockState.tint.opacity(0.30), lineWidth: 0.7))
+        // Material backing so the pill stays legible over a full, saturated
+        // hero — a bare translucent tint washed out against the water.
+        .background {
+            Capsule().fill(.regularMaterial)
+            Capsule().fill(state.clockState.tint.opacity(0.16))
+        }
+        .overlay(Capsule().strokeBorder(state.clockState.tint.opacity(0.40), lineWidth: 0.8))
         .animation(Motion.standard, value: state.clockState)
     }
 }
@@ -397,6 +402,12 @@ struct TodayTimeline: View {
                     } bottom: {
                         EmptyView()
                     }
+                    // Water turns orange/red on the same limits as the month
+                    // cells: red past the daily max, orange for an over-long
+                    // uninterrupted run or a break shortfall.
+                    .statusTint(state.overDailyMax ? .bobRed
+                                : (state.overMaxNonBreak || state.breakGuidelineShortfall != nil)
+                                    ? .bobOrange : nil)
                     // Content-sized: a fixed frame smaller than the content
                     // makes the hero spill past it top and bottom (SwiftUI
                     // doesn't clip), eating the gap to the next card.
@@ -631,6 +642,14 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     /// straddles the hero's bottom edge, so no text runs under it.
     var bottomInset: CGFloat = 0
 
+    /// When set, the water is drawn in this color's hue instead of the system
+    /// accent — orange/red for over-limit days, matching the month cells. Set
+    /// via `.statusTint(_:)` so callers don't touch the init.
+    var statusTint: Color?
+
+    /// The water's hue: the status tint when over a limit, else the accent.
+    private var activeHue: Double { statusTint?.hueComponent ?? Color.accentHue }
+
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
@@ -690,18 +709,19 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     // pastel with dark ink in light mode.
     private var dark: Bool { scheme == .dark }
     private var waterGradient: LinearGradient {
+        let h = activeHue
         let stops = dark
-            ? [Color.systemAccentHued(sat: 0.76, bri: 0.28), Color.systemAccentHued(sat: 0.72, bri: 0.44),
-               Color.systemAccentHued(sat: 0.68, bri: 0.60)]
-            : [Color.systemAccentHued(sat: 0.32, bri: 0.80), Color.systemAccentHued(sat: 0.30, bri: 0.86),
-               Color.systemAccentHued(sat: 0.28, bri: 0.91)]
+            ? [Color.hued(h, sat: 0.76, bri: 0.28), Color.hued(h, sat: 0.72, bri: 0.44),
+               Color.hued(h, sat: 0.68, bri: 0.60)]
+            : [Color.hued(h, sat: 0.32, bri: 0.80), Color.hued(h, sat: 0.30, bri: 0.86),
+               Color.hued(h, sat: 0.28, bri: 0.91)]
         return LinearGradient(colors: stops, startPoint: .leading, endPoint: .trailing)
     }
     private var glowColor: Color {
-        dark ? Color.systemAccentHued(sat: 0.45, bri: 0.88) : Color.systemAccentHued(sat: 0.14, bri: 0.99)
+        dark ? Color.hued(activeHue, sat: 0.45, bri: 0.88) : Color.hued(activeHue, sat: 0.14, bri: 0.99)
     }
     private var baseColor: Color {
-        dark ? Color.systemAccentHued(sat: 0.55, bri: 0.09) : Color.systemAccentHued(sat: 0.08, bri: 0.92)
+        dark ? Color.hued(activeHue, sat: 0.55, bri: 0.09) : Color.hued(activeHue, sat: 0.08, bri: 0.92)
     }
     private var ink: Color { dark ? .white : Color(red: 0.06, green: 0.20, blue: 0.24) }
 
@@ -865,6 +885,16 @@ struct LiquidHero<Top: View, Bottom: View>: View {
         }
         if breakTotal > 0 { parts.append("\(Fmt.hm(breakTotal)) break") }
         return parts.joined(separator: " · ")
+    }
+}
+
+extension LiquidHero {
+    /// Draw the water in `tint`'s hue (orange/red for over-limit days). Pass nil
+    /// to keep the accent. Chained so callers don't thread it through the init.
+    func statusTint(_ tint: Color?) -> LiquidHero {
+        var copy = self
+        copy.statusTint = tint
+        return copy
     }
 }
 
