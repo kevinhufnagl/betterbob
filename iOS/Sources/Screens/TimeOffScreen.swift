@@ -26,6 +26,7 @@ struct TimeOffScreen: View {
                     .padding(.top, 60)
                 } else {
                     poolHero
+                    upcomingSection
                     balanceGrid
                     TimeOffCalendar(state: state, onSelect: { start, end in
                         booking = BookingRange(start: start, end: end)
@@ -96,6 +97,92 @@ struct TimeOffScreen: View {
 
     private func trimmed(_ v: Double) -> String {
         v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+    }
+
+    // MARK: Upcoming — same selection as the Mac's card
+
+    /// Future, still-active requests, soonest first.
+    private var upcoming: [TimeOffRequest] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return state.timeOffRequests
+            .filter { r in
+                let s = r.status.lowercased()
+                return !s.contains("cancel") && !s.contains("declin") && !s.contains("reject")
+            }
+            .filter { (DayFmt.date($0.startDate) ?? .distantPast) >= today }
+            .sorted { (DayFmt.date($0.startDate) ?? .distantFuture) < (DayFmt.date($1.startDate) ?? .distantFuture) }
+    }
+
+    private var upcomingSection: some View {
+        GlassGroupedSection(header: "Upcoming time off") {
+            if upcoming.isEmpty {
+                GlassRow(showDivider: false) {
+                    HStack(spacing: 12) {
+                        AnimatedBob().frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nothing booked yet").font(.body.weight(.semibold))
+                            Text("You've earned a break — treat yourself")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            } else {
+                ForEach(Array(upcoming.prefix(4).enumerated()), id: \.element.id) { i, request in
+                    GlassRow(showDivider: i > 0) {
+                        upcomingRow(request, hero: i == 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private func upcomingRow(_ request: TimeOffRequest, hero: Bool) -> some View {
+        let pending = request.status.lowercased().contains("pend")
+        return HStack(spacing: 12) {
+            Image(systemName: policyIcon(request.typeName))
+                .font(hero ? .title3 : .callout)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.typeName)
+                    .font(hero ? .body.weight(.semibold) : .subheadline.weight(.medium))
+                Text(prettyRange(request) + (request.amount.isEmpty ? "" : " · \(request.amount)"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if pending {
+                Text("Pending")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.bobOrange)
+            }
+            Text(countdown(request))
+                .font((hero ? Font.footnote : .caption2).weight(.bold))
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, hero ? 5 : 3)
+                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+        }
+        .padding(.vertical, hero ? 4 : 0)
+        .contentShape(Rectangle())
+        .onTapGesture { selectedRequest = request }
+    }
+
+    private func prettyRange(_ request: TimeOffRequest) -> String {
+        func fmt(_ s: String) -> String {
+            (DayFmt.date(s)?.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())) ?? s
+        }
+        return request.startDate == request.endDate
+            ? fmt(request.startDate)
+            : "\(fmt(request.startDate)) → \(fmt(request.endDate))"
+    }
+
+    private func countdown(_ request: TimeOffRequest) -> String {
+        guard let start = DayFmt.date(request.startDate) else { return "" }
+        let days = Calendar.current.dateComponents(
+            [.day], from: Calendar.current.startOfDay(for: Date()), to: start).day ?? 0
+        return days == 0 ? "today" : days == 1 ? "tomorrow" : "in \(days)d"
     }
 
     // MARK: Balances
