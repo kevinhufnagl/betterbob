@@ -40,10 +40,14 @@ rm -rf "$RESOURCES/AppIcon.icon"
 cp -R Resources/AppIcon.icon "$RESOURCES/AppIcon.icon"
 
 echo "==> Compiling Swift sources (target $TARGET)"
+# Collect app sources plus the shared package's sources — the package files
+# compile directly into the Mac app's single module (the iOS app links
+# BetterBobShared as a real SwiftPM dependency instead).
 SWIFT_FILES=()
 while IFS= read -r -d '' f; do
   SWIFT_FILES+=( "$f" )
-done < <(find Sources -name '*.swift' -type f -print0)
+done < <(find Sources Packages -name '*.swift' -type f \
+           -not -path '*/.build/*' -not -name 'Package.swift' -print0)
 
 # Build in two passes so the swiftc frontend actually emits the const
 # values file for App Intents (it's skipped on the one-shot path).

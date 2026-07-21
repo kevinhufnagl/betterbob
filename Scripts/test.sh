@@ -17,7 +17,9 @@ mkdir -p build
 SWIFT_FILES=()
 while IFS= read -r -d '' f; do
   SWIFT_FILES+=( "$f" )
-done < <(find Sources -name '*.swift' -type f -not -path 'Sources/App/*' -print0)
+done < <(find Sources Packages -name '*.swift' -type f \
+           -not -path 'Sources/App/*' -not -path '*/.build/*' \
+           -not -name 'Package.swift' -print0)
 
 swiftc -target "$TARGET" -o "$BIN" "${SWIFT_FILES[@]}" Tests/main.swift
 
