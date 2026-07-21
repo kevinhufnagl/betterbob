@@ -10,7 +10,7 @@ struct RootTabs: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            NavigationStack { TodayTab(state: state) }
+            NavigationStack { TodayScreen(state: state) }
                 .tabItem { Label("Today", systemImage: "clock.fill") }
                 .tag(BobTab.today)
 

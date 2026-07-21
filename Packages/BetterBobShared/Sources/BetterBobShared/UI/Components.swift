@@ -132,13 +132,13 @@ extension Color {
     /// The Mac's accent hue re-lit with our own saturation/brightness recipe
     /// — how every brand color stays legible in both appearances while
     /// following System Settings.
-    static func systemAccentHued(sat: Double, bri: Double) -> Color {
+    public static func systemAccentHued(sat: Double, bri: Double) -> Color {
         Color(hue: accentHue, saturation: sat, brightness: bri)
     }
 
     /// The system accent hue (0…1). iOS has no user-selectable accent, so the
     /// dynamic tint is resolved once (it's teal-blue by default).
-    static var accentHue: Double {
+    public static var accentHue: Double {
         var h: CGFloat = 0.51, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         #if os(macOS)
         (NSColor.controlAccentColor.usingColorSpace(.deviceRGB) ?? .systemTeal)
@@ -152,12 +152,12 @@ extension Color {
 
     /// Re-light any hue with our saturation/brightness recipe — used to build
     /// the water in the accent hue, or in bobOrange/bobRed for over-limit days.
-    static func hued(_ hue: Double, sat: Double, bri: Double) -> Color {
+    public static func hued(_ hue: Double, sat: Double, bri: Double) -> Color {
         Color(hue: hue, saturation: sat, brightness: bri)
     }
 
     /// This color's hue (0…1), so a fixed brand color can be re-lit by `hued`.
-    var hueComponent: Double {
+    public var hueComponent: Double {
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         #if os(macOS)
         (NSColor(self).usingColorSpace(.deviceRGB) ?? .systemTeal)
@@ -172,36 +172,36 @@ extension Color {
     /// buttons and sidebar selections wear), deepened for light mode and
     /// brightened for dark so it stays legible. Replaces the old work green
     /// and the popover's system blue.
-    static func primaryAccent(_ scheme: ColorScheme) -> Color {
+    public static func primaryAccent(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? systemAccentHued(sat: 0.65, bri: 0.85)
                         : systemAccentHued(sat: 0.85, bri: 0.50)
     }
     /// A brighter cut of the accent for control fills and borders — close to
     /// the raw system accent native filled controls wear. Text should keep
     /// `primaryAccent`, which is deepened for legibility.
-    static func controlAccent(_ scheme: ColorScheme) -> Color {
+    public static func controlAccent(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? systemAccentHued(sat: 0.60, bri: 0.95)
                         : systemAccentHued(sat: 0.80, bri: 0.72)
     }
     /// Fixed mid-tone for contexts that can't read the color scheme
     /// (menu-bar tint, clock-state dots) — legible on both appearances.
-    static var bobTeal: Color { systemAccentHued(sat: 0.82, bri: 0.62) }
+    public static var bobTeal: Color { systemAccentHued(sat: 0.82, bri: 0.62) }
     /// Fixed warm tones tuned to complement the teal: a coral-leaning orange
     /// for break/attention and a rose-leaning red for hard warnings.
-    static let bobOrange = Color(red: 0.88, green: 0.47, blue: 0.24)
-    static let bobRed = Color(red: 0.85, green: 0.27, blue: 0.33)
+    public static let bobOrange = Color(red: 0.88, green: 0.47, blue: 0.24)
+    public static let bobRed = Color(red: 0.85, green: 0.27, blue: 0.33)
     /// A cool violet, distinct from teal/orange/red — flags a past day whose
     /// work entries carry no reason (untagged).
     static let bobViolet = Color(red: 0.58, green: 0.44, blue: 0.86)
 
-    static func workAccent(_ scheme: ColorScheme) -> Color {
+    public static func workAccent(_ scheme: ColorScheme) -> Color {
         primaryAccent(scheme)
     }
-    static func breakAccent(_ scheme: ColorScheme) -> Color {
+    public static func breakAccent(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Color(red: 1.00, green: 0.63, blue: 0.43)
                         : Color(red: 0.75, green: 0.34, blue: 0.13)
     }
-    static func reasonAccent(_ scheme: ColorScheme) -> Color {
+    public static func reasonAccent(_ scheme: ColorScheme) -> Color {
         primaryAccent(scheme)
     }
     /// Clock-out / stop red — rose-leaning to sit well next to the teal,
@@ -215,7 +215,7 @@ extension Color {
 // MARK: - Clock-state visual vocabulary
 
 extension ClockState {
-    var tint: Color {
+    public var tint: Color {
         switch self {
         case .clockedOut: return .secondary
         case .working: return .bobTeal
@@ -223,7 +223,7 @@ extension ClockState {
         }
     }
 
-    var symbol: String {
+    public var symbol: String {
         switch self {
         case .clockedOut: return "clock"
         case .working: return "clock.fill"
@@ -231,7 +231,7 @@ extension ClockState {
         }
     }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .clockedOut: return "Clocked out"
         case .working: return "Working"

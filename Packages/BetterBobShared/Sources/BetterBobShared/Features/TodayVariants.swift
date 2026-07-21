@@ -6,20 +6,20 @@ import AppKit
 // The Today layout and its shared helpers — TodayVals, the actions row and
 // the interactive timeline strip.
 
-struct TodayVals {
-    var worked: TimeInterval = 0
-    var targetSecs: TimeInterval = 8 * 3600
-    var remaining: TimeInterval = 0
-    var over = false
-    var fraction: Double = 0
-    var working = false
-    var onBreak = false
-    var started: Date?
-    var breakTotal: TimeInterval = 0
-    var autoBreakDue: Date?
+public struct TodayVals {
+    public var worked: TimeInterval = 0
+    public var targetSecs: TimeInterval = 8 * 3600
+    public var remaining: TimeInterval = 0
+    public var over = false
+    public var fraction: Double = 0
+    public var working = false
+    public var onBreak = false
+    public var started: Date?
+    public var breakTotal: TimeInterval = 0
+    public var autoBreakDue: Date?
 
     @MainActor
-    init(_ state: BobState, now: Date) {
+    public init(_ state: BobState, now: Date) {
         worked = AttendanceLogic.workedToday(entries: state.entries, now: now)
         let targetHours = state.cycleSummary?.days.first { $0.date == DayFmt.today() }?.target ?? 8
         targetSecs = targetHours * 3600
@@ -34,7 +34,7 @@ struct TodayVals {
         autoBreakDue = state.autoBreakDue
     }
 
-    var doneBy: Date? { working && remaining > 0 ? Date().addingTimeInterval(remaining) : nil }
+    public var doneBy: Date? { working && remaining > 0 ? Date().addingTimeInterval(remaining) : nil }
 }
 
 @MainActor
@@ -47,12 +47,14 @@ private func greetingText(_ state: BobState) -> String {
 
 // MARK: - Shared: status pill, actions, to-scale strip, agenda
 
-struct StatusPill: View {
+public struct StatusPill: View {
     @ObservedObject var state: BobState
+
+    public init(state: BobState) { self.state = state }
     /// Match the water: the over-limit tint when past a limit, else the
     /// clock-state color (which already tracks the accent water).
     private var tint: Color { state.heroLimitTint ?? state.clockState.tint }
-    var body: some View {
+    public var body: some View {
         HStack(spacing: 6) {
             Circle().fill(tint).frame(width: 8, height: 8)
                 .shadow(color: tint.opacity(0.6), radius: 3)
@@ -630,7 +632,7 @@ final class HeroSweep {
 /// of target, with a sloshing waterline. Optional `top`/`bottom` slots render
 /// on the water — the dashboard puts its greeting row and the timeline-plus-
 /// buttons glass panel there. `cornerRadius: 0` makes it a full-bleed section.
-struct LiquidHero<Top: View, Bottom: View>: View {
+public struct LiquidHero<Top: View, Bottom: View>: View {
     let worked: TimeInterval
     let target: TimeInterval
     var breakTotal: TimeInterval = 0
@@ -660,7 +662,7 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     /// The water's hue: the status tint when over a limit, else the accent.
     private var activeHue: Double { statusTint?.hueComponent ?? Color.accentHue }
 
-    init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
+    public init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
@@ -735,7 +737,7 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     }
     private var ink: Color { dark ? .white : Color(red: 0.06, green: 0.20, blue: 0.24) }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             top.foregroundStyle(ink)
             Spacer(minLength: compact ? 4 : 8)
@@ -901,7 +903,7 @@ struct LiquidHero<Top: View, Bottom: View>: View {
 extension LiquidHero {
     /// Draw the water in `tint`'s hue (orange/red for over-limit days). Pass nil
     /// to keep the accent. Chained so callers don't thread it through the init.
-    func statusTint(_ tint: Color?) -> LiquidHero {
+    public func statusTint(_ tint: Color?) -> LiquidHero {
         var copy = self
         copy.statusTint = tint
         return copy
@@ -910,7 +912,7 @@ extension LiquidHero {
 
 extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
     /// Slot-less hero — the popover's compact variant.
-    init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
+    public init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
@@ -929,7 +931,12 @@ extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
 /// (repeat-forever sway and dip), so it is interpolated by the compositor
 /// instead of sampled per frame; blinks run on a sparse async loop. Pauses
 /// when the window isn't really visible.
-struct BuoyBob: View {
+public struct BuoyBob: View {
+    public init(sleeping: Bool = false, onBreak: Bool = false, size: CGFloat = 72) {
+        self.sleeping = sleeping
+        self.onBreak = onBreak
+        self.size = size
+    }
     var sleeping = false
     /// On a break he wears sunglasses.
     var onBreak = false
@@ -945,7 +952,7 @@ struct BuoyBob: View {
     @State private var dipAmp = CGFloat.random(in: 0.024...0.035)
     @State private var dipDur = Double.random(in: 1.45...2.1)
 
-    var body: some View {
+    public var body: some View {
         content(blink: sleeping ? 1 : blink)
             .rotationEffect(.degrees(swayAngle))
             // Scaled to Bob's size — a fixed ±2.5pt was too much travel for

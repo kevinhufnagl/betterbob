@@ -17,11 +17,19 @@ import AppKit
 ///   as much as the other shortens and nothing else moves. The day's first
 ///   edge moves the clock-in, the last edge (when closed) the clock-out.
 /// The open (ongoing) block's trailing "now" edge isn't draggable.
-struct EditableDayStrip: View {
+public struct EditableDayStrip: View {
     let entries: [AttendanceEntry]
     let now: Date
     var height: CGFloat = 44
     var onChange: ([AttendanceEntry]) -> Void
+
+    public init(entries: [AttendanceEntry], now: Date, height: CGFloat = 44,
+                onChange: @escaping ([AttendanceEntry]) -> Void) {
+        self.entries = entries
+        self.now = now
+        self.height = height
+        self.onChange = onChange
+    }
     @Environment(\.colorScheme) private var scheme
 
     /// A grabbed (or hovered) resize handle: the boundary owned by `index` —
@@ -44,7 +52,7 @@ struct EditableDayStrip: View {
 
     private var sorted: [AttendanceEntry] { entries.sorted { $0.start < $1.start } }
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             let shown = (preview ?? entries).sorted { $0.start < $1.start }
             let start = shown.map(\.start).min() ?? now
