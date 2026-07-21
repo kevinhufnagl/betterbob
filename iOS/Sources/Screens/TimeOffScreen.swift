@@ -148,7 +148,8 @@ struct TimeOffScreen: View {
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(request.typeName).font(.body)
-                Text("\(request.startDate) – \(request.endDate) · \(request.amount)")
+                Text("\(request.startDate) – \(request.endDate)"
+                     + (request.amount.isEmpty ? "" : " · \(request.amount)"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -202,9 +203,11 @@ struct TimeOffScreen: View {
                                     Text(request.endDate).foregroundStyle(.secondary)
                                 }
                             }
-                            GlassRow {
-                                LabeledContent("Amount") {
-                                    Text(request.amount).foregroundStyle(.secondary)
+                            if !request.amount.isEmpty {
+                                GlassRow {
+                                    LabeledContent("Amount") {
+                                        Text(request.amount).foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                             GlassRow {
