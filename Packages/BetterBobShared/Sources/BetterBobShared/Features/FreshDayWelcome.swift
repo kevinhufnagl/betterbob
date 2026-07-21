@@ -129,6 +129,15 @@ public struct FreshDayWelcome: View {
 
     private var target: TimeInterval { TodayVals(state, now: Date()).targetSecs }
 
+    /// Bob's distance from the leading edge, tuned per surface.
+    private var bobLeading: CGFloat {
+        #if os(iOS)
+        return 26
+        #else
+        return compact ? 30 : 72
+        #endif
+    }
+
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
         let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
@@ -193,13 +202,14 @@ public struct FreshDayWelcome: View {
                     .frame(height: waterH)
                     .frame(maxWidth: .infinity)
 
-                // Bob floats at the waterline, off to the side — far enough
-                // left that he stays clear of the centered dock.
+                // Bob floats at the waterline, off to the side — clear of the
+                // centered dock. The phone hugs him near the edge; the Mac's
+                // wider surfaces sit him further in.
                 HStack {
                     BuoyBob(size: compact ? 58 : 84)
                     Spacer()
                 }
-                .padding(.leading, compact ? 14 : 32)
+                .padding(.leading, bobLeading)
                 .padding(.bottom, line - (compact ? 24 : 36))
 
                 // The dock straddles the waterline, centered.
@@ -216,10 +226,12 @@ public struct FreshDayWelcome: View {
                         .font(compact ? .footnote : .body)
                         .foregroundStyle(.secondary)
                     Spacer().frame(height: compact ? 10 : 16)
-                    chip("\(Fmt.hm(target)) today", symbol: "target")
-                    // Morning glanceables: what today could look like, where
-                    // the cycle stands, and what there is to look forward to.
-                    VStack(spacing: 6) {
+                    // Morning glanceables in one flow: the target plus what
+                    // today could look like, where the cycle stands, and
+                    // what there is to look forward to. Chips share a row
+                    // when they fit, wrap when they don't — uniform spacing.
+                    ChipFlow(spacing: 6) {
+                        chip("\(Fmt.hm(target)) today", symbol: "target")
                         if let doneByText {
                             chip(doneByText, symbol: "clock.badge.checkmark")
                         }
@@ -231,7 +243,7 @@ public struct FreshDayWelcome: View {
                             chip(nextTimeOffText, symbol: "sun.max")
                         }
                     }
-                    .padding(.top, 6)
+                    .padding(.horizontal, 8)
                     Spacer()
                 }
                 .padding(.horizontal, 16)
@@ -240,5 +252,59 @@ public struct FreshDayWelcome: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// A centered flow: chips share a row while they fit the proposed width,
+/// wrap to the next row when they don't. Rows are centered horizontally and
+/// every gap — within and between rows — uses the same spacing.
+private struct ChipFlow: Layout {
+    var spacing: CGFloat = 6
+
+    private func rows(_ subviews: Subviews, maxWidth: CGFloat) -> [[Int]] {
+        var rows: [[Int]] = [[]]
+        var x: CGFloat = 0
+        for (i, subview) in subviews.enumerated() {
+            let w = subview.sizeThatFits(.unspecified).width
+            if rows[rows.count - 1].isEmpty {
+                x = w
+                rows[rows.count - 1].append(i)
+            } else if x + spacing + w <= maxWidth {
+                x += spacing + w
+                rows[rows.count - 1].append(i)
+            } else {
+                rows.append([i])
+                x = w
+            }
+        }
+        return rows
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? 600
+        var width: CGFloat = 0, height: CGFloat = 0
+        for (index, row) in rows(subviews, maxWidth: maxWidth).enumerated() {
+            let sizes = row.map { subviews[$0].sizeThatFits(.unspecified) }
+            let rowWidth = sizes.map(\.width).reduce(0, +) + spacing * CGFloat(max(0, row.count - 1))
+            width = max(width, rowWidth)
+            height += (sizes.map(\.height).max() ?? 0) + (index > 0 ? spacing : 0)
+        }
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, maxWidth: bounds.width) {
+            let sizes = row.map { subviews[$0].sizeThatFits(.unspecified) }
+            let rowWidth = sizes.map(\.width).reduce(0, +) + spacing * CGFloat(max(0, row.count - 1))
+            let rowHeight = sizes.map(\.height).max() ?? 0
+            var x = bounds.minX + (bounds.width - rowWidth) / 2
+            for (k, i) in row.enumerated() {
+                subviews[i].place(at: CGPoint(x: x, y: y + (rowHeight - sizes[k].height) / 2),
+                                  anchor: .topLeading, proposal: .unspecified)
+                x += sizes[k].width + spacing
+            }
+            y += rowHeight + spacing
+        }
     }
 }
