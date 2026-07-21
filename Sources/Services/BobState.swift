@@ -289,11 +289,12 @@ final class BobState: ObservableObject {
             tries += 1
         }
         if expectedAfterPunch != nil { expectedAfterPunch = nil; await reconcile() }
-        // Clocking in after a closed break left a clocked-out hole (auto-break
-        // ended before the user actually came back): stretch the break to the
-        // clock-in so the day stays contiguous. Same opt-in as the other fixes.
+        // Clocking in after a clocked-out hole: stretch the preceding break to
+        // the clock-in (auto-break ended before the user came back), or cover
+        // a hole after work with a new break (clocked out at 2, back at 3).
+        // Same opt-in as the other gap fixes.
         if punched, head.action == .clockIn, Prefs.shared.autoFixGapsOverlaps,
-           let fixed = AttendanceLogic.extendingBreakToClockIn(entries: entries) {
+           let fixed = AttendanceLogic.fillingGapBeforeClockIn(entries: entries) {
             saveDay(fixed, on: today)
         }
         recomputeQueueTimes()

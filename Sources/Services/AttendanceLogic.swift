@@ -259,23 +259,29 @@ enum AttendanceLogic {
         return out
     }
 
-    /// After a clock-in that follows a closed break with a clocked-out hole
-    /// between them (typically the auto-break's fixed end passed before the
-    /// user actually returned), stretch that break to meet the clock-in so
-    /// the day stays contiguous. Returns the fixed day, or nil when there is
-    /// nothing to fix. Gaps under a minute are left alone — not worth a
-    /// whole-day rewrite.
-    static func extendingBreakToClockIn(entries: [AttendanceEntry]) -> [AttendanceEntry]? {
+    /// After a clock-in that left a clocked-out hole behind it, make the day
+    /// contiguous again: a hole after a closed break stretches that break to
+    /// the clock-in (the auto-break's fixed end passed before the user
+    /// actually returned); a hole after closed work becomes a new break
+    /// covering it (clocked out at 2, back at 3 → a 2–3 break). Returns the
+    /// fixed day, or nil when there is nothing to fix. Holes under a minute
+    /// are left alone — not worth a whole-day rewrite.
+    static func fillingGapBeforeClockIn(entries: [AttendanceEntry]) -> [AttendanceEntry]? {
         let sorted = entries.sorted { $0.start < $1.start }
         guard sorted.count >= 2,
               let last = sorted.last, last.kind == .work, last.end == nil
         else { return nil }
         let prev = sorted[sorted.count - 2]
-        guard prev.kind == .breakTime, let prevEnd = prev.end,
+        guard let prevEnd = prev.end,
               last.start.timeIntervalSince(prevEnd) >= 60
         else { return nil }
         var fixed = sorted
-        fixed[fixed.count - 2].end = last.start
+        if prev.kind == .breakTime {
+            fixed[fixed.count - 2].end = last.start
+        } else {
+            fixed.insert(AttendanceEntry(kind: .breakTime, start: prevEnd, end: last.start),
+                         at: fixed.count - 1)
+        }
         return fixed
     }
 

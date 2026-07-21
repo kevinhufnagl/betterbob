@@ -57,23 +57,24 @@ struct EntryRowView: View {
     @State private var editStart = Date()
     @State private var editEnd = Date()
     @State private var timeHover = false
+    @State private var rowHover = false
 
     var body: some View {
         let e = entry
         let tint = e.kind == .breakTime ? Color.breakAccent(scheme) : Color.workAccent(scheme)
         let editable = e.id != nil
         HStack(spacing: 12) {
-            Image(systemName: e.kind.icon)
-                .font(.system(size: 11, weight: .semibold)).foregroundStyle(tint).frame(width: 18)
+            // The tinted label carries the work/break color cue on its own.
             Text(e.kind.label)
-                .font(.system(size: 12, weight: .semibold)).frame(width: 52, alignment: .leading)
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+                .frame(width: 52, alignment: .leading)
 
             Button {
                 editStart = e.start; editEnd = e.end ?? Date()
                 editing = true
             } label: {
                 HStack(spacing: 5) {
-                    Text("\(Fmt.clock(e.start)) – \(e.end.map(Fmt.clock) ?? "now")  (\(Fmt.hm((e.end ?? Date()).timeIntervalSince(e.start))))")
+                    Text("\(Fmt.clock(e.start)) – \(e.end.map(Fmt.clock) ?? "now")")
                         .font(.system(size: 12, design: .monospaced)).foregroundStyle(.primary.opacity(0.85))
                     if editable {
                         Image(systemName: "pencil").font(.system(size: 11, weight: .semibold))
@@ -87,7 +88,7 @@ struct EntryRowView: View {
             }
             .buttonStyle(.plain)
             .disabled(!editable)
-            .frame(width: 210, alignment: .leading)
+            .frame(width: 170, alignment: .leading)
             .onHover { h in
                 guard editable else { return }
                 timeHover = h
@@ -98,6 +99,11 @@ struct EntryRowView: View {
 
             if e.kind == .work { ReasonPicker(state: state, entry: e, dayEntries: dayEntries, date: date) }
             Spacer()
+            // Duration as its own quiet column instead of squeezed into the
+            // time range.
+            Text(Fmt.hm((e.end ?? Date()).timeIntervalSince(e.start)))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.secondary)
             if let eid = e.id {
                 if state.deletingEntries.contains(eid) {
                     ProgressView().controlSize(.small).frame(width: 16)
@@ -106,11 +112,16 @@ struct EntryRowView: View {
                     Button(role: .destructive) { state.deleteEntry(e, in: dayEntries, on: date) } label: {
                         Image(systemName: "trash").font(.system(size: 11))
                     }.buttonStyle(.plain).foregroundStyle(.secondary).help("Delete entry")
+                        .frame(width: 16)
+                        .opacity(rowHover ? 1 : 0)   // appears with the row hover
                         .transition(.opacity)
                 }
             }
         }
         .padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .onHover { rowHover = $0 }
+        .animation(Motion.quick, value: rowHover)
         .animation(Motion.quick, value: state.deletingEntries)
     }
 

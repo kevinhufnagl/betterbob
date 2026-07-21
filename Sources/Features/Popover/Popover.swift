@@ -282,9 +282,9 @@ struct PopoverRootView: View {
         let dryAwake = v.fraction < 0.15 && state.clockState != .clockedOut
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                       compact: true)
-                .frame(height: 100)
-                .padding(.top, dryAwake ? 26 : 18)
+                       compact: true, bottomInset: 20)
+                .frame(height: 112)
+                .padding(.top, dryAwake ? 28 : 21)
                 .overlay(alignment: .bottomTrailing) {
                     // Clocked out on dry land: asleep bottom-right.
                     if v.fraction < 0.15, state.clockState == .clockedOut {
@@ -300,6 +300,8 @@ struct PopoverRootView: View {
                 BuoyBob(sleeping: state.clockState == .clockedOut,
                         onBreak: v.onBreak, size: 44)
                     .padding(.leading, 14)
+                    // A hair higher so his float's low point clears the text.
+                    .offset(y: -2)
                     .transition(.bobReplace)
             } else if dryAwake {
                 // Hanging behind the card, paws on the lip, head peeking over.
@@ -324,13 +326,10 @@ struct PopoverRootView: View {
                     Divider().opacity(0.25)
                 }
                 HStack(spacing: 8) {
-                    Image(systemName: entry.kind.icon)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(kindColor(entry.kind))
-                        .frame(width: 14)
+                    // The tinted label carries the work/break color cue.
                     Text(entry.kind.label)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(kindColor(entry.kind))
                     if entry.kind == .work {
                         reasonMenu(for: entry)
                     }

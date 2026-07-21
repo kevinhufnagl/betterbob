@@ -812,32 +812,39 @@ expect(AttendanceLogic.meetingBreakGuideline(entries: [work(9, 12), brk(12, 12.5
                                              threshold: sixH, required: halfH, now: t(17)) == nil,
        "compliant day → nothing to fix")
 
-// MARK: - extendingBreakToClockIn (fill the hole a late clock-in leaves after a break)
+// MARK: - fillingGapBeforeClockIn (fill the hole a late clock-in leaves behind)
 
-print("AttendanceLogic.extendingBreakToClockIn")
+print("AttendanceLogic.fillingGapBeforeClockIn")
 
-if let fixed = AttendanceLogic.extendingBreakToClockIn(
+if let fixed = AttendanceLogic.fillingGapBeforeClockIn(
         entries: [work(9, 13.667), brk(13.667, 14.167), work(14.333, nil)]) {
-    expect(fixed[1].end == t(14.333), "break stretches to the clock-in")
+    expect(fixed[1].end == t(14.333), "hole after a break → break stretches to the clock-in")
     expect(fixed[1].start == t(13.667), "break start untouched")
     expect(fixed[2].start == t(14.333) && fixed[2].end == nil, "open work entry untouched")
 } else {
     expect(false, "10-minute hole after a break → fix")
 }
 
-expect(AttendanceLogic.extendingBreakToClockIn(
+if let fixed = AttendanceLogic.fillingGapBeforeClockIn(
+        entries: [work(9, 14), work(15, nil)]) {
+    expect(fixed.count == 3, "hole after work → a break is inserted")
+    expect(fixed[1].kind == .breakTime && fixed[1].start == t(14) && fixed[1].end == t(15),
+           "inserted break covers the hole exactly")
+    expect(fixed[2].start == t(15) && fixed[2].end == nil, "open work entry untouched")
+} else {
+    expect(false, "1-hour hole after work → fix")
+}
+
+expect(AttendanceLogic.fillingGapBeforeClockIn(
         entries: [work(9, 12), brk(12, 12.5), work(12.5083, nil)]) == nil,
        "sub-minute hole → left alone")
-expect(AttendanceLogic.extendingBreakToClockIn(
-        entries: [work(9, 14), work(14.25, nil)]) == nil,
-       "hole after work (not a break) → left alone")
-expect(AttendanceLogic.extendingBreakToClockIn(
+expect(AttendanceLogic.fillingGapBeforeClockIn(
         entries: [work(9, 12), brk(12, 12.5), work(12.75, 16)]) == nil,
        "closed last entry → nothing to fix")
-expect(AttendanceLogic.extendingBreakToClockIn(
+expect(AttendanceLogic.fillingGapBeforeClockIn(
         entries: [work(9, 12), brk(12, 12.5), brk(12.75, nil)]) == nil,
        "open break, not a clock-in → nothing to fix")
-expect(AttendanceLogic.extendingBreakToClockIn(entries: [work(9, nil)]) == nil,
+expect(AttendanceLogic.fillingGapBeforeClockIn(entries: [work(9, nil)]) == nil,
        "first clock-in of the day → nothing to fix")
 
 // MARK: - Fmt.parseClock (hand-typed time text)

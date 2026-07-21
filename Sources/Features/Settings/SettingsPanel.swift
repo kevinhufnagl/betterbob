@@ -2,8 +2,10 @@ import SwiftUI
 import AppKit
 
 struct SettingsPanel: View {
+    @Environment(\.colorScheme) private var scheme
     @ObservedObject var state: BobState
     @ObservedObject var prefs: Prefs
+    @State private var confirmingUninstall = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -26,6 +28,7 @@ struct SettingsPanel: View {
             SettingsGroup(title: "Popover") { popoverContent }
             SettingsGroup(title: "General") { generalContent }
             SettingsGroup(title: "Updates") { UpdatesCard() }
+            SettingsGroup(title: "Uninstall") { uninstallContent }
             if let err = state.lastError {
                 SettingsGroup(title: "Diagnostics") { diagnosticsContent(err) }
             }
@@ -40,7 +43,7 @@ struct SettingsPanel: View {
         Group {
             if state.signedIn {
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.primaryAccent(scheme))
                     Text("Signed in as \(state.accountEmail ?? "—")")
                         .font(.system(size: 12))
                     Spacer()
@@ -296,6 +299,33 @@ struct SettingsPanel: View {
         }
     }
 
+    // MARK: - Uninstall
+
+    @ViewBuilder
+    private var uninstallContent: some View {
+        Group {
+            HStack {
+                Text("Remove BetterBob from this Mac")
+                    .font(.system(size: 12))
+                Spacer()
+                Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
+                    .controlSize(.small)
+            }
+            Text("Deletes your saved credentials, settings, and sign-in session, moves the app to the Trash, and quits. Your attendance records on HiBob are not touched.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .confirmationDialog("Uninstall BetterBob?",
+                            isPresented: $confirmingUninstall,
+                            titleVisibility: .visible) {
+            Button("Uninstall and quit", role: .destructive) { Uninstaller.run() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Everything BetterBob stores on this Mac is removed and the app moves to the Trash. Attendance data lives on HiBob and is not affected.")
+        }
+    }
+
     // Endpoint-capture stays available via the `--capture-endpoints` launch
     // flag (EndpointCaptureController) — the settings card is intentionally
     // hidden so it isn't a user-facing option.
@@ -323,6 +353,7 @@ struct SettingsPanel: View {
 /// Store the HiBob password + TOTP secret (in the Keychain) for autofilling the
 /// SSO sign-in form. Kept in its own view so it can hold the editable fields.
 private struct AutoSignInCard: View {
+    @Environment(\.colorScheme) private var scheme
     @ObservedObject var state: BobState
     @ObservedObject var prefs: Prefs
     @State private var email = ""
@@ -369,7 +400,7 @@ private struct AutoSignInCard: View {
             }
             HStack(spacing: 8) {
                 Label("Saved to Keychain", systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 10)).foregroundStyle(.green)
+                    .font(.system(size: 10)).foregroundStyle(Color.primaryAccent(scheme))
                 Spacer()
                 Button("Clear", role: .destructive) { clearAll() }.controlSize(.small)
                 Button("Edit") { editing = true }.controlSize(.small).buttonStyle(.borderedProminent)
@@ -456,6 +487,7 @@ private struct AutoSignInCard: View {
 
 /// Version + background-update status against GitHub Releases.
 private struct UpdatesCard: View {
+    @Environment(\.colorScheme) private var scheme
     @ObservedObject var updater = Updater.shared
 
     var body: some View {
@@ -490,7 +522,7 @@ private struct UpdatesCard: View {
                 }
             } else if case .upToDate = updater.phase {
                 Label("You're up to date.", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 11)).foregroundStyle(.green)
+                    .font(.system(size: 11)).foregroundStyle(Color.primaryAccent(scheme))
             } else if case .failed(let msg) = updater.phase {
                 Label(msg, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 10)).foregroundStyle(.orange)

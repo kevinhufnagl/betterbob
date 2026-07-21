@@ -57,4 +57,13 @@ enum Keychain {
     }
 
     static func has(_ key: Key) -> Bool { get(key) != nil }
+
+    /// Delete every item under the service in one call — the uninstaller's
+    /// half of the cleanup. Silent, because this build created the items.
+    static func wipeAll() {
+        SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+        ] as CFDictionary)
+    }
 }

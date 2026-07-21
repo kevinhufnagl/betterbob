@@ -187,6 +187,63 @@ private struct DockButton: View {
     }
 }
 
+/// Times under the day strip, one at each block boundary — the clock-in,
+/// every work/break joint, and the day's end (or "now" while open). Real
+/// times from the entries rather than an hour grid, positioned with the
+/// same span math as the strip so each label sits exactly under its edge.
+/// Labels that would collide are thinned left-to-right; the day's first
+/// and last always survive.
+struct BoundaryLabels: View {
+    let entries: [AttendanceEntry]
+    let now: Date
+
+    var body: some View {
+        GeometryReader { geo in
+            let sorted = entries.sorted { $0.start < $1.start }
+            let start = sorted.map(\.start).min() ?? now
+            let lastEnd = sorted.compactMap(\.end).max()
+            let hasOpen = sorted.contains { $0.end == nil }
+            let end = hasOpen ? max(now, lastEnd ?? now) : (lastEnd ?? now)
+            let span = max(1, end.timeIntervalSince(start))
+            let w = geo.size.width
+            ZStack(alignment: .topLeading) {
+                ForEach(marks(sorted, start: start, end: end, hasOpen: hasOpen,
+                              span: span, w: w), id: \.x) { m in
+                    Text(m.text)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .position(x: min(max(m.x, 15), w - 15), y: 6)
+                }
+            }
+        }
+        .frame(height: 12)
+    }
+
+    private func marks(_ sorted: [AttendanceEntry], start: Date, end: Date, hasOpen: Bool,
+                       span: TimeInterval, w: CGFloat) -> [(x: CGFloat, text: String)] {
+        var times = Set(sorted.compactMap(\.end))
+        times.insert(start)
+        times.insert(end)
+        let minGap: CGFloat = 42
+        var kept: [(x: CGFloat, text: String)] = []
+        for t in times.sorted() {
+            let x = CGFloat(t.timeIntervalSince(start) / span) * w
+            if let last = kept.last, x - last.x < minGap { continue }
+            kept.append((x, t == end && hasOpen ? "now" : Fmt.clock(t)))
+        }
+        // The day's end always shows: drop earlier labels crowding it (never
+        // the clock-in).
+        let endX = w
+        if let last = kept.last, last.x < endX {
+            while kept.count > 1, endX - kept[kept.count - 1].x < minGap {
+                kept.removeLast()
+            }
+            kept.append((endX, hasOpen ? "now" : Fmt.clock(end)))
+        }
+        return kept
+    }
+}
+
 /// The day's entries as a to-scale bar with solid work/break blocks (display
 /// only — editing happens in the entries table below).
 struct DayStrip: View {
@@ -307,7 +364,7 @@ struct TodayTimeline: View {
                 // water above it, his body inside.
                 ZStack(alignment: .topLeading) {
                     LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                               greeting: greetingText(state)) {
+                               greeting: greetingText(state), bottomInset: 12) {
                         HStack {
                             Spacer()
                             StatusPill(state: state)
@@ -355,32 +412,17 @@ struct TodayTimeline: View {
                     ActionDock(state: state, now: ctx.date)
                 }
 
-                Card {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if state.entries.isEmpty {
-                            Text("No entries yet today.").font(.system(size: 12)).foregroundStyle(.secondary)
-                        } else {
-                            VStack(spacing: 3) {
-                                EditableDayStrip(entries: state.entries, now: ctx.date, height: 40) { updated in
-                                    state.saveDay(updated, on: Date())
-                                }
-                                HStack {
-                                    Text(state.entries.map(\.start).min().map(Fmt.clock) ?? "")
-                                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
-                                    Spacer()
-                                    // "now" only while an entry is open — a
-                                    // clocked-out day ends at its last entry.
-                                    if state.entries.contains(where: { $0.end == nil }) {
-                                        Text(Fmt.clock(ctx.date) + " now")
-                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
-                                    } else {
-                                        Text(state.entries.compactMap(\.end).max().map(Fmt.clock) ?? "")
-                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
+                // The day strip floats naked on the page — no card box — with
+                // the entry boundary times underneath. (An empty day shows
+                // nothing here; the entries card carries the empty message.)
+                if !state.entries.isEmpty {
+                    VStack(spacing: 5) {
+                        EditableDayStrip(entries: state.entries, now: ctx.date, height: 40) { updated in
+                            state.saveDay(updated, on: Date())
                         }
+                        BoundaryLabels(entries: state.entries, now: ctx.date)
                     }
+                    .padding(.horizontal, 2)
                 }
 
                 if case .onBreak = state.clockState { breakBanner(ctx.date).transition(.bobBanner) }
@@ -561,10 +603,15 @@ struct LiquidHero<Top: View, Bottom: View>: View {
     let top: Top
     let bottom: Bottom
 
+    /// Extra bottom padding for the content — room for an ActionDock that
+    /// straddles the hero's bottom edge, so no text runs under it.
+    var bottomInset: CGFloat = 0
+
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
+         bottomInset: CGFloat = 0,
          @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
         self.worked = worked
         self.target = target
@@ -576,6 +623,7 @@ struct LiquidHero<Top: View, Bottom: View>: View {
         self.customBig = customBig
         self.customLine2 = customLine2
         self.customLine3 = customLine3
+        self.bottomInset = bottomInset
         self.top = top()
         self.bottom = bottom()
     }
@@ -662,6 +710,7 @@ struct LiquidHero<Top: View, Bottom: View>: View {
             bottom
         }
         .padding(compact ? 12 : 20)
+        .padding(.bottom, bottomInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             // Water sized by the content — a greedy GeometryReader sibling
@@ -800,11 +849,13 @@ extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
     init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
-         customLine2: String? = nil, customLine3: String? = nil) {
+         customLine2: String? = nil, customLine3: String? = nil,
+         bottomInset: CGFloat = 0) {
         self.init(worked: worked, target: target, breakTotal: breakTotal,
                   compact: compact, greeting: greeting, cornerRadius: cornerRadius,
                   customFraction: customFraction, customBig: customBig,
                   customLine2: customLine2, customLine3: customLine3,
+                  bottomInset: bottomInset,
                   top: { EmptyView() }, bottom: { EmptyView() })
     }
 }

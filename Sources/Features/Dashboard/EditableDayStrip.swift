@@ -245,18 +245,15 @@ struct EditableDayStrip: View {
 
     @ViewBuilder
     private func blockLabel(_ e: AttendanceEntry, width bw: CGFloat) -> some View {
-        let dur = Fmt.hm((e.end ?? now).timeIntervalSince(e.start))
-        // Show the duration as soon as there's room — it updates live as the
-        // surrounding work resizes during a drag.
-        let text: String? = bw > 96 ? "\(Fmt.clock(e.start))–\(e.end.map(Fmt.clock) ?? "now") · \(dur)"
-            : bw > 34 ? dur : nil
-        if let text {
-            Text(text)
+        // Just the duration, straight on the block — the boundary times live
+        // under the strip. It updates live as the surrounding work resizes
+        // during a drag.
+        if bw > 40 {
+            Text(Fmt.hm((e.end ?? now).timeIntervalSince(e.start)))
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 7).padding(.vertical, 2.5)
-                .glassEffect(.regular, in: .capsule)
+                .foregroundStyle(.white.opacity(0.92))
+                .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
                 .fixedSize()
         }
     }
