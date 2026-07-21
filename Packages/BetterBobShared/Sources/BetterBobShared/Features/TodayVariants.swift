@@ -1119,12 +1119,17 @@ struct TropicalDrink: View {
 /// peeking over, eyes on the water filling below — waiting for enough
 /// depth to swim. The mask cutoff sits exactly on the card's edge, so his
 /// body reads as hidden behind it.
-struct PeekingBob: View {
+public struct PeekingBob: View {
     var size: CGFloat = 64
     /// On a break: sunglasses on, drink standing on the lip beside him.
     var onBreak = false
 
-    var body: some View {
+    public init(size: CGFloat = 64, onBreak: Bool = false) {
+        self.size = size
+        self.onBreak = onBreak
+    }
+
+    public var body: some View {
         ZStack(alignment: .top) {
             AnimatedBob(lookAt: .zero)
                 .frame(width: size, height: size)

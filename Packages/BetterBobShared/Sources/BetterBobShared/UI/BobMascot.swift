@@ -264,11 +264,12 @@ public struct AnimatedBob: View {
 /// Bob asleep on his side, in profile: lying flat with his tail out the
 /// back, cap still on, one closed eye — perfectly still except his chest
 /// slowly rising and falling. Draw in a 1.6:1 frame.
-struct SleepingBob: View {
+public struct SleepingBob: View {
+    public init() {}
     var palette = BobPalette()
     @State private var windowVisible = true
 
-    var body: some View {
+    public var body: some View {
         Group {
             if windowVisible && !Motion.reduce {
                 TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { ctx in

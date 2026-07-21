@@ -62,11 +62,31 @@ struct TodayScreen: View {
             .statusTint(state.heroLimitTint)
             .frame(height: 215)
             .overlay(alignment: .topLeading) {
+                // Swimming once the water is ~15% deep, straddling the top
+                // edge like the Mac popover.
                 if v.fraction >= 0.15 {
                     BuoyBob(sleeping: state.clockState == .clockedOut,
                             onBreak: v.onBreak, size: 72)
                         .padding(.leading, 18)
                         .offset(y: 10)
+                }
+            }
+            .overlay(alignment: .top) {
+                // Too little water to swim, but still on the clock: he hangs
+                // behind the card, paws on the lip, peeking over the middle
+                // (the corners hold the status pill and worked-time text).
+                if v.fraction < 0.15, state.clockState != .clockedOut {
+                    PeekingBob(size: 64, onBreak: v.onBreak)
+                        .offset(y: -2)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                // Dry and clocked out: asleep in the corner.
+                if v.fraction < 0.15, state.clockState == .clockedOut {
+                    SleepingBob()
+                        .frame(width: 86, height: 54)
+                        .padding(.trailing, 18)
+                        .padding(.bottom, 40)
                 }
             }
             .overlay(alignment: .topTrailing) {
