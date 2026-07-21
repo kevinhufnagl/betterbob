@@ -121,10 +121,20 @@ public struct FreshDayWelcome: View {
     @ObservedObject var state: BobState
     /// Compact drops Bob's size and the spacing for the Mac popover.
     var compact: Bool
+    /// False when the host paints the water itself (the Mac dashboard puts
+    /// it in the window's container background so it can run under the
+    /// sidebar and toolbar) — Bob and the dock still sit on the waterline.
+    var showsWater: Bool
+    /// Overrides the proportional water height so a host-drawn water layer
+    /// and this view agree on where the waterline is.
+    var fixedWaterHeight: CGFloat?
 
-    public init(state: BobState, compact: Bool = false) {
+    public init(state: BobState, compact: Bool = false,
+                showsWater: Bool = true, fixedWaterHeight: CGFloat? = nil) {
         self.state = state
         self.compact = compact
+        self.showsWater = showsWater
+        self.fixedWaterHeight = fixedWaterHeight
     }
 
     private var target: TimeInterval { TodayVals(state, now: Date()).targetSecs }
@@ -252,12 +262,15 @@ public struct FreshDayWelcome: View {
         // waterline like it rides the hero's edge, and the greeting centers
         // in the sky above. Fills a wide pane and a phone alike.
         GeometryReader { geo in
-            let waterH: CGFloat = compact ? 118 : max(220, geo.size.height * 0.42)
+            let waterH: CGFloat = fixedWaterHeight
+                ?? (compact ? 118 : max(220, geo.size.height * 0.42))
             let line = waterH * 0.80   // waterline height from the bottom
             ZStack(alignment: .bottom) {
-                WaterBand(fill: 0.80, amplitude: compact ? 4 : 6)
-                    .frame(height: waterH)
-                    .frame(maxWidth: .infinity)
+                if showsWater {
+                    WaterBand(fill: 0.80, amplitude: compact ? 4 : 6)
+                        .frame(height: waterH)
+                        .frame(maxWidth: .infinity)
+                }
 
                 // Bob floats at the waterline, off to the side — clear of the
                 // centered dock. The phone hugs him near the edge; the Mac's

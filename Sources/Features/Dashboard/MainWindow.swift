@@ -47,11 +47,30 @@ struct MainWindow: View {
             } detail: {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(DashboardBG().ignoresSafeArea())
+                    // On a fresh day the window's container background paints
+                    // the backdrop + water for the WHOLE window (sidebar and
+                    // toolbar included) — an opaque pane background here
+                    // would cover it up.
+                    .background {
+                        if !showFreshWelcome { DashboardBG().ignoresSafeArea() }
+                    }
                     // Title bar shows the selected pane, like any sidebar app.
                     .navigationTitle(tab.title)
             }
             .frame(minWidth: 940, minHeight: 620)
+            // The fresh-day pool as the window's own background, so the water
+            // runs edge to edge — under the sidebar and up past the toolbar.
+            .containerBackground(for: .window, alignment: .bottom) {
+                if showFreshWelcome {
+                    ZStack(alignment: .bottom) {
+                        DashboardBG()
+                        WaterBand(fill: 0.80)
+                            .frame(height: 190)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .toolbarBackgroundVisibility(showFreshWelcome ? .hidden : .automatic, for: .windowToolbar)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button { Task { await state.reconcile() } } label: {
@@ -59,7 +78,12 @@ struct MainWindow: View {
                     }.help("Refresh")
                 }
             }
-            FooterBar(state: state)
+            // The footer strip would sit between the water and the window's
+            // bottom edge, breaking the waterline alignment — the welcome
+            // owns the whole height on a fresh day.
+            if !showFreshWelcome {
+                FooterBar(state: state)
+            }
         }
         .onAppear { if !state.signedIn { tab = .settings } }
         .onChange(of: state.signedIn) { _, signedIn in
@@ -97,7 +121,9 @@ struct MainWindow: View {
 
     @ViewBuilder private var detail: some View {
         if showFreshWelcome {
-            FreshDayWelcome(state: state)
+            // The window's container background draws the water; the welcome
+            // just places Bob and the dock on the agreed 190pt waterline.
+            FreshDayWelcome(state: state, showsWater: false, fixedWaterHeight: 190)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             scrollingDetail
