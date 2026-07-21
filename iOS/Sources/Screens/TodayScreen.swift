@@ -1,27 +1,6 @@
 import BetterBobShared
 import SwiftUI
 
-/// A single sine wave filling from its crest to the bottom — the welcome
-/// screen's calm water decoration.
-private struct WelcomeWave: Shape {
-    var phase: Double
-    var height: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let mid = rect.height - height
-        p.move(to: CGPoint(x: 0, y: mid))
-        for x in stride(from: 0, through: rect.width, by: 3) {
-            let y = mid + sin(x / rect.width * .pi * 2.4 + phase) * (height * 0.35)
-            p.addLine(to: CGPoint(x: x, y: y))
-        }
-        p.addLine(to: CGPoint(x: rect.width, y: rect.height))
-        p.addLine(to: CGPoint(x: 0, y: rect.height))
-        p.closeSubpath()
-        return p
-    }
-}
-
 /// Today, restaged for the phone: the wave hero with swimming Bob up top,
 /// full-width glass clock actions, the touch-editable timeline, and today's
 /// entries as native rows. All state flows through the shared engine.
@@ -42,7 +21,7 @@ struct TodayScreen: View {
                 // RootView swaps the whole page for them.
                 let vals = TodayVals(state, now: ctx.date)
                 if isFreshDay {
-                    freshDayWelcome(vals)
+                    FreshDayWelcome(state: state)
                         // Fill the viewport so the greeting centers on the
                         // whole page instead of floating above dead space.
                         .containerRelativeFrame(.vertical)
@@ -84,77 +63,6 @@ struct TodayScreen: View {
                            onDelete: { state.deleteEntry(edit.entry) })
                 .presentationDetents([.medium])
         }
-    }
-
-    // MARK: Fresh-day welcome
-
-    private func freshDayWelcome(_ v: TodayVals) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 24)
-            AnimatedBob().frame(width: 150, height: 150)
-                .background(alignment: .center) { bubbles }
-            Spacer().frame(height: 20)
-            Text(greeting)
-                .font(.largeTitle.bold())
-                .multilineTextAlignment(.center)
-            Text("Ready when you are")
-                .font(.body)
-                .foregroundStyle(.secondary)
-            Spacer().frame(height: 18)
-            // Today's target as a quiet glass pill.
-            Label("\(Fmt.hm(v.targetSecs)) today", systemImage: "target")
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassSurface(cornerRadius: 22)
-            Spacer(minLength: 28)
-            ActionDock(state: state, now: Date())
-            Spacer(minLength: 24)
-        }
-        .frame(maxWidth: .infinity)
-        // A faint water motif along the bottom — the app's wave, at rest.
-        .background(alignment: .bottom) { welcomeWaves }
-    }
-
-    /// Soft accent bubbles rising behind Bob — decorative, matches the palette.
-    private var bubbles: some View {
-        ZStack {
-            ForEach(Array([(-70.0, 40.0, 14.0), (64.0, 8.0, 22.0), (-40.0, -60.0, 10.0),
-                           (78.0, -44.0, 12.0), (30.0, 66.0, 8.0)].enumerated()), id: \.offset) { _, b in
-                Circle()
-                    .fill(Color.accentColor.opacity(0.12))
-                    .frame(width: b.2, height: b.2)
-                    .offset(x: b.0, y: b.1)
-            }
-        }
-        .frame(width: 220, height: 220)
-        .blur(radius: 0.5)
-    }
-
-    /// Two layered waves in the accent hue, drifting like the LiquidHero's
-    /// water — the same living motif, laid along the bottom of the page.
-    private var welcomeWaves: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            ZStack(alignment: .bottom) {
-                WelcomeWave(phase: t * 0.7, height: 42)
-                    .fill(Color.accentColor.opacity(0.10))
-                WelcomeWave(phase: -t * 1.1 + .pi, height: 30)
-                    .fill(Color.accentColor.opacity(0.16))
-            }
-            .frame(height: 120)
-            .frame(maxWidth: .infinity)
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
-        if let first = state.profile?.name.split(separator: " ").first {
-            return "\(part), \(first)"
-        }
-        return part
     }
 
     // MARK: Hero — the wave, untouched

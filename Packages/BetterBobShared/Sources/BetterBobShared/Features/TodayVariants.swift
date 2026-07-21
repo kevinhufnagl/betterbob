@@ -418,6 +418,18 @@ public struct TodayTimeline: View {
 
     @ViewBuilder
     private func content(now: Date) -> some View {
+        // A fresh, clocked-out day: the empty tank reads as "nothing here",
+        // so show the welcome instead — same as the iOS app.
+        if state.entries.isEmpty, state.clockState == .clockedOut {
+            FreshDayWelcome(state: state)
+                .frame(minHeight: 420)
+        } else {
+            dayContent(now: now)
+        }
+    }
+
+    @ViewBuilder
+    private func dayContent(now: Date) -> some View {
         let ctxDate = now
         let v = TodayVals(state, now: ctxDate)
         VStack(alignment: .leading, spacing: 16) {
