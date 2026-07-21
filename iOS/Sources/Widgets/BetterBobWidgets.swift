@@ -8,6 +8,12 @@ struct BetterBobWidgets: WidgetBundle {
         TodayWidget()
         BobFaceWidget()
         DayStripWidget()
+        MonthProgressWidget()
+        CycleBalanceWidget()
+        WeekStripWidget()
+        DoneByWidget()
+        HolidayPoolWidget()
+        NextTimeOffWidget()
         BobLiveActivity()
     }
 }
