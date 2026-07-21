@@ -87,7 +87,7 @@ struct DayStripWidgetView: View {
                 Text("On a break")
             }
         case .clockedOut, .signedOut:
-            Text("Done · \(Duration.seconds(snap.workedBase).formatted(.time(pattern: .hourMinute)))")
+            Text("Clocked out · \(Duration.seconds(snap.workedBase).formatted(.time(pattern: .hourMinute)))")
         }
     }
 }
