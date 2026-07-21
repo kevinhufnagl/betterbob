@@ -813,7 +813,7 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                             // (second harmonic); all three fade slowly toward
                             // the small, slow, symmetric standing wave.
                             let decay = exp(-t / 3.0)
-                            let sustain: CGFloat = fraction < 1 ? 3.5 : 0
+                            let sustain: CGFloat = fraction < 1 ? 5 : 0
                             let amp = sustain + (11 - sustain) * decay * (0.3 + 0.7 * eased)
                             let phase = seedPhase + 1.5 * t + (3.3 - 1.5) * 3.0 * (1 - decay)
                             water(level: displayedFraction(at: ctx.date) * eased,
