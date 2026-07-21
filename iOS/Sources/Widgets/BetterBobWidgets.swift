@@ -5,7 +5,7 @@ import SwiftUI
 struct BetterBobWidgets: WidgetBundle {
     var body: some Widget {
         TodayWidget()
-        // BobLiveActivity()  ← added in Task 11
+        BobLiveActivity()
     }
 }
 

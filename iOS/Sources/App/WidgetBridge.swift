@@ -24,6 +24,6 @@ final class WidgetBridge {
             target: Prefs.shared.threshold, breakEnds: state.autoBreakEnds,
             now: Date())
         SharedStore.save(snapshot)
-        // LiveActivityController.shared.sync(snapshot)  ← wired in Task 11
+        LiveActivityController.shared.sync(snapshot)
     }
 }

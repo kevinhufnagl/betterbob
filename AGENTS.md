@@ -1,16 +1,41 @@
 # BetterBob — agent notes
 
-macOS menu-bar client for HiBob time tracking. Single-module SwiftUI app built
-with plain `swiftc` — no Xcode project. Requires Apple Silicon + macOS 26
-toolchain (`xcrun --show-sdk-version` → 26.x).
+macOS menu-bar client for HiBob time tracking, plus an iOS companion app
+sharing the same `Sources/` core. The Mac app is a single-module SwiftUI app
+built with plain `swiftc` — no Xcode project. Requires Apple Silicon +
+macOS 26 toolchain (`xcrun --show-sdk-version` → 26.x).
 
 ## Commands
 
 ```sh
-./Scripts/build.sh          # build build/BetterBob.app
+./Scripts/build.sh          # build build/BetterBob.app (macOS)
 ./Scripts/test.sh           # run the unit tests (Tests/main.swift, plain expect() harness)
-./Scripts/release.sh 1.4    # cut a release — see below
+./Scripts/gen-ios.sh        # regenerate iOS/BetterBob-iOS.xcodeproj (brew install xcodegen)
+./Scripts/release.sh 1.4    # cut a macOS release — see below
 ```
+
+## iOS app
+
+`iOS/` holds an XcodeGen project sharing `Sources/` with the Mac app —
+`iOS/project.yml` lists exactly which shared files compile for iOS (the
+`includes:` list), plus iOS-only code under `iOS/Sources/` (app shell,
+background refresh, App Group store, widgets, Live Activity).
+
+- Build/run on a device from Xcode (personal team, automatic signing):
+  `./Scripts/gen-ios.sh && open iOS/BetterBob-iOS.xcodeproj`.
+- Verification builds go against the iOS simulator with
+  `CODE_SIGNING_ALLOWED=NO`; xcodebuild's destination matching is flaky here —
+  if `generic/platform=iOS Simulator` errors, retry with a concrete
+  `platform=iOS Simulator,name=iPhone 17 Pro,OS=…` destination (or vice versa).
+- iOS-only code lives in `iOS/Sources/` — never under `Sources/`, which
+  build.sh/test.sh glob for the Mac build. New shared files must compile for
+  macOS 26 too, guarded with `#if os(macOS)` / `#if os(iOS)` where needed.
+- No hidden sign-in window on iOS: SSO runs in a visible sheet
+  (`SSOSignInController.sheetWebView` + `SignInSheet.swift`).
+- Background auto-break is best-effort (`BGAppRefreshTask` chained around
+  auto-break due times) plus catch-up on foreground; widgets and the Live
+  Activity read a `WidgetSnapshot` from the App Group
+  (`group.k3n.betterbob`).
 
 ## Releasing
 
