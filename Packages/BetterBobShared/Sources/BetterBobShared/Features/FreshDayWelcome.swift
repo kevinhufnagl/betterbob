@@ -31,15 +31,31 @@ public struct WaterBand: View {
         dark ? Color.hued(hue, sat: 0.45, bri: 0.88) : Color.hued(hue, sat: 0.14, bri: 0.99)
     }
 
+    /// Pause the 30fps clock the moment the hosting window can't be seen —
+    /// SwiftUI retains closed windows, and an unpaused wave burns CPU forever.
+    @State private var windowVisible = true
+
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
+        Group {
+            if windowVisible && !Motion.reduce {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
+                    water(phase: ctx.date.timeIntervalSinceReferenceDate * 0.6)
+                }
+            } else {
+                water(phase: 0)   // a frozen frame keeps the look, costs nothing
+            }
+        }
+        .trackWindowVisibility { windowVisible = $0 }
+        .allowsHitTesting(false)
+    }
+
+    private func water(phase: Double) -> some View {
             let field = HWaveField(fill: fill, amplitude: Motion.reduce ? 0 : amplitude,
-                                   phase: t * 0.6)
+                                   phase: phase)
             let shape = HWaterShape(field: field)
             // The waterline sits at this fraction from the top.
             let line = 1 - min(1, fill)
-            ZStack(alignment: .top) {
+            return ZStack(alignment: .top) {
                 shape.fill(waterGradient)
                 // The signature glow: a vertical gradient over the water body
                 // that ramps to a bright band right at the waterline and
@@ -57,8 +73,6 @@ public struct WaterBand: View {
                     .stroke(glowColor.opacity(0.9),
                             style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
             }
-        }
-        .allowsHitTesting(false)
     }
 }
 

@@ -978,7 +978,11 @@ public struct BuoyBob: View {
             // Scaled to Bob's size — a fixed ±2.5pt was too much travel for
             // the popover's small swimmer.
             .offset(y: dipOffset)
-            .overlay(alignment: .topTrailing) { if sleeping { DriftingZs() } }
+            // Gated like every other clock: the z's 12fps TimelineView must
+            // not keep ticking inside a retained-but-closed window.
+            .overlay(alignment: .topTrailing) {
+                if sleeping && windowVisible && !Motion.reduce { DriftingZs() }
+            }
             .frame(width: size, height: size)
             .trackWindowVisibility { visible in
                 windowVisible = visible
