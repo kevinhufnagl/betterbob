@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 import Combine
 
 /// The app's one source of truth, refreshed from HiBob (the *real* source of
@@ -112,6 +114,7 @@ final class BobState: ObservableObject {
         // used or accepted, so clear any lingering item on launch.
         Keychain.wipeLegacyTOTPSecret()
         Notifier.requestAuthorization()
+        #if os(macOS)
         // Reading the Wi-Fi SSID needs Location authorization on modern macOS.
         if Prefs.shared.wifiAutoReasonEnabled { WiFiMonitor.shared.requestAccess() }
 
@@ -120,6 +123,7 @@ final class BobState: ObservableObject {
         ) { [weak self] _ in
             Task { await self?.reconcile() }
         }
+        #endif
 
         pollTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { await self?.reconcile() }
@@ -470,12 +474,18 @@ final class BobState: ObservableObject {
     /// Reason for a Wi-Fi rule matching the current SSID (trimmed,
     /// case-insensitive), or nil.
     private func matchingWiFiReason() -> String? {
+        #if os(macOS)
         guard let ssid = WiFiMonitor.shared.currentSSID()?
             .trimmingCharacters(in: .whitespaces), !ssid.isEmpty else { return nil }
         return Prefs.shared.wifiRules.first {
             !$0.reasonName.isEmpty
                 && $0.ssid.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(ssid) == .orderedSame
         }?.reasonName
+        #else
+        // iOS has no CoreWLAN — reason tagging falls through to the default
+        // reason in `currentAutoReason`.
+        return nil
+        #endif
     }
 
     /// Length of the current uninterrupted work stretch (0 unless working).

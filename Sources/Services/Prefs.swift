@@ -1,6 +1,7 @@
 import SwiftUI
-import AppKit
+#if os(macOS)
 import ServiceManagement
+#endif
 
 final class Prefs: ObservableObject {
     static let shared = Prefs()
@@ -239,10 +240,15 @@ final class Prefs: ObservableObject {
         } else {
             self.wifiRules = []
         }
+        #if os(macOS)
         self.launchAtLogin = SMAppService.mainApp.status == .enabled
+        #else
+        self.launchAtLogin = false
+        #endif
     }
 
     private func applyLaunchAtLogin() {
+        #if os(macOS)
         do {
             if launchAtLogin {
                 if SMAppService.mainApp.status != .enabled {
@@ -256,10 +262,14 @@ final class Prefs: ObservableObject {
         } catch {
             NSLog("Failed to toggle launch-at-login: \(error)")
         }
+        #endif
     }
 }
 
 extension Notification.Name {
     static let updateStatusItem = Notification.Name("updateStatusItem")
     static let closePopover     = Notification.Name("closePopover")
+    /// iOS: asks the app root to show the onboarding cover (macOS opens the
+    /// onboarding window directly).
+    static let presentOnboarding = Notification.Name("presentOnboarding")
 }
