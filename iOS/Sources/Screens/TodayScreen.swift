@@ -13,7 +13,7 @@ struct TodayScreen: View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 let vals = TodayVals(state, now: ctx.date)
                 VStack(spacing: 16) {
-                    if state.signedIn && !state.ready {
+                    if state.bootingUp {
                         // First reconcile still in flight — Bob holds the fort
                         // instead of a screenful of zeroes.
                         BobPlaceholder(title: "Getting your day ready…", lines: BobLines.loading) {

@@ -14,7 +14,7 @@ struct MonthScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if state.signedIn && summary == nil {
+                if state.bootingUp || (state.signedIn && summary == nil) {
                     BobPlaceholder(title: "Reading the month…", lines: BobLines.loading) {
                         ProgressView().controlSize(.small).padding(.top, 2)
                     }

@@ -17,7 +17,7 @@ struct TimeOffScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                if state.signedIn && state.timeOffBalances.isEmpty && state.timeOffRequests.isEmpty {
+                if state.bootingUp || (state.signedIn && state.timeOffBalances.isEmpty && state.timeOffRequests.isEmpty) {
                     BobPlaceholder(title: "Fetching your time off…", lines: BobLines.loading) {
                         ProgressView().controlSize(.small).padding(.top, 2)
                     }
