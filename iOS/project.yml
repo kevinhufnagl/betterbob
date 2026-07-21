@@ -26,6 +26,7 @@ targets:
       # App Intents must compile into the app target itself so Shortcuts
       # metadata extraction sees them; the file is shared with the Mac build.
       - path: ../Sources/Intents/BobIntents.swift
+      - path: Resources/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios
@@ -33,6 +34,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Resources/BetterBob.entitlements
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     dependencies:
       - package: BetterBobShared
       - target: BetterBobWidgets
