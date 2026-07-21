@@ -142,11 +142,17 @@ struct TodayScreen: View {
             // One wand at a time: an over-long stretch implies the shortfall
             // too, and adding the missing break resolves both.
             if state.hasOverLongStretch(state.entries) {
-                fixButton("Add the missing break") { state.addMissingBreak() }
+                breakWarning(
+                    headline: "Over your \(Fmt.hm(Prefs.shared.threshold)) max without a break",
+                    buttonTitle: "Add \(Prefs.shared.breakMinutes)-min break",
+                    note: "Inserts a break mid-shift — clock-in and clock-out stay the same."
+                ) { state.addMissingBreak() }
             } else if let shortfall = state.breakGuidelineShortfall {
-                fixButton("Fix break — \(Fmt.hm(shortfall)) short of the guideline") {
-                    state.fixBreakGuideline()
-                }
+                breakWarning(
+                    headline: "Breaks too short — \(Fmt.hm(shortfall)) more needed",
+                    buttonTitle: "Extend break to \(Prefs.shared.breakMinutes) min",
+                    note: "Only breaks of \(Prefs.shared.breakMinutes) min or more count toward the guideline."
+                ) { state.fixBreakGuideline() }
             }
             if state.overDailyMax {
                 warningRow("Past the daily limit — only clocking out helps.",
@@ -155,15 +161,29 @@ struct TodayScreen: View {
         }
     }
 
-    private func fixButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: "wand.and.rays")
-                .font(.body.weight(.semibold))
+    /// The Mac popover's break banner restaged: headline, tinted wand
+    /// button, and the tooltip copy as a visible sub-line (touch can't hover).
+    private func breakWarning(headline: String, buttonTitle: String, note: String,
+                              action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(headline, systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.bobOrange)
-                .frame(maxWidth: .infinity, minHeight: 28)
+            Button(action: action) {
+                Label(buttonTitle, systemImage: "wand.and.stars")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 24)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Color.bobOrange)
+            .disabled(state.busy)
+            Text(note)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
-        .buttonStyle(.glass)
-        .controlSize(.large)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassSurface(cornerRadius: 14)
     }
 
     private func warningRow(_ text: String, symbol: String, tint: Color) -> some View {
