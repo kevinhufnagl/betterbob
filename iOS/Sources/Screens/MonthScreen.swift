@@ -7,6 +7,7 @@ import SwiftUI
 struct MonthScreen: View {
     @ObservedObject var state: BobState
     var onOpenToday: () -> Void = {}
+    @State private var openDayKey: String?
 
     private var summary: CycleSummary? { state.cycleSummary }
 
@@ -20,7 +21,8 @@ struct MonthScreen: View {
                         .glassSurface()
                 }
                 statGrid
-                CalendarHeatmap(state: state, onOpenToday: onOpenToday)
+                CalendarHeatmap(state: state, onOpenToday: onOpenToday,
+                                onOpenDay: { openDayKey = $0 })
                 if summary?.days.isEmpty == false {
                     BalanceTrendCard(state: state)
                 }
@@ -39,6 +41,12 @@ struct MonthScreen: View {
         }
         .refreshable { await state.reconcile() }
         .task { await state.loadCycleData() }
+        .sheet(isPresented: Binding(get: { openDayKey != nil },
+                                    set: { if !$0 { openDayKey = nil } })) {
+            if let key = openDayKey {
+                DayDetailScreen(state: state, dateKey: key)
+            }
+        }
     }
 
     private var statGrid: some View {

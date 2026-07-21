@@ -117,14 +117,14 @@ public struct StatTile: View {
 
 // MARK: - Date helpers
 
-enum DayFmt {
+public enum DayFmt {
     static let iso: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian); f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"; return f
     }()
-    static func date(_ s: String) -> Date? { iso.date(from: s) }
-    static func today() -> String { iso.string(from: Date()) }
+    public static func date(_ s: String) -> Date? { iso.date(from: s) }
+    public static func today() -> String { iso.string(from: Date()) }
 }
 
 func hoursText(_ h: Double) -> String {

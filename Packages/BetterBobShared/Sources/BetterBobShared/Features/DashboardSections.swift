@@ -557,12 +557,17 @@ public struct CyclePane: View {
 /// A proper month calendar: weekday columns, week rows, each day shaded by
 /// hours worked with the number shown and today ringed.
 public struct CalendarHeatmap: View {
-    public init(state: BobState, onOpenToday: @escaping () -> Void = {}) {
+    public init(state: BobState, onOpenToday: @escaping () -> Void = {},
+                onOpenDay: ((String) -> Void)? = nil) {
         self.state = state
         self.onOpenToday = onOpenToday
+        self.onOpenDay = onOpenDay
     }
     @ObservedObject var state: BobState
     var onOpenToday: () -> Void = {}
+    /// When set, day cells hand the dateKey to the host instead of showing
+    /// the built-in popover editor (the iOS screens present their own).
+    var onOpenDay: ((String) -> Void)?
     @Environment(\.colorScheme) private var scheme
     @State private var hovered: String?
     @State private var selected: String?    // dateKey of the cell whose detail is open
@@ -660,7 +665,9 @@ public struct CalendarHeatmap: View {
             .animation(.easeOut(duration: 0.12), value: hov)
             .onHover { hovered = $0 ? day.date : (hovered == day.date ? nil : hovered) }
             .onTapGesture {
-                if isToday { onOpenToday() } else { selected = day.date }
+                if isToday { onOpenToday() }
+                else if let onOpenDay { onOpenDay(day.date) }
+                else { selected = day.date }
             }
             // Detail popover anchored to this exact cell; closes on outside click.
             .popover(isPresented: Binding(get: { selected == day.date },

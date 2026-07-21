@@ -33,9 +33,8 @@ struct TimeOffScreen: View {
         .refreshable { await state.loadTimeOff() }
         .task { await state.loadTimeOff() }
         .sheet(item: $booking) { range in
-            TimeOffBookingSheet(state: state, start: range.start, end: range.end)
+            BookingSheet(state: state, start: range.start, end: range.end)
                 .presentationDetents([.medium, .large])
-                .presentationBackground(.thinMaterial)
         }
     }
 

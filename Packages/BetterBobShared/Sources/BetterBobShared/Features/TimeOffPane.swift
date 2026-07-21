@@ -416,6 +416,23 @@ public struct TimeOffCalendar: View {
             // grid — `.offset` alone leaves the layout bounds tiny.
             .frame(width: geo.size.width, height: gridHeight, alignment: .topLeading)
             .contentShape(Rectangle())
+            #if os(iOS)
+            // Touch: a full-surface drag gesture would swallow scrolling, so
+            // ranges are picked with two taps — start day, then end day. A
+            // tap on a cancellable reserved day still offers to cancel it.
+            .onTapGesture(coordinateSpace: .local) { loc in
+                guard let idx = indexAt(loc, cellW: cellW), let d = days[idx] else { return }
+                if let s = dragStart {
+                    dragEnd = idx
+                    if let sd = days[min(s, idx)], let ed = days[max(s, idx)] { onSelect(sd, ed) }
+                    dragStart = nil; dragEnd = nil
+                } else if let r = requestFor(d), canCancel(r) {
+                    cancelTarget = r
+                } else {
+                    dragStart = idx; dragEnd = idx
+                }
+            }
+            #else
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
@@ -436,6 +453,7 @@ public struct TimeOffCalendar: View {
                         dragStart = nil; dragEnd = nil
                     }
             )
+            #endif
         }
         .frame(height: gridHeight)
     }
