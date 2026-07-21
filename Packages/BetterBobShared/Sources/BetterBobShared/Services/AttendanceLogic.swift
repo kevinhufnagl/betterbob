@@ -456,10 +456,12 @@ public enum AttendanceLogic {
     // MARK: - iOS widget / background support
 
     /// Snapshot of the current attendance state for the widgets and Live
-    /// Activity. `breakEnds` is engine state (BobState.autoBreakEnds), not
-    /// derivable from entries, so it's passed through.
+    /// Activity. `breakEnds`/`breakDue` are engine state (BobState's
+    /// autoBreakEnds/autoBreakDue), not derivable from entries, so they're
+    /// passed through.
     public static func widgetSnapshot(entries: [AttendanceEntry], signedIn: Bool,
                                target: TimeInterval, breakEnds: Date?,
+                               breakDue: Date? = nil,
                                now: Date) -> WidgetSnapshot {
         guard signedIn else {
             return WidgetSnapshot(state: .signedOut, stretchStart: nil, workedBase: 0,
@@ -470,7 +472,8 @@ public enum AttendanceLogic {
         case .working(let since):
             return WidgetSnapshot(state: .working, stretchStart: since,
                                   workedBase: worked - now.timeIntervalSince(since),
-                                  target: target, breakEnds: nil, updatedAt: now)
+                                  target: target, breakEnds: nil, breakDue: breakDue,
+                                  updatedAt: now)
         case .onBreak:
             return WidgetSnapshot(state: .onBreak, stretchStart: nil, workedBase: worked,
                                   target: target, breakEnds: breakEnds, updatedAt: now)

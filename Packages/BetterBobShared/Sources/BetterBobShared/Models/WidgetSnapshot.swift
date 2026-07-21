@@ -18,20 +18,32 @@ public struct WidgetSnapshot: Codable, Equatable {
     public var target: TimeInterval
     /// When the running auto-break ends, if one is running.
     public var breakEnds: Date?
+    /// When the next auto-break is due while working, if one is armed.
+    public var breakDue: Date?
     public var updatedAt: Date
 
     public init(state: State, stretchStart: Date?, workedBase: TimeInterval,
-                target: TimeInterval, breakEnds: Date?, updatedAt: Date) {
+                target: TimeInterval, breakEnds: Date?, breakDue: Date? = nil,
+                updatedAt: Date) {
         self.state = state
         self.stretchStart = stretchStart
         self.workedBase = workedBase
         self.target = target
         self.breakEnds = breakEnds
+        self.breakDue = breakDue
         self.updatedAt = updatedAt
     }
 
     public func workedTotal(now: Date) -> TimeInterval {
         guard state == .working, let start = stretchStart else { return workedBase }
         return workedBase + max(0, now.timeIntervalSince(start))
+    }
+
+    /// When the target will be reached at the current pace — only meaningful
+    /// while working and still short of the target.
+    public func doneBy(now: Date) -> Date? {
+        guard state == .working else { return nil }
+        let remaining = target - workedTotal(now: now)
+        return remaining > 0 ? now.addingTimeInterval(remaining) : nil
     }
 }

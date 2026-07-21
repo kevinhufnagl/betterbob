@@ -852,11 +852,14 @@ expect(Fmt.parseClock("12345") == nil, "too many digits → nil")
 print("AttendanceLogic.widgetSnapshot")
 
 let snapWorking = AttendanceLogic.widgetSnapshot(
-    entries: [work(9, nil)], signedIn: true, target: sixH, breakEnds: nil, now: t(11))
+    entries: [work(9, nil)], signedIn: true, target: sixH, breakEnds: nil,
+    breakDue: t(15), now: t(11))
 expect(snapWorking.state == .working, "working: state")
 expect(snapWorking.stretchStart == t(9), "working: timer anchors at stretch start")
 expect(abs(snapWorking.workedBase) < 1, "working: base excludes the open stretch")
 expect(abs(snapWorking.workedTotal(now: t(11)) - 2 * 3600) < 1, "working: total = base + elapsed")
+expect(snapWorking.breakDue == t(15), "working: carries the auto-break due time")
+expect(snapWorking.doneBy(now: t(11)) == t(15), "working: done-by = now + remaining")
 
 let snapBreak = AttendanceLogic.widgetSnapshot(
     entries: [work(9, 12), brk(12, nil)], signedIn: true, target: sixH,

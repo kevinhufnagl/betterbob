@@ -26,6 +26,7 @@ final class WidgetBridge {
         let snapshot = AttendanceLogic.widgetSnapshot(
             entries: state.entries, signedIn: state.signedIn,
             target: target, breakEnds: state.autoBreakEnds,
+            breakDue: state.autoBreakDue,
             now: Date())
         SharedStore.save(snapshot)
         LiveActivityController.shared.sync(snapshot)
