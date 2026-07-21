@@ -137,8 +137,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         #if os(iOS)
-        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 720),
+        // Request desktop content: the autofill driver's selectors are
+        // written against the desktop HiBob/Okta pages the Mac app sees —
+        // the mobile variants have different markup and stall the flow at
+        // the gateway step.
+        config.defaultWebpagePreferences.preferredContentMode = .desktop
+        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768),
                             configuration: config)
+        web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
         web.navigationDelegate = self
         webView = web
         if visible {
@@ -194,7 +200,11 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                 .flatMap(\.windows)
                 .first
         guard let window else { return }
-        web.frame = window.bounds
+        // Keep a desktop-sized layout viewport — the view is fully covered by
+        // the app's content, so its footprint doesn't matter visually.
+        web.frame = CGRect(x: 0, y: 0,
+                           width: max(window.bounds.width, 1024),
+                           height: max(window.bounds.height, 768))
         web.isUserInteractionEnabled = false
         web.accessibilityElementsHidden = true
         window.insertSubview(web, at: 0)
