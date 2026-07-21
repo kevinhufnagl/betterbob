@@ -435,10 +435,11 @@ enum BobIcon {
     /// Cached template image of Bob for the menu bar.
     private static var cache: [String: NSImage] = [:]
 
-    /// A one-colour full-body Bob silhouette (arms, body, feet, ears,
-    /// head) with the eyes and tooth gap punched out — drawn in Core Graphics so
-    /// overlapping parts union cleanly (non-zero) and the holes are cut with a
-    /// clear blend. Marked as a template so the menu bar tints it automatically.
+    /// A one-colour Bob face silhouette (ears, head, teeth — matching the
+    /// face-and-cap app icon) with the eyes and tooth gap punched out — drawn
+    /// in Core Graphics so overlapping parts union cleanly (non-zero) and the
+    /// holes are cut with a clear blend. Marked as a template so the menu bar
+    /// tints it automatically.
     static func menuBar(height: CGFloat = 18, badge: StateBadge = .none) -> NSImage {
         let key = "\(Int(height * 4))-\(badge.rawValue)"
         if let img = cache[key] { return img }
@@ -455,13 +456,14 @@ enum BobIcon {
             func round(_ r: CGRect, _ rad: CGFloat) -> CGPath {
                 CGPath(roundedRect: r, cornerWidth: rad, cornerHeight: rad, transform: nil)
             }
-            // Silhouette (non-zero union: arms, body, feet, ears, head, teeth).
+            // Face only, zoomed to fill (the app icon is face-and-cap now):
+            // scale around the face bundle's centre so ears/head/teeth span
+            // the canvas; the old full-body parts are gone.
+            ctx.saveGState()
+            ctx.translateBy(x: 0.5 * s, y: 0.5 * s)
+            ctx.scaleBy(x: 1.35, y: 1.35)
+            ctx.translateBy(x: -0.5 * s, y: -0.6575 * s)
             ctx.setFillColor(CGColor(gray: 0, alpha: 1))
-            ctx.addEllipse(in: ell(0.24, 0.31, 0.13, 0.18))
-            ctx.addEllipse(in: ell(0.76, 0.31, 0.13, 0.18))
-            ctx.addPath(round(ell(0.5, 0.27, 0.48, 0.44), s * 0.10))
-            ctx.addEllipse(in: ell(0.40, 0.07, 0.16, 0.10))
-            ctx.addEllipse(in: ell(0.60, 0.07, 0.16, 0.10))
             ctx.addEllipse(in: ell(0.24, 0.82, 0.17, 0.17))
             ctx.addEllipse(in: ell(0.76, 0.82, 0.17, 0.17))
             ctx.addEllipse(in: ell(0.5, 0.63, 0.58, 0.54))
@@ -474,6 +476,7 @@ enum BobIcon {
             ctx.addRect(ell(0.5, 0.45, 0.02, 0.10))
             ctx.fillPath()
             ctx.setBlendMode(.normal)
+            ctx.restoreGState()
 
             // State badge in the bottom-right corner: a filled disc with the
             // glyph punched out, and a clear ring around it so it reads as its

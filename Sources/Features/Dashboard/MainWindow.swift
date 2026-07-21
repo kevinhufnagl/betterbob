@@ -48,6 +48,8 @@ struct MainWindow: View {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(DashboardBG().ignoresSafeArea())
+                    // Title bar shows the selected pane, like any sidebar app.
+                    .navigationTitle(tab.title)
             }
             .frame(minWidth: 940, minHeight: 620)
             .toolbar {
