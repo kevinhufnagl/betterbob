@@ -322,7 +322,8 @@ struct PopoverRootView: View {
                 .foregroundStyle(.secondary)
                 .kerning(0.5)
                 .padding(.bottom, 2)
-            ForEach(Array(state.entries.enumerated()), id: \.offset) { index, entry in
+            // Newest entry on top, matching the dashboard's Today list.
+            ForEach(Array(state.entries.reversed().enumerated()), id: \.offset) { index, entry in
                 if index > 0 {
                     Divider().opacity(0.25)
                 }
