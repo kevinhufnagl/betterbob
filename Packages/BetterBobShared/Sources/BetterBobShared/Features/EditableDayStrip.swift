@@ -115,11 +115,10 @@ public struct EditableDayStrip: View {
         let bw = CGFloat((e.end ?? now).timeIntervalSince(e.start) / span) * w
         let isDragging = dragID == e.id
         let isHover = hoverID == e.id && !isDragging
-        // Square inside edges; only the timeline's outer ends are rounded.
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: first ? radius : 0, bottomLeadingRadius: first ? radius : 0,
-            bottomTrailingRadius: last ? radius : 0, topTrailingRadius: last ? radius : 0,
-            style: .continuous)
+        // Blocks stay square — the strip's clipShape rounds the outer ends,
+        // and per-block rounding turned a tiny end block into a floating
+        // crescent beside its neighbour.
+        let shape = Rectangle()
         return shape
             .fill(LinearGradient(colors: [accent.opacity(0.96), accent.opacity(0.78)],
                                  startPoint: .top, endPoint: .bottom))
