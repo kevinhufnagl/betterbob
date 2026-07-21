@@ -379,10 +379,17 @@ public struct AutoLoginInline: View {
         }
         .padding(14)
         .frame(maxWidth: fillWidth ? .infinity : 300)
+        #if os(macOS)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(Color.primary.opacity(0.05)))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+        #else
+        // iOS wears the app-wide glass so callers don't double-wrap it.
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+        #endif
         .animation(.easeInOut(duration: 0.15), value: state.otpSubmitting)
         .animation(.easeInOut(duration: 0.15), value: state.autoLoginStatus)
         .animation(.easeInOut(duration: 0.15), value: state.otpError)

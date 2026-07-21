@@ -28,7 +28,7 @@ struct OnboardingScreen: View {
                         .opacity(didAppear ? 1 : 0)
                         .offset(y: didAppear ? 0 : 14)
                     if state.autoLoginInProgress {
-                        GlassCard { AutoLoginInline(state: state, fillWidth: true) }
+                        AutoLoginInline(state: state, fillWidth: true)
                     } else {
                         autoSection
                             .opacity(didAppear ? 1 : 0)
