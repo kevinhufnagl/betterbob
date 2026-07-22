@@ -174,8 +174,16 @@ public struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             summaryRow("envelope.fill", email.isEmpty ? "No email set" : email)
             summaryRow("key.fill", "Password ••••••••")
-            summaryRow("keyboard", hasSecret ? "Codes come from your stored secret"
-                                             : "You type the code at sign-in")
+            // How the second factor is handled — accurate to the environment:
+            // Okta Verify installed → push approval; stored secret → generated;
+            // otherwise → typed at sign-in.
+            if SignInFactorGroup.oktaVerifyInstalled {
+                summaryRow("bell.badge.fill", "Approve the sign-in in Okta Verify")
+            } else if hasSecret {
+                summaryRow("keyboard", "Codes come from your stored secret")
+            } else {
+                summaryRow("keyboard", "You type the code at sign-in")
+            }
             if !state.autoLoginInProgress {
                 VStack(spacing: 8) {
                     // Signing in again only makes sense while signed out.
