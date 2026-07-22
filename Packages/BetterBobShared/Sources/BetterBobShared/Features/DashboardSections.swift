@@ -257,6 +257,11 @@ public struct DayDetailSheet: View {
 
     private var day: DayEntries? { state.monthDays.first { $0.dateKey == dateKey } }
     private var dayDate: Date { day?.date ?? DayFmt.date(dateKey) ?? Date() }
+    /// A day still in the future — nothing to log there.
+    private var isFuture: Bool {
+        Calendar.current.startOfDay(for: dayDate)
+            > Calendar.current.startOfDay(for: Date())
+    }
     private var worked: TimeInterval {
         (day?.entries ?? []).filter { $0.kind == .work }
             .reduce(0) { $0 + ($1.end ?? $1.start).timeIntervalSince($1.start) }
@@ -281,8 +286,10 @@ public struct DayDetailSheet: View {
                     }
                     .transition(.opacity)
                 }
-                Button { adding = true } label: {
-                    Label("Add entry", systemImage: "plus")
+                if !isFuture {
+                    Button { adding = true } label: {
+                        Label("Add entry", systemImage: "plus")
+                    }
                 }
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }

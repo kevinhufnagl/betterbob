@@ -12,6 +12,12 @@ struct DayDetailScreen: View {
     @State private var addingEntry = false
 
     private var day: DayEntries? { state.monthDays.first { $0.dateKey == dateKey } }
+    /// A day still in the future — nothing to log there.
+    private var isFuture: Bool {
+        guard let date = DayFmt.date(dateKey) else { return false }
+        return Calendar.current.startOfDay(for: date)
+            > Calendar.current.startOfDay(for: Date())
+    }
     private var dayEnd: Date {
         day?.entries.compactMap(\.end).max() ?? day?.date ?? Date()
     }
@@ -46,11 +52,14 @@ struct DayDetailScreen: View {
             .bobScreen(title: title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { addingEntry = true } label: {
-                        Image(systemName: "plus")
+                // No manual entries for a day that hasn't happened yet.
+                if !isFuture {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { addingEntry = true } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Add entry")
                     }
-                    .accessibilityLabel("Add entry")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
