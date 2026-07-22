@@ -9,6 +9,7 @@ struct DayDetailScreen: View {
     let dateKey: String
     @Environment(\.dismiss) private var dismiss
     @State private var editingEntry: EntryEdit?
+    @State private var addingEntry = false
 
     private var day: DayEntries? { state.monthDays.first { $0.dateKey == dateKey } }
     private var dayEnd: Date {
@@ -45,9 +46,28 @@ struct DayDetailScreen: View {
             .bobScreen(title: title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { addingEntry = true } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add entry")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $addingEntry) {
+                let date = day?.date ?? DayFmt.date(dateKey) ?? Date()
+                let cal = Calendar.current
+                let s = cal.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+                let e = cal.date(bySettingHour: 17, minute: 0, second: 0, of: date) ?? date
+                NewEntrySheet(reasonOptions: state.reasonOptions,
+                              defaultStart: s, defaultEnd: e) { kind, start, end, reason in
+                    state.addEntry(kind: kind, start: start, end: end,
+                                   reason: reason?.name,
+                                   in: day?.entries ?? [], on: date)
+                }
+                .presentationDetents([.medium])
             }
             .sheet(item: $editingEntry) { edit in
                 if let day {

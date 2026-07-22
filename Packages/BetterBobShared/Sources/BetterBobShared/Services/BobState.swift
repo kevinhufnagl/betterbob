@@ -461,6 +461,28 @@ public final class BobState: ObservableObject {
                 on: date, anchor: entry.id)
     }
 
+    /// Add a brand-new entry (no server id yet) to a specific day and resave
+    /// the whole day. The server assigns the id on the reconcile that follows.
+    /// The `date`'s calendar day is combined with the picked wall-clock times
+    /// so a manual entry lands on the right day even when edited elsewhere.
+    public func addEntry(kind: AttendanceEntry.Kind, start: Date, end: Date?,
+                         reason: String?, in day: [AttendanceEntry], on date: Date) {
+        let cal = Calendar.current
+        func onDay(_ t: Date) -> Date {
+            let c = cal.dateComponents([.hour, .minute], from: t)
+            return cal.date(bySettingHour: c.hour ?? 0, minute: c.minute ?? 0,
+                            second: 0, of: date) ?? t
+        }
+        let new = AttendanceEntry(kind: kind, start: onDay(start),
+                                  end: end.map(onDay), id: nil, reason: reason)
+        saveDay(day + [new], on: date)
+    }
+
+    /// Add an entry to today.
+    public func addEntry(kind: AttendanceEntry.Kind, start: Date, end: Date?, reason: String?) {
+        addEntry(kind: kind, start: start, end: end, reason: reason, in: entries, on: today)
+    }
+
     /// True when the day has enough work to owe a break but none is logged.
     /// The reason that will be auto-applied to work right now — a matching
     /// Wi-Fi rule for the current network, else the default. nil if neither.

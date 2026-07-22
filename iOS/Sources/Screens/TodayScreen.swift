@@ -7,6 +7,7 @@ import SwiftUI
 struct TodayScreen: View {
     @ObservedObject var state: BobState
     @State private var editingEntry: EntryEdit?
+    @State private var addingEntry = false
 
     /// A fresh day: signed in, nothing punched yet, still clocked out. The
     /// empty water tank reads as "nothing here", so swap it for a welcome.
@@ -58,6 +59,19 @@ struct TodayScreen: View {
             }
         }
         .bobScreen(title: "Today")
+        // Add a past/forgotten entry to today by hand. Hidden on a fresh day,
+        // whose nav bar is hidden anyway — the Month tab covers backfilling
+        // empty days.
+        .toolbar {
+            if !isFreshDay {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { addingEntry = true } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add entry")
+                }
+            }
+        }
         .sheet(item: $editingEntry) { edit in
             EntryEditSheet(entry: edit.entry,
                            reasonOptions: state.reasonOptions,
@@ -68,6 +82,27 @@ struct TodayScreen: View {
                            onDelete: { state.deleteEntry(edit.entry) })
                 .presentationDetents([.medium])
         }
+        .sheet(isPresented: $addingEntry) {
+            let (s, e) = defaultNewEntryTimes()
+            NewEntrySheet(reasonOptions: state.reasonOptions,
+                          defaultStart: s, defaultEnd: e) { kind, start, end, reason in
+                state.addEntry(kind: kind, start: start, end: end, reason: reason?.name)
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    /// A one-hour slot ending at the most recent entry's start (so a new entry
+    /// slots in before what's logged), else the hour up to now — both rounded
+    /// to 5 minutes.
+    private func defaultNewEntryTimes() -> (Date, Date) {
+        let anchor = state.entries.map(\.start).min() ?? Date()
+        func round5(_ d: Date) -> Date {
+            let t = (d.timeIntervalSinceReferenceDate / 300).rounded() * 300
+            return Date(timeIntervalSinceReferenceDate: t)
+        }
+        let end = round5(anchor)
+        return (end.addingTimeInterval(-3600), end)
     }
 
     // MARK: Hero — the wave, untouched

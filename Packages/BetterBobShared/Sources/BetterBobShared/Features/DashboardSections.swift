@@ -253,8 +253,10 @@ public struct DayDetailSheet: View {
     let dateKey: String
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @State private var adding = false
 
     private var day: DayEntries? { state.monthDays.first { $0.dateKey == dateKey } }
+    private var dayDate: Date { day?.date ?? DayFmt.date(dateKey) ?? Date() }
     private var worked: TimeInterval {
         (day?.entries ?? []).filter { $0.kind == .work }
             .reduce(0) { $0 + ($1.end ?? $1.start).timeIntervalSince($1.start) }
@@ -278,6 +280,9 @@ public struct DayDetailSheet: View {
                         Text("Saving…").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     .transition(.opacity)
+                }
+                Button { adding = true } label: {
+                    Label("Add entry", systemImage: "plus")
                 }
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
@@ -317,6 +322,12 @@ public struct DayDetailSheet: View {
         .padding(20)
         #if os(macOS)
         .frame(width: 560)
+        .sheet(isPresented: $adding) {
+            AddEntrySheet(reasonOptions: state.reasonOptions, date: dayDate) { kind, start, end, reason in
+                state.addEntry(kind: kind, start: start, end: end,
+                               reason: reason?.name, in: day?.entries ?? [], on: dayDate)
+            }
+        }
         #endif
         .animation(Motion.standard, value: day?.entries)
     }
@@ -893,3 +904,82 @@ func reasonColor(_ index: Int) -> Color {
     let palette: [Color] = [.teal, .blue, .orange, .purple, .pink, .indigo, .mint]
     return index < palette.count ? palette[index] : .gray
 }
+
+#if os(macOS)
+/// Add an attendance entry by hand (macOS): pick Work or Break, a start and
+/// end, and (for work) a reason. Times are wall-clock; the engine lands them
+/// on the target day and resaves it.
+struct AddEntrySheet: View {
+    var reasonOptions: [ReasonOption] = []
+    let date: Date
+    var onAdd: (AttendanceEntry.Kind, Date, Date, ReasonOption?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isBreak = false
+    @State private var start: Date
+    @State private var end: Date
+    @State private var reasonName = ""
+
+    init(reasonOptions: [ReasonOption] = [], date: Date,
+         onAdd: @escaping (AttendanceEntry.Kind, Date, Date, ReasonOption?) -> Void) {
+        self.reasonOptions = reasonOptions
+        self.date = date
+        self.onAdd = onAdd
+        let cal = Calendar.current
+        let s = cal.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        _start = State(initialValue: s)
+        _end = State(initialValue: cal.date(byAdding: .hour, value: 8, to: s) ?? s)
+    }
+
+    private var kind: AttendanceEntry.Kind { isBreak ? .breakTime : .work }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New entry").font(.system(size: 16, weight: .bold))
+
+            Picker("", selection: $isBreak) {
+                Text("Work").tag(false)
+                Text("Break").tag(true)
+            }
+            .pickerStyle(.segmented).labelsHidden()
+
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    Text("Start").font(.system(size: 12)).gridColumnAlignment(.leading)
+                    DatePicker("", selection: $start, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+                GridRow {
+                    Text("End").font(.system(size: 12))
+                    DatePicker("", selection: $end, in: start..., displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+                if kind == .work, !reasonOptions.isEmpty {
+                    GridRow {
+                        Text("Reason").font(.system(size: 12))
+                        Picker("", selection: $reasonName) {
+                            Text("None").tag("")
+                            ForEach(reasonOptions, id: \.name) { opt in Text(opt.name).tag(opt.name) }
+                        }
+                        .labelsHidden().frame(maxWidth: 220, alignment: .leading)
+                    }
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Add") {
+                    let reason = reasonOptions.first { $0.name == reasonName }
+                    onAdd(kind, start, end, kind == .work ? reason : nil)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(end <= start)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+    }
+}
+#endif
