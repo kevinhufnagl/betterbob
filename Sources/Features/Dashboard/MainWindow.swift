@@ -77,29 +77,27 @@ struct MainWindow: View {
             } detail: {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // No pane background — the window's container background
-                    // (below) paints the backdrop for the WHOLE window, so it
-                    // runs edge to edge under the sidebar and up past the
-                    // toolbar on every tab, not just the fresh-day pool.
+                    // Backdrop in the pane (not the window background) so the
+                    // toolbar keeps its native material and blurs content as it
+                    // scrolls under it. The fresh-day pool is the exception —
+                    // it paints the window container background instead so the
+                    // water can run under the sidebar and past the toolbar.
+                    .background {
+                        if !showFreshWelcome { DashboardBG().ignoresSafeArea() }
+                    }
                     .navigationTitle(tab.title)
             }
             .frame(minWidth: 940, minHeight: 620)
-            // The backdrop as the window's own background so it reaches the top
-            // and under the sidebar; the fresh-day pool adds its water on top.
             .containerBackground(for: .window, alignment: .bottom) {
-                ZStack(alignment: .bottom) {
-                    DashboardBG()
-                    if showFreshWelcome {
+                if showFreshWelcome {
+                    ZStack(alignment: .bottom) {
+                        DashboardBG()
                         WaterBand(fill: 0.80, active: windowVisible)
                             .frame(height: 190)
                             .frame(maxWidth: .infinity)
                     }
                 }
             }
-            // Hide the toolbar material only on the fresh-day pool, where the
-            // water must show through. On the scrolling tabs keep it automatic
-            // so macOS blurs content as it passes under the toolbar (the native
-            // look) — the backdrop still shows through that translucent material.
             .toolbarBackgroundVisibility(showFreshWelcome ? .hidden : .automatic, for: .windowToolbar)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
