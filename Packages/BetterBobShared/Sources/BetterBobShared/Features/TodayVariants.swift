@@ -90,42 +90,37 @@ public struct ActionDock: View {
     var now = Date()
     @Environment(\.colorScheme) private var scheme
 
+    @Namespace private var glassNS
+
     public var body: some View {
-        // The ZStack lets the outgoing pair cross-fade over the incoming one
-        // instead of stacking beside it mid-transition.
-        ZStack {
-            HStack(spacing: 6) {
+        // One shared glass layer: each button is its own Liquid Glass capsule
+        // and matched glassEffectIDs make state changes morph — one pill
+        // splits into two on clock-in and merges back on clock-out, instead
+        // of a cross-fade. No wrapper capsule; the pills ARE the dock.
+        GlassEffectContainer(spacing: 16) {
+            HStack(spacing: 8) {
                 switch state.projectedClockState {
                 case .clockedOut:
                     DockButton(label: "Clock in", sym: "play.fill",
-                               caption: autoTagTrailing, prominent: true) { state.clockIn() }
+                               caption: autoTagTrailing, prominent: true,
+                               id: "primary", ns: glassNS) { state.clockIn() }
                 case .working:
                     DockButton(label: "Start break", sym: "pause.fill",
-                               caption: autoBreakTrailing, prominent: true) { state.startManualBreak() }
-                    DockButton(label: "Clock out", sym: "stop.fill") { state.clockOut() }
+                               caption: autoBreakTrailing, prominent: true,
+                               id: "primary", ns: glassNS) { state.startManualBreak() }
+                    DockButton(label: "Clock out", sym: "stop.fill",
+                               id: "secondary", ns: glassNS) { state.clockOut() }
                 case .onBreak:
                     DockButton(label: "End break", sym: "play.fill",
-                               caption: endBreakTrailing, prominent: true) { state.endBreak() }
-                    DockButton(label: "Clock out", sym: "stop.fill") { state.clockOut() }
+                               caption: endBreakTrailing, prominent: true,
+                               id: "primary", ns: glassNS) { state.endBreak() }
+                    DockButton(label: "Clock out", sym: "stop.fill",
+                               id: "secondary", ns: glassNS) { state.clockOut() }
                 }
             }
-            .id(clockStateKey)
-            .transition(.bobReplace)
         }
-        .padding(5)
-        .glassEffect(.regular, in: .capsule)
-        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6))
         .shadow(color: .black.opacity(scheme == .dark ? 0.30 : 0.14), radius: 12, y: 4)
         .animation(Motion.standard, value: state.projectedClockState)
-    }
-
-    /// Stable identity per clock state so the whole pair cross-fades.
-    private var clockStateKey: String {
-        switch state.projectedClockState {
-        case .clockedOut: return "out"
-        case .working: return "working"
-        case .onBreak: return "break"
-        }
     }
 
     /// "auto in 42m" under the Start-break label while working.
@@ -150,17 +145,20 @@ public struct ActionDock: View {
     }
 }
 
-/// One dock action. Prominent = solid accent capsule with a white label
-/// (the next thing you'll do); quiet = glass capsule with a neutral label.
+/// One dock action: its own Liquid Glass capsule inside the dock's
+/// GlassEffectContainer. Prominent gets a soft accent wash in the glass (the
+/// next thing you'll do); quiet stays clear. The system supplies hover and
+/// press response via interactive glass; matched ids morph across states.
 /// Fixed height so a captioned button and its plain neighbour stay level.
 private struct DockButton: View {
     let label: String
     let sym: String
     var caption: String? = nil
     var prominent = false
+    let id: String
+    let ns: Namespace.ID
     let act: () -> Void
     @Environment(\.colorScheme) private var scheme
-    @State private var hovering = false
 
     // Touch targets get a size up from the Mac's pointer-sized capsules.
     #if os(iOS)
@@ -192,33 +190,24 @@ private struct DockButton: View {
             .foregroundStyle(Color.primary.opacity(prominent ? 0.9 : 0.85))
             .padding(.horizontal, padH)
             .frame(height: dockHeight)
-            .background(
-                // The welcome button's soft accent wash, as a fill: the dock's
-                // glass beneath supplies the blur, so a 30% accent over it
-                // reads as tinted glass — prominent without a solid sticker.
-                Capsule().fill(prominent
-                    ? AnyShapeStyle((scheme == .dark
-                        ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
-                        : Color.controlAccent(scheme)).opacity(0.30))
-                    : AnyShapeStyle(Color.primary.opacity(hovering ? 0.10 : 0.05))))
-            .overlay {
-                if prominent {
-                    // Hover brightens the solid fill instead of re-tinting it.
-                    Capsule().fill(Color.white.opacity(hovering ? 0.12 : 0))
-                } else {
-                    Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.7)
-                }
-            }
             .contentShape(Capsule())
         }
-        .buttonStyle(PressablePillStyle())
+        .buttonStyle(.plain)
+        .glassEffect(prominent ? .regular.tint(accentWash).interactive()
+                               : .regular.interactive(), in: .capsule)
+        .glassEffectID(id, in: ns)
         #if os(macOS)
         .onHover { h in
-            hovering = h
             if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
         #endif
-        .animation(Motion.quick, value: hovering)
+    }
+
+    /// The welcome button's soft accent wash, shared by every prominent pill.
+    private var accentWash: Color {
+        (scheme == .dark
+            ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
+            : Color.controlAccent(scheme)).opacity(0.3)
     }
 }
 
