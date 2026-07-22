@@ -77,28 +77,15 @@ struct MainWindow: View {
             } detail: {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Backdrop in the pane (not the window background) so the
-                    // toolbar keeps its native material and blurs content as it
-                    // scrolls under it. The fresh-day pool is the exception —
-                    // it paints the window container background instead so the
-                    // water can run under the sidebar and past the toolbar.
+                    // Backdrop in the pane so the toolbar keeps its native
+                    // material and blurs content scrolling under it. The
+                    // fresh-day pool is the exception — see the modifier below.
                     .background {
                         if !showFreshWelcome { DashboardBG().ignoresSafeArea() }
                     }
                     .navigationTitle(tab.title)
             }
             .frame(minWidth: 940, minHeight: 620)
-            .containerBackground(for: .window, alignment: .bottom) {
-                if showFreshWelcome {
-                    ZStack(alignment: .bottom) {
-                        DashboardBG()
-                        WaterBand(fill: 0.80, active: windowVisible)
-                            .frame(height: 190)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-            }
-            .toolbarBackgroundVisibility(showFreshWelcome ? .hidden : .automatic, for: .windowToolbar)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button { Task { await state.reconcile() } } label: {
@@ -106,6 +93,12 @@ struct MainWindow: View {
                     }.help("Refresh")
                 }
             }
+            // Only the fresh-day pool touches the window background + toolbar
+            // material (to run water to the top). Applying containerBackground
+            // or an explicit toolbar visibility on the other tabs — even with
+            // empty content — flattens the toolbar and kills the native
+            // scroll-under blur, so it's applied ONLY when fresh.
+            .modifier(FreshDayWindowBackdrop(show: showFreshWelcome, windowVisible: windowVisible))
             // The footer strip would sit between the water and the window's
             // bottom edge, breaking the waterline alignment — the welcome
             // owns the whole height on a fresh day.
@@ -204,6 +197,35 @@ struct MainWindow: View {
             .padding(.top, 4)
         }
         .padding(.top, 40)
+    }
+}
+
+/// The fresh-day pool's window backdrop: paints the water as the window's
+/// container background (so it runs under the sidebar and past the toolbar)
+/// and hides the toolbar material. Applied ONLY on the fresh day — merely
+/// attaching `containerBackground(for: .window)` or an explicit toolbar
+/// visibility on the normal tabs flattens the toolbar and defeats macOS's
+/// native blur-content-under-the-toolbar effect, so the other tabs get
+/// neither modifier.
+private struct FreshDayWindowBackdrop: ViewModifier {
+    let show: Bool
+    let windowVisible: Bool
+
+    func body(content: Content) -> some View {
+        if show {
+            content
+                .containerBackground(for: .window, alignment: .bottom) {
+                    ZStack(alignment: .bottom) {
+                        DashboardBG()
+                        WaterBand(fill: 0.80, active: windowVisible)
+                            .frame(height: 190)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
     }
 }
 
