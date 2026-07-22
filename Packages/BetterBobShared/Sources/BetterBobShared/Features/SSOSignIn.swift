@@ -509,26 +509,37 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // (ready) and we didn't just type it (justFilled). Clicking in the same
           // tick as filling submits before the widget registers the value → the
           // "username cannot be blank" error.
-          // Okta's post-auth "Stay signed in?" prompt is fieldless, so no
-          // branch below would touch it — click Stay (exact match: the other
-          // button is "Don't stay signed in") to finish and keep the session.
-          if (!onHibob) {
-            var stay = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]')).find(function(x){
-              return shown(x) && (x.value || x.textContent || '').trim().toLowerCase() === 'stay signed in';
+          // Okta's post-auth "Stay signed in?" prompt (KMSI) is fieldless, so
+          // no branch below would touch it. Its affirmative button is the
+          // form's PRIMARY submit — identified structurally (submit / data-se
+          // save / primary class), never by label, so it works in any UI
+          // language ("Stay signed in", "Angemeldet bleiben", …). The other
+          // choice is a secondary link, so the primary match picks Stay.
+          if (!onHibob && !present && !window.__bbStayClicked) {
+            var prim = [].slice.call(document.querySelectorAll(
+              'input[type=submit], button[type=submit], [data-type=save], [data-se=save], .o-form-button-bar input[type=submit], .button-primary'
+            )).find(function(x){
+              return shown(x) && (x.type === 'submit'
+                  || x.getAttribute('data-type') === 'save'
+                  || x.getAttribute('data-se') === 'save'
+                  || /(button-primary|btn-primary|\\bprimary\\b)/.test(x.className || ''));
             });
-            if (stay && !window.__bbStayClicked) {
-              window.__bbStayClicked = true; stay.click(); return step + pageHint;
-            }
+            if (prim) { window.__bbStayClicked = true; prim.click(); return step + pageHint; }
           }
           // Okta FastPass interstitial: a fieldless page probing the local
           // Okta Verify app — in a hidden web view that probe never resolves
           // (it can't show its prompts). Its own "Back to sign in" link drops
           // to the normal identifier form, so click it once after ~5s stuck.
+          // Matched by Okta's cancel data-se attribute (language-proof) or the
+          // English/German label as a fallback.
           if (step === 'loading' && !present) {
             window.__bbStuckTicks = (window.__bbStuckTicks || 0) + 1;
             if (window.__bbStuckTicks >= 4 && !window.__bbBackClicked) {
-              var back = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
-                return shown(x) && /back to sign ?in/.test((x.textContent || x.value || '').trim().toLowerCase());
+              var back = [].slice.call(document.querySelectorAll('a, button, [role=button], [data-se]')).find(function(x){
+                if (!shown(x)) return false;
+                var se = x.getAttribute('data-se') || '';
+                if (/cancel|back-link|signout|go-back/.test(se)) return true;
+                return /back to sign ?in|zur(ü|ue)ck zur anmeldung/.test((x.textContent || x.value || '').trim().toLowerCase());
               });
               if (back) { window.__bbBackClicked = true; back.click(); }
             }
