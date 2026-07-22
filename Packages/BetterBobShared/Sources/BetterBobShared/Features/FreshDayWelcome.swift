@@ -11,10 +11,16 @@ public struct WaterBand: View {
     /// Water depth as a fraction of the band's height.
     var fill: Double
     var amplitude: CGFloat
+    /// External visibility gate. Views hosted in a window's container
+    /// background never receive window callbacks, so this view's own tracker
+    /// stays at its default there — hosts like that must pass their own
+    /// window-visibility signal instead.
+    var active: Bool
 
-    public init(fill: Double = 0.55, amplitude: CGFloat = 5) {
+    public init(fill: Double = 0.55, amplitude: CGFloat = 5, active: Bool = true) {
         self.fill = fill
         self.amplitude = amplitude
+        self.active = active
     }
 
     @Environment(\.colorScheme) private var scheme
@@ -37,7 +43,7 @@ public struct WaterBand: View {
 
     public var body: some View {
         Group {
-            if windowVisible && !Motion.reduce {
+            if active && windowVisible && !Motion.reduce {
                 TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
                     water(phase: ctx.date.timeIntervalSinceReferenceDate * 0.6)
                         // Rasterize on the GPU — animated vector fills were

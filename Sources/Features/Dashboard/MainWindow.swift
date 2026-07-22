@@ -30,6 +30,10 @@ struct MainWindow: View {
     @ObservedObject var state: BobState
     @ObservedObject var prefs = Prefs.shared
     @State private var tab: MainTab = .today
+    // Real window visibility, from the root tracker below. The container
+    // background's water can't track this itself — views hosted there never
+    // get window callbacks, so its internal gate would stay open forever.
+    @State private var windowVisible = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,7 +68,7 @@ struct MainWindow: View {
                 if showFreshWelcome {
                     ZStack(alignment: .bottom) {
                         DashboardBG()
-                        WaterBand(fill: 0.80)
+                        WaterBand(fill: 0.80, active: windowVisible)
                             .frame(height: 190)
                             .frame(maxWidth: .infinity)
                     }
@@ -91,7 +95,10 @@ struct MainWindow: View {
         }
         // Only pull the heavy dashboard data (month grid, activity, time off)
         // while this window is actually on screen — see BobState.reconcile.
-        .trackWindowVisibility { state.setDashboardActive($0) }
+        .trackWindowVisibility {
+            windowVisible = $0
+            state.setDashboardActive($0)
+        }
     }
 
     private func row(_ t: MainTab) -> some View {
