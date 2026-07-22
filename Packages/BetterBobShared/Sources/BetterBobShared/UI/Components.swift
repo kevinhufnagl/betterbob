@@ -251,9 +251,44 @@ public struct SignInFactorGroup: View {
 
     public init(state: BobState) { self.state = state }
 
-    /// Okta Verify push leads and is highlighted — most orgs' policy only
-    /// accepts it; the code factors are fallbacks that may not be offered.
-    private var orderedFactors: [SignInFactor] { [.oktaVerifyPush, .googleAuthenticator, .oktaVerifyCode] }
+    /// Whether the Okta Verify desktop app is installed. When it is, macOS
+    /// routes our WebKit sign-in through Okta's device (SSO-extension/FastPass)
+    /// flow, whose chooser only offers Okta Verify — the code methods (Google
+    /// Authenticator, Okta Verify code) are dropped server-side and can't be
+    /// reached. So there's no point offering them; show only push. Computed
+    /// once — the install state won't change mid-session.
+    static let oktaVerifyInstalled: Bool = {
+        #if os(macOS)
+        if FileManager.default.fileExists(atPath: "/Applications/Okta Verify.app") { return true }
+        for id in ["com.okta.verify", "com.okta.mobile", "com.okta.macos.verify"] {
+            if NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) != nil { return true }
+        }
+        return false
+        #else
+        return false
+        #endif
+    }()
+
+    /// Push leads. With Okta Verify installed, it's the only method the
+    /// embedded flow can reach, so the code fallbacks are dropped entirely.
+    private var orderedFactors: [SignInFactor] {
+        Self.oktaVerifyInstalled
+            ? [.oktaVerifyPush]
+            : [.oktaVerifyPush, .googleAuthenticator, .oktaVerifyCode]
+    }
+
+    /// A full-width, clearly-tappable row used when there's a single method.
+    private func soloButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+                Text(title).font(.system(size: 12, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 
     public var body: some View {
         VStack(spacing: 6) {
@@ -261,15 +296,15 @@ public struct SignInFactorGroup: View {
                 if state.fullyAutomatic {
                     // A stored authenticator secret only works with the Google
                     // Authenticator flow — nothing to choose, one button does it.
-                    Button { state.startAutoSignIn(factor: .googleAuthenticator) } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "wand.and.rays").font(.system(size: 12, weight: .semibold))
-                            Text("Log in automatically").font(.system(size: 12, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 11)
-                        .contentShape(Rectangle())
+                    soloButton(icon: "wand.and.rays", title: "Log in automatically") {
+                        state.startAutoSignIn(factor: .googleAuthenticator)
                     }
-                    .buttonStyle(.plain)
+                } else if orderedFactors.count == 1, let only = orderedFactors.first {
+                    // Just one usable method (Okta Verify installed): a single,
+                    // clearly-a-button row rather than a lone segment.
+                    soloButton(icon: only.icon, title: "Sign in with \(only.shortLabel)") {
+                        state.startAutoSignIn(factor: only)
+                    }
                 } else {
                     HStack(spacing: 0) {
                         ForEach(Array(orderedFactors.enumerated()), id: \.element.id) { i, factor in
@@ -293,11 +328,10 @@ public struct SignInFactorGroup: View {
                 .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-            // Which factors an org's Okta actually offers is set by policy, not
-            // by what's enrolled — many tenants only accept Okta Verify, so the
-            // code options can silently fail. Say so rather than let it surprise.
             if !state.fullyAutomatic {
-                Text("Okta Verify push is the most reliable. The code methods depend on Okta offering them at sign-in.")
+                Text(Self.oktaVerifyInstalled
+                     ? "Okta Verify is installed, so this Mac signs in with it. Approve the push on your device."
+                     : "Okta Verify push is the most reliable. The code methods depend on Okta offering them at sign-in.")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
