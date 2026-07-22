@@ -345,7 +345,7 @@ public struct AutoLoginInline: View {
                     ProgressView().controlSize(.small)
                     Text(state.pushPending
                          ? "Waiting for you to approve the push in Okta Verify."
-                         : "A push is on its way to your phone.")
+                         : "A push is on its way to Okta Verify.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
@@ -431,13 +431,13 @@ public struct AutoLoginInline: View {
     }
 
     private var headerTitle: String {
-        if isPush { return state.pushPending ? "Approve on your phone" : "Signing you in…" }
+        if isPush { return state.pushPending ? "Approve in Okta Verify" : "Signing you in…" }
         if handsFree { return "Signing you in…" }
         return "Two-factor code"
     }
 
     private var substatus: String {
-        if isPush { return state.pushPending ? "Sent to your phone" : (state.autoLoginStatus.isEmpty ? "Connecting…" : state.autoLoginStatus) }
+        if isPush { return state.pushPending ? "Sent to Okta Verify" : (state.autoLoginStatus.isEmpty ? "Connecting…" : state.autoLoginStatus) }
         if state.otpSubmitting { return "Verifying your code…" }
         if state.awaitingOTP { return "Ready — enter the code from your app" }
         return state.autoLoginStatus.isEmpty ? "Signing you in…" : state.autoLoginStatus

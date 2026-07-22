@@ -369,7 +369,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         case "select":   return "Choosing your authenticator…"
         // The user types the code into the inline field — there is no seed.
         case "code":     return "Enter the code from your authenticator app"
-        case "push":     return "Approve the sign-in in Okta Verify on your phone…"
+        case "push":     return "Approve the sign-in in Okta Verify…"
         default:         return "Loading…"
         }
     }
@@ -510,36 +510,38 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // tick as filling submits before the widget registers the value → the
           // "username cannot be blank" error.
           // Okta's post-auth "Stay signed in?" prompt (KMSI) is fieldless, so
-          // no branch below would touch it. Its affirmative button is the
-          // form's PRIMARY submit — identified structurally (submit / data-se
-          // save / primary class), never by label, so it works in any UI
-          // language ("Stay signed in", "Angemeldet bleiben", …). The other
-          // choice is a secondary link, so the primary match picks Stay.
+          // no branch below would touch it — click Stay to finish and keep the
+          // session. Two matchers, both safe on the working English flow:
+          //  1. the exact English label (proven), and
+          //  2. a language-agnostic fallback GATED on an explicit decline
+          //     button being present ("Nicht angemeldet bleiben", "Don't stay
+          //     signed in", …) — a control unique to this screen, so it can't
+          //     fire on the chooser, push-wait, or FastPass spinner. When it's
+          //     there, click the visible button that is NEITHER the decline
+          //     NOR a known secondary/escape link: that's Stay, in any language.
           if (!onHibob && !present && !window.__bbStayClicked) {
-            var prim = [].slice.call(document.querySelectorAll(
-              'input[type=submit], button[type=submit], [data-type=save], [data-se=save], .o-form-button-bar input[type=submit], .button-primary'
-            )).find(function(x){
-              return shown(x) && (x.type === 'submit'
-                  || x.getAttribute('data-type') === 'save'
-                  || x.getAttribute('data-se') === 'save'
-                  || /(button-primary|btn-primary|\\bprimary\\b)/.test(x.className || ''));
-            });
-            if (prim) { window.__bbStayClicked = true; prim.click(); return step + pageHint; }
+            var choices = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]')).filter(shown);
+            var negRE = /\\b(don'?t|do not|no)\\b|nicht|kein|niet|non/i;
+            var secRE = /back to sign|zur(ü|ue)ck|verify with|another way|different|help|hilfe|resend|erneut|cancel|abbrechen/i;
+            var label = function(x){ return (x.value || x.textContent || '').trim(); };
+            var stay = choices.find(function(x){ return label(x).toLowerCase() === 'stay signed in'; });
+            if (!stay && choices.some(function(x){ return negRE.test(label(x)); })) {
+              stay = choices.find(function(x){
+                var t = label(x);
+                return t && !negRE.test(t) && !secRE.test(t);
+              });
+            }
+            if (stay) { window.__bbStayClicked = true; stay.click(); return step + pageHint; }
           }
           // Okta FastPass interstitial: a fieldless page probing the local
           // Okta Verify app — in a hidden web view that probe never resolves
           // (it can't show its prompts). Its own "Back to sign in" link drops
           // to the normal identifier form, so click it once after ~5s stuck.
-          // Matched by Okta's cancel data-se attribute (language-proof) or the
-          // English/German label as a fallback.
           if (step === 'loading' && !present) {
             window.__bbStuckTicks = (window.__bbStuckTicks || 0) + 1;
             if (window.__bbStuckTicks >= 4 && !window.__bbBackClicked) {
-              var back = [].slice.call(document.querySelectorAll('a, button, [role=button], [data-se]')).find(function(x){
-                if (!shown(x)) return false;
-                var se = x.getAttribute('data-se') || '';
-                if (/cancel|back-link|signout|go-back/.test(se)) return true;
-                return /back to sign ?in|zur(ü|ue)ck zur anmeldung/.test((x.textContent || x.value || '').trim().toLowerCase());
+              var back = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
+                return shown(x) && /back to sign ?in|zur(ü|ue)ck zur anmeldung/.test((x.textContent || x.value || '').trim().toLowerCase());
               });
               if (back) { window.__bbBackClicked = true; back.click(); }
             }
