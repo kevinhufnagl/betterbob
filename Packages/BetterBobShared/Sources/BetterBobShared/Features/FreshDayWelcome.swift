@@ -378,7 +378,6 @@ public struct FreshDayWelcome: View {
 /// doesn't shift when the dock takes over mid-punch.
 private struct WelcomeClockInButton: View {
     @ObservedObject var state: BobState
-    @Environment(\.colorScheme) private var scheme
 
     #if os(iOS)
     private let symSize: CGFloat = 14
@@ -410,13 +409,15 @@ private struct WelcomeClockInButton: View {
                         .opacity(0.75)
                 }
             }
+            .foregroundStyle(Color.primary.opacity(0.9))
             .padding(.horizontal, padH)
             .frame(height: height)
+            .contentShape(Capsule())
         }
-        .buttonStyle(.glassProminent)
-        .tint(scheme == .dark
-            ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
-            : Color.controlAccent(scheme))
+        .buttonStyle(.plain)
+        // The actual Liquid Glass material, clear and interactive — the
+        // system handles refraction, specular highlights, and press response.
+        .glassEffect(.regular.interactive(), in: .capsule)
         #if os(macOS)
         .onHover { h in
             if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
