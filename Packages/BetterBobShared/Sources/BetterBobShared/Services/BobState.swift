@@ -172,8 +172,8 @@ public final class BobState: ObservableObject {
             if success {
                 Task { await self.completeSSOSignIn() }
             } else {
-                self.lastError = "Automatic sign-in didn't complete — try signing in manually."
-                Notifier.failure("Automatic sign-in didn't complete.")
+                self.lastError = "Sign-in didn't complete — check your details and try again."
+                Notifier.failure("Sign-in didn't complete.")
             }
         }
     }

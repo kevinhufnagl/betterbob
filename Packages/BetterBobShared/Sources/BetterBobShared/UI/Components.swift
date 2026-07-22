@@ -311,6 +311,13 @@ public struct AutoLoginInline: View {
     private var canSubmit: Bool { trimmed.count >= 4 && !state.otpSubmitting }
     /// This sign-in uses push (no code field at any point).
     private var isPush: Bool { state.signInFactor?.isPush == true }
+    /// Fully automatic: a stored secret supplies the code, so no field shows.
+    /// If Okta rejects the generated code, awaitingOTP flips true and the
+    /// normal typed prompt takes over.
+    private var handsFree: Bool {
+        state.signInFactor == .googleAuthenticator && state.fullyAutomatic
+            && !state.awaitingOTP
+    }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -339,6 +346,16 @@ public struct AutoLoginInline: View {
                     Text(state.pushPending
                          ? "Waiting for you to approve the push in Okta Verify."
                          : "A push is on its way to your phone.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            } else if handsFree {
+                // Stored secret: the code comes from the Keychain — nothing to
+                // type, just a progress line while the hidden browser drives.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Signing you in with your stored secret…")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
@@ -410,11 +427,12 @@ public struct AutoLoginInline: View {
         .animation(.easeInOut(duration: 0.15), value: state.autoLoginStatus)
         .animation(.easeInOut(duration: 0.15), value: state.otpError)
         .animation(.easeInOut(duration: 0.15), value: state.pushPending)
-        .onAppear { if !isPush { focused = true } }
+        .onAppear { if !isPush && !handsFree { focused = true } }
     }
 
     private var headerTitle: String {
         if isPush { return state.pushPending ? "Approve on your phone" : "Signing you in…" }
+        if handsFree { return "Signing you in…" }
         return "Two-factor code"
     }
 

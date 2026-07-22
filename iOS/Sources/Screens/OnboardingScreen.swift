@@ -90,7 +90,7 @@ struct OnboardingScreen: View {
 
     private var autoSection: some View {
         GlassGroupedSection(
-            header: "Sign in automatically",
+            header: "Sign in with your password",
             footer: "Bob fills your email and password, then stops at the authenticator step — you type the current code or approve a push. Your code is never stored."
         ) {
             if hasSaved && !editing {

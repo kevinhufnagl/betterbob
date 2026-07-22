@@ -137,7 +137,7 @@ public struct OnboardingView: View {
     private var autoCard: some View {
         OnboardingCard(
             symbol: "wand.and.rays", tint: .accentColor,
-            title: "Sign in automatically", badge: "Recommended", tag: "Hands-off",
+            title: "Sign in with your password", badge: "Recommended", tag: "One code",
             blurb: "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
         ) {
             VStack(alignment: .leading, spacing: 10) {
@@ -284,7 +284,7 @@ public struct OnboardingView: View {
                     // Hands-free expiry re-login is only possible with a
                     // stored secret — the checkbox appears alongside it.
                     Toggle(isOn: $prefs.autoReloginOnExpiry) {
-                        Text("Sign back in by himself when the session expires")
+                        Text("Sign back in automatically when the session expires")
                             .font(.system(size: 11))
                     }
                     #if os(macOS)
