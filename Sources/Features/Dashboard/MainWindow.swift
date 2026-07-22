@@ -36,6 +36,32 @@ struct MainWindow: View {
     @State private var windowVisible = true
 
     var body: some View {
+        Group {
+            if windowVisible {
+                shell
+            } else {
+                // SwiftUI retains a closed window's view tree and keeps its
+                // display links armed — and per-view visibility gating has
+                // proven leaky (backing views get duplicated during scene
+                // setup and lose their window observers). Tearing the whole
+                // tree down while nobody can see it is the only airtight way
+                // to stop every animation clock; reopening rebuilds it.
+                Color.clear
+            }
+        }
+        .onAppear { if !state.signedIn { tab = .settings } }
+        .onChange(of: state.signedIn) { _, signedIn in
+            if signedIn, tab == .settings { tab = .today }
+        }
+        // Only pull the heavy dashboard data (month grid, activity, time off)
+        // while this window is actually on screen — see BobState.reconcile.
+        .trackWindowVisibility {
+            windowVisible = $0
+            state.setDashboardActive($0)
+        }
+    }
+
+    private var shell: some View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 List(selection: $tab) {
@@ -88,16 +114,6 @@ struct MainWindow: View {
             if !showFreshWelcome {
                 FooterBar(state: state)
             }
-        }
-        .onAppear { if !state.signedIn { tab = .settings } }
-        .onChange(of: state.signedIn) { _, signedIn in
-            if signedIn, tab == .settings { tab = .today }
-        }
-        // Only pull the heavy dashboard data (month grid, activity, time off)
-        // while this window is actually on screen — see BobState.reconcile.
-        .trackWindowVisibility {
-            windowVisible = $0
-            state.setDashboardActive($0)
         }
     }
 
