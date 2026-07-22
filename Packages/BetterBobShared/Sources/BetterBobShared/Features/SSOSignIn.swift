@@ -288,9 +288,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             if self.drive == .assisted {
                                 if self.factor.isPush {
                                     BobState.shared.pushPending = (step == "push")
-                                } else {
-                                    self.trackCodeStep(step)
                                 }
+                                // Even on the push route, Okta sometimes lands
+                                // on a code field (newer choosers add a second
+                                // code-vs-push screen; org policy can force
+                                // it). Surface the inline code card then — the
+                                // Okta Verify app shows codes too — instead of
+                                // hanging on a push that never comes.
+                                self.trackCodeStep(step)
                             }
                         }
                     }
@@ -430,6 +435,17 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                 clickSubmit(field);
               }
             }
+            // Push factor stranded on a code field: Okta's newer widgets land
+            // there when the chooser's second screen defaults to a typed code.
+            // Route back through "Verify with something else" once — the
+            // chooser comes back and the push row gets picked below.
+            if (factor === 'ovp' && otp && !otp.value && !window.__bbAltOnce) {
+              var alt = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
+                var s = (x.textContent || x.value || '').trim().toLowerCase();
+                return shown(x) && /verify with something else|use another|another way|different method/.test(s);
+              });
+              if (alt) { window.__bbAltOnce = true; alt.click(); }
+            }
           } else if (!window.__bbSsoClicked && location.hostname.indexOf('hibob.com') >= 0) {
             // HiBob's own gateway: click "Continue with Okta". Never touch links
             // on the SAML/Okta redirect pages — a stray click sends us to okta.com
@@ -440,25 +456,37 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               return s.indexOf('okta') >= 0 || s.indexOf('continue with') >= 0;
             });
             if (t) { window.__bbSsoClicked = true; t.click(); }
-          } else if (!window.__bbFactorPicked) {
+          } else if (step !== 'push') {
             // Okta "choose a security method" step → pick the requested factor's
-            // row (never Security Key / biometric). Each factor is its own row,
-            // matched by the row's text.
+            // row (never Security Key / biometric). Newer widgets show this
+            // TWICE — the authenticator, then a code-vs-push method screen — so
+            // the guard is per distinct choice, not once per flow. Never runs
+            // on the push-wait screen, whose form text ("push notification
+            // sent") would otherwise match every button in it.
             var btns = [].slice.call(document.querySelectorAll('a, button, input[type=submit], [role=button]'));
             function boxText(x){
               return ((x.closest('.authenticator-row, .authenticator-button, li, form') || x.parentElement || x).textContent || '').toLowerCase();
             }
             var b = btns.find(function(x){
               if (!shown(x)) return false;
+              var own = (x.textContent || x.value || '').toLowerCase();
+              if (/resend|something else|another way|different method|back to sign/.test(own)) return false;
               var c = boxText(x);
               if (c.indexOf('security key') >= 0 || c.indexOf('biometric') >= 0) return false;
               if (factor === 'ga') return c.indexOf('google authenticator') >= 0 && c.indexOf('push') < 0;
               if (factor === 'ovc') return c.indexOf('okta verify') >= 0 && c.indexOf('enter a code') >= 0;
-              if (factor === 'ovp') return c.indexOf('okta verify') >= 0
-                  && (c.indexOf('push') >= 0 || c.indexOf('notification') >= 0);
+              // Push: the first screen's row says "Okta Verify … push"; the
+              // method screen's row may just say "Get a push notification".
+              if (factor === 'ovp') return (c.indexOf('push') >= 0 || c.indexOf('notification') >= 0)
+                  && c.indexOf('enter a code') < 0;
               return false;
             });
-            if (b) { window.__bbFactorPicked = true; b.click(); }
+            var pick = b ? ((b.textContent || b.value || '').trim() + '@' + location.pathname) : '';
+            if (b && window.__bbFactorSig !== pick) {
+              window.__bbFactorSig = pick;
+              window.__bbFactorPicked = true;
+              b.click();
+            }
           }
           return step;
         })();
