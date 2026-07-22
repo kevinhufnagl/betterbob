@@ -77,30 +77,26 @@ struct MainWindow: View {
             } detail: {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // On a fresh day the window's container background paints
-                    // the backdrop + water for the WHOLE window (sidebar and
-                    // toolbar included) — an opaque pane background here
-                    // would cover it up.
-                    .background {
-                        if !showFreshWelcome { DashboardBG().ignoresSafeArea() }
-                    }
-                    // Title bar shows the selected pane, like any sidebar app.
+                    // No pane background — the window's container background
+                    // (below) paints the backdrop for the WHOLE window, so it
+                    // runs edge to edge under the sidebar and up past the
+                    // toolbar on every tab, not just the fresh-day pool.
                     .navigationTitle(tab.title)
             }
             .frame(minWidth: 940, minHeight: 620)
-            // The fresh-day pool as the window's own background, so the water
-            // runs edge to edge — under the sidebar and up past the toolbar.
+            // The backdrop as the window's own background so it reaches the top
+            // and under the sidebar; the fresh-day pool adds its water on top.
             .containerBackground(for: .window, alignment: .bottom) {
-                if showFreshWelcome {
-                    ZStack(alignment: .bottom) {
-                        DashboardBG()
+                ZStack(alignment: .bottom) {
+                    DashboardBG()
+                    if showFreshWelcome {
                         WaterBand(fill: 0.80, active: windowVisible)
                             .frame(height: 190)
                             .frame(maxWidth: .infinity)
                     }
                 }
             }
-            .toolbarBackgroundVisibility(showFreshWelcome ? .hidden : .automatic, for: .windowToolbar)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button { Task { await state.reconcile() } } label: {

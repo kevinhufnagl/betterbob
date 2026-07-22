@@ -147,7 +147,7 @@ public struct OnboardingView: View {
     private var autoCard: some View {
         OnboardingCard(
             symbol: "wand.and.rays", tint: .accentColor,
-            title: "Sign in with your password", badge: "Recommended",
+            title: "Sign in with your password", badge: nil,
             tag: oktaOnly ? "" : "One code",
             blurb: oktaOnly
                 ? "Save your HiBob password. When the session expires Bob fills it in and you approve the sign-in in Okta Verify."

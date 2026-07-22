@@ -535,6 +535,24 @@ public final class BobState: ObservableObject {
         dayEntries.contains { $0.kind == .work && ($0.reason ?? "").isEmpty }
     }
 
+    /// How many loaded month days have at least one work entry with no reason.
+    public var daysMissingReason: Int {
+        monthDays.filter { missingReason($0.entries) }.count
+    }
+
+    /// Set `option` on every reasonless work entry across the loaded month,
+    /// one day at a time. Entries that already carry a reason are untouched;
+    /// days with nothing missing are skipped so we don't re-save them.
+    public func applyReasonToMissing(_ option: ReasonOption) {
+        for day in monthDays where missingReason(day.entries) {
+            let updated = day.entries.map { e -> AttendanceEntry in
+                guard e.kind == .work, (e.reason ?? "").isEmpty else { return e }
+                var e = e; e.reason = option.name; return e
+            }
+            saveDay(updated, on: day.date)
+        }
+    }
+
     /// Whether a day's total worked time is past the daily max (default 10h).
     public func isOverDailyMax(_ dayEntries: [AttendanceEntry]) -> Bool {
         AttendanceLogic.overDailyMax(entries: dayEntries,

@@ -606,10 +606,39 @@ public struct CalendarHeatmap: View {
                         ForEach(days, id: \.date) { day in cell(day) }
                     }
                     legend
+                    missingReasonControl
                 }
             } else {
                 Text("Loading cycle…").font(.system(size: 12)).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// When any loaded day has a work entry with no reason (the violet cells),
+    /// offer to tag them all at once — pick a reason, applied only to the
+    /// entries that are missing one; anything already tagged is left alone.
+    @ViewBuilder private var missingReasonControl: some View {
+        let n = state.daysMissingReason
+        if n > 0, !state.reasonOptions.isEmpty {
+            HStack(spacing: 8) {
+                Circle().fill(Color.bobViolet).frame(width: 8, height: 8)
+                Text(n == 1 ? "1 day has a work entry with no reason"
+                            : "\(n) days have work entries with no reason")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer()
+                Menu {
+                    ForEach(state.reasonOptions, id: \.self) { opt in
+                        Button(opt.name) { state.applyReasonToMissing(opt) }
+                    }
+                } label: {
+                    Label("Set reason for all", systemImage: "wand.and.stars")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .menuStyle(.button)
+                .fixedSize()
+                .disabled(state.busy)
+            }
+            .padding(.top, 2)
         }
     }
 
