@@ -79,6 +79,15 @@ native iOS 26 Liquid Glass app:
 
 ## Gotchas
 
+- **Closed windows keep animating.** SwiftUI retains a closed Window scene's
+  view tree with its display links armed, and per-view `trackWindowVisibility`
+  gates are leaky (backing views get duplicated during scene setup; the
+  survivor can end up detached and never hear `willClose`). MainWindow
+  therefore swaps its whole shell for `Color.clear` when the root tracker
+  reports the window invisible — keep that pattern, don't rely on gating
+  individual clocks. Also: a `repeatForever` animation is not cancelled by a
+  `disablesAnimations` write; replace it with a finite animation
+  (`withAnimation(.linear(duration: 0.01))`) to stop it.
 - **SourceKit diagnostics are noise.** The LSP can't see across files in this
   no-project setup, so it reports "Cannot find type X in scope" everywhere.
   The only real check is `./Scripts/build.sh` + `./Scripts/test.sh`.
