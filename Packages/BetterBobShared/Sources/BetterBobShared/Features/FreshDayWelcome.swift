@@ -378,6 +378,7 @@ public struct FreshDayWelcome: View {
 /// doesn't shift when the dock takes over mid-punch.
 private struct WelcomeClockInButton: View {
     @ObservedObject var state: BobState
+    @Environment(\.colorScheme) private var scheme
 
     // A size up from the dock's buttons — the lone action on the whole
     // screen can afford the presence.
@@ -417,14 +418,22 @@ private struct WelcomeClockInButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        // The actual Liquid Glass material, clear and interactive — the
-        // system handles refraction, specular highlights, and press response.
-        .glassEffect(.regular.interactive(), in: .capsule)
+        // The actual Liquid Glass material, interactive, with a soft accent
+        // wash — enough color to read as the primary action while staying
+        // glass, not a filled capsule.
+        .glassEffect(.regular.tint(accent.opacity(0.3)).interactive(), in: .capsule)
         #if os(macOS)
         .onHover { h in
             if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
         #endif
+    }
+
+    /// The dock's prominent accent, reused as the glass wash.
+    private var accent: Color {
+        scheme == .dark
+            ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
+            : Color.controlAccent(scheme)
     }
 }
 
