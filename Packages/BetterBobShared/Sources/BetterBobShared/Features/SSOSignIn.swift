@@ -332,7 +332,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                 if step == "select", !self.factor.isPush,
                                    Date().timeIntervalSince(self.lastStepSince ?? Date()) > 10 {
                                     self.lastFailureReason =
-                                        "\(self.factor.shortLabel) isn't set up for your account. Use Okta Verify push, or add the method in Okta first."
+                                        "Your Okta sign-in only offers Okta Verify here — \(self.factor.shortLabel) isn't accepted for this login. Use Okta Verify push."
                                     self.finish(false); return
                                 }
                             }
