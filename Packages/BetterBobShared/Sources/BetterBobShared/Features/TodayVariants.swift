@@ -97,8 +97,11 @@ public struct ActionDock: View {
         // and matched glassEffectIDs make state changes morph — one pill
         // splits into two on clock-in and merges back on clock-out, instead
         // of a cross-fade. No wrapper capsule; the pills ARE the dock.
-        GlassEffectContainer(spacing: 16) {
-            HStack(spacing: 8) {
+        // The container's spacing is the merge radius: it must stay BELOW the
+        // HStack gap or resting neighbours distort toward each other — shapes
+        // should only flow together mid-morph, when they actually overlap.
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 10) {
                 switch state.projectedClockState {
                 case .clockedOut:
                     DockButton(label: "Clock in", sym: "play.fill",
