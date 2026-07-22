@@ -152,14 +152,27 @@ struct PopoverRootView: View {
             }
             Spacer()
             if state.signedIn {
+                // A labeled capsule rather than a bare glyph — opening the
+                // dashboard is the header's one action, so it reads as one.
                 Button {
                     openAppWindow("main")
                 } label: {
-                    Image(systemName: "macwindow")
-                        .font(.system(size: 12, weight: .medium))
+                    HStack(spacing: 4) {
+                        Image(systemName: "macwindow")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Dashboard")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.primaryAccent(scheme))
+                    .padding(.horizontal, 9)
+                    .frame(height: 22)
+                    .background(Capsule().fill(Color.primaryAccent(scheme).opacity(0.13)))
+                    .overlay(Capsule().strokeBorder(
+                        Color.primaryAccent(scheme).opacity(0.30), lineWidth: 0.7))
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .fastTooltip("Open BetterBob")
+                .fastTooltip("Open the BetterBob dashboard")
             }
         }
         .padding(.horizontal, 14)
