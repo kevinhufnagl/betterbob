@@ -172,8 +172,9 @@ public final class BobState: ObservableObject {
             if success {
                 Task { await self.completeSSOSignIn() }
             } else {
-                self.lastError = "Sign-in didn't complete — check your details and try again."
-                Notifier.failure("Sign-in didn't complete.")
+                let reason = SSOSignInController.shared.lastFailureReason
+                self.lastError = reason ?? "Sign-in didn't complete — check your details and try again."
+                Notifier.failure(reason ?? "Sign-in didn't complete.")
             }
         }
     }

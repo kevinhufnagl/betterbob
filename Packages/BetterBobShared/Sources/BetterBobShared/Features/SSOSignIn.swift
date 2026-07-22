@@ -81,6 +81,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     /// Stall tracking: the last step token and when it first appeared.
     private var lastStep: String?
     private var lastStepSince: Date?
+    /// A specific reason the last assisted run failed (e.g. the chosen factor
+    /// isn't enrolled), so the caller can show it instead of a generic message.
+    public private(set) var lastFailureReason: String?
 
     // MARK: - Entry points
 
@@ -114,6 +117,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         self.factor = factor
         self.enteredCode = nil
         self.autoOTPFailed = false
+        self.lastFailureReason = nil
         self.lastStep = nil
         self.lastStepSince = nil
         self.deadline = Date().addingTimeInterval(300)
@@ -319,6 +323,18 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                 // Okta Verify app shows codes too — instead of
                                 // hanging on a push that never comes.
                                 self.trackCodeStep(step)
+
+                                // The chooser only lists the factors the account
+                                // actually has enrolled. When the requested one
+                                // isn't there its row never clicks and 'select'
+                                // just sits — fail fast with a clear message
+                                // instead of spinning to the 5-minute deadline.
+                                if step == "select", !self.factor.isPush,
+                                   Date().timeIntervalSince(self.lastStepSince ?? Date()) > 10 {
+                                    self.lastFailureReason =
+                                        "\(self.factor.shortLabel) isn't set up for your account. Use Okta Verify push, or add the method in Okta first."
+                                    self.finish(false); return
+                                }
                             }
                         }
                     }
