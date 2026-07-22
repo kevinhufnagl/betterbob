@@ -310,9 +310,19 @@ public struct FreshDayWelcome: View {
                 .padding(.leading, bobLeading)
                 .padding(.bottom, line - (compact ? 24 : 36))
 
-                // The dock straddles the waterline, centered.
-                ActionDock(state: state, now: Date())
-                    .padding(.bottom, line - (compact ? 20 : 24))
+                // The action straddles the waterline, centered. A fresh,
+                // clocked-out day has exactly one thing to do, so it gets a
+                // bare native glass button — real Liquid Glass refraction over
+                // the water, no dock capsule around a lone control. The dock
+                // returns the moment a punch is in flight (two actions).
+                Group {
+                    if state.projectedClockState == .clockedOut {
+                        WelcomeClockInButton(state: state)
+                    } else {
+                        ActionDock(state: state, now: Date())
+                    }
+                }
+                .padding(.bottom, line - (compact ? 20 : 24))
 
                 // Greeting block, centered in the sky above the water.
                 VStack(spacing: compact ? 6 : 10) {
@@ -360,6 +370,58 @@ public struct FreshDayWelcome: View {
                 await state.loadTimeOff()
             }
         }
+    }
+}
+
+/// The welcome's lone action as a bare native glass button: tinted Liquid
+/// Glass straddling the waterline, sized like a dock button so the layout
+/// doesn't shift when the dock takes over mid-punch.
+private struct WelcomeClockInButton: View {
+    @ObservedObject var state: BobState
+    @Environment(\.colorScheme) private var scheme
+
+    #if os(iOS)
+    private let symSize: CGFloat = 14
+    private let labelSize: CGFloat = 15
+    private let captionSize: CGFloat = 11
+    private let height: CGFloat = 48
+    private let padH: CGFloat = 22
+    #else
+    private let symSize: CGFloat = 12
+    private let labelSize: CGFloat = 13
+    private let captionSize: CGFloat = 9
+    private let height: CGFloat = 40
+    private let padH: CGFloat = 18
+    #endif
+
+    var body: some View {
+        Button { state.clockIn() } label: {
+            VStack(spacing: 1) {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: symSize, weight: .bold))
+                    Text("Clock in")
+                        .font(.system(size: labelSize, weight: .semibold))
+                }
+                // The auto-tag preview ("as In Office"), like the dock shows.
+                if let tag = state.currentAutoReason {
+                    Text(tag)
+                        .font(.system(size: captionSize, weight: .medium))
+                        .opacity(0.75)
+                }
+            }
+            .padding(.horizontal, padH)
+            .frame(height: height)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(scheme == .dark
+            ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
+            : Color.controlAccent(scheme))
+        #if os(macOS)
+        .onHover { h in
+            if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        #endif
     }
 }
 
