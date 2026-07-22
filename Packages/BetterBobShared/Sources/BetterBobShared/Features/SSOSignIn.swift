@@ -415,6 +415,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               });
             }
           }
+          var onHibob = location.hostname.indexOf('hibob.com') >= 0;
           var email = document.querySelector('input[name=identifier], input[type=email], input[autocomplete=username]');
           var pw = document.querySelector('input[type=password]');
           var otp = pw ? null : document.querySelector('input[autocomplete=one-time-code], input[inputmode=numeric], input[type=tel], input[name*=passcode i], input[name*=otp i], input[name*=code i]');
@@ -422,23 +423,45 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // A friendly step name for the UI status line.
           var bodyText = (document.body ? document.body.innerText : '').toLowerCase();
           var step;
-          if (pw) step = 'password';
+          if (onHibob) step = 'gateway';
+          else if (pw) step = 'password';
           else if (otp) step = 'code';
           else if (email) step = 'email';
-          else if (location.hostname.indexOf('hibob.com') >= 0) step = 'gateway';
           else if (bodyText.indexOf('security method') >= 0 || bodyText.indexOf('verify it') >= 0
                    || bodyText.indexOf('authenticator') >= 0) step = 'select';
           else step = 'loading';
           // Push factor: once we've selected it and there's no field left, we're
           // on the "we sent a push, approve on your phone" screen — waiting.
-          if (factor === 'ovp' && window.__bbFactorPicked && !present) step = 'push';
+          if (factor === 'ovp' && window.__bbFactorPicked && !present && !onHibob) step = 'push';
           var justFilled = false, ready = false;
-          [[email, \(lit(email))], [pw, \(lit(pw))], [otp, \(lit(otp))]].forEach(function(p){
+          // Never fill HiBob's own password/code fields — the account is
+          // Okta-managed; a fresh device's gateway shows the native form next
+          // to the SSO button, and filling it just errors and loops the flow.
+          [[email, \(lit(email))], [onHibob ? null : pw, \(lit(pw))], [onHibob ? null : otp, \(lit(otp))]].forEach(function(p){
             var r = fill(p[0], p[1]);
             if (r === 1) justFilled = true;
             if (r === 2) ready = true;
           });
           if (!\(click ? "true" : "false")) return step;
+          if (onHibob) {
+            // HiBob's gateway: click "Continue with Okta" if it's there —
+            // regardless of whether the native form is also showing. Only an
+            // email-routing gateway (no SSO button) advances with the email.
+            if (!window.__bbSsoClicked) {
+              var all = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button], a'));
+              var t = all.find(function(x){
+                if (!shown(x)) return false;
+                var s2 = (x.value || x.textContent || '').toLowerCase();
+                return s2.indexOf('okta') >= 0 || s2.indexOf('continue with') >= 0 || s2.indexOf('sso') >= 0;
+              });
+              if (t) { window.__bbSsoClicked = true; t.click(); return step; }
+            }
+            if (email && email.value && !justFilled) {
+              var esig = 'gw:' + email.value;
+              if (window.__bbSubmitted !== esig) { window.__bbSubmitted = esig; clickSubmit(email); }
+            }
+            return step;
+          }
           // Only submit on a later tick — once the field already holds the value
           // (ready) and we didn't just type it (justFilled). Clicking in the same
           // tick as filling submits before the widget registers the value → the
@@ -466,16 +489,6 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               });
               if (alt) { window.__bbAltOnce = true; alt.click(); }
             }
-          } else if (!window.__bbSsoClicked && location.hostname.indexOf('hibob.com') >= 0) {
-            // HiBob's own gateway: click "Continue with Okta". Never touch links
-            // on the SAML/Okta redirect pages — a stray click sends us to okta.com
-            // marketing; they navigate on their own.
-            var all = [].slice.call(document.querySelectorAll('button, input[type=submit]'));
-            var t = all.find(function(x){
-              var s = (x.value || x.textContent || '').toLowerCase();
-              return s.indexOf('okta') >= 0 || s.indexOf('continue with') >= 0;
-            });
-            if (t) { window.__bbSsoClicked = true; t.click(); }
           } else if (step !== 'push') {
             // Okta "choose a security method" step → pick the requested factor's
             // row (never Security Key / biometric). Newer widgets show this
