@@ -251,42 +251,65 @@ public struct SignInFactorGroup: View {
 
     public init(state: BobState) { self.state = state }
 
+    /// Okta Verify push leads and is highlighted — most orgs' policy only
+    /// accepts it; the code factors are fallbacks that may not be offered.
+    private var orderedFactors: [SignInFactor] { [.oktaVerifyPush, .googleAuthenticator, .oktaVerifyCode] }
+
     public var body: some View {
-        Group {
-            if state.fullyAutomatic {
-                // A stored authenticator secret only works with the Google
-                // Authenticator flow — nothing to choose, one button does it.
-                Button { state.startAutoSignIn(factor: .googleAuthenticator) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "wand.and.rays").font(.system(size: 12, weight: .semibold))
-                        Text("Log in automatically").font(.system(size: 12, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 11)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else {
-                HStack(spacing: 0) {
-                    ForEach(Array(SignInFactor.allCases.enumerated()), id: \.element.id) { i, factor in
-                        if i > 0 { Divider().frame(height: 34) }
-                        Button { state.startAutoSignIn(factor: factor) } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: factor.icon).font(.system(size: 13, weight: .semibold))
-                                Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .contentShape(Rectangle())
+        VStack(spacing: 6) {
+            Group {
+                if state.fullyAutomatic {
+                    // A stored authenticator secret only works with the Google
+                    // Authenticator flow — nothing to choose, one button does it.
+                    Button { state.startAutoSignIn(factor: .googleAuthenticator) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wand.and.rays").font(.system(size: 12, weight: .semibold))
+                            Text("Log in automatically").font(.system(size: 12, weight: .semibold))
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(Array(orderedFactors.enumerated()), id: \.element.id) { i, factor in
+                            if i > 0 { Divider().frame(height: 34) }
+                            let lead = factor.isPush   // the recommended one
+                            Button { state.startAutoSignIn(factor: factor) } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: factor.icon)
+                                        .font(.system(size: 13, weight: lead ? .bold : .semibold))
+                                    Text(factor.shortLabel)
+                                        .font(.system(size: 10, weight: lead ? .semibold : .medium))
+                                }
+                                .foregroundStyle(lead ? AnyShapeStyle(Color.accentColor)
+                                                      : AnyShapeStyle(.primary))
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                .background(lead ? Color.accentColor.opacity(0.12) : .clear)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+            // Which factors an org's Okta actually offers is set by policy, not
+            // by what's enrolled — many tenants only accept Okta Verify, so the
+            // code options can silently fail. Say so rather than let it surprise.
+            if !state.fullyAutomatic {
+                Text("Okta Verify push is the reliable choice. If your company requires it, Google Authenticator and Okta Verify code may not be offered.")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(Color.primary.opacity(0.06)))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }
 
