@@ -361,6 +361,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     private func friendlyStatus(_ step: String) -> String {
         switch step {
         case "gateway":  return "Connecting to Okta…"
+        // HiBob served its own password page — the email didn't route to
+        // Okta, which means the saved address is off (or not SSO-mapped).
+        case "gateway-pw": return "HiBob asked for a password instead of Okta — check the email in Sign-in setup"
         case "email":    return "Entering your email…"
         case "password": return "Entering your password…"
         case "select":   return "Choosing your authenticator…"
@@ -442,7 +445,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // A friendly step name for the UI status line.
           var bodyText = (document.body ? document.body.innerText : '').toLowerCase();
           var step;
-          if (onHibob) step = 'gateway';
+          if (onHibob) step = (pw && shown(pw)) ? 'gateway-pw' : 'gateway';
           else if (pw) step = 'password';
           else if (otp) step = 'code';
           else if (email) step = 'email';
@@ -459,7 +462,10 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             .map(function(x){ return (x.value || x.textContent || '').trim().replace(/\\s+/g,' ').slice(0, 24); })
             .filter(function(t){ return t; })
             .slice(0, 3).join(', ');
-          var pageHint = '||' + location.hostname + (hintBtns ? '||' + hintBtns : '');
+          var heading = document.querySelector('h1, h2, .o-form-title, [data-se=o-form-explain], .okta-form-title');
+          var headingText = heading ? heading.textContent.trim().replace(/\\s+/g,' ').slice(0, 40) : '';
+          var pageHint = '||' + location.hostname + (headingText ? ' · ' + headingText : '')
+              + (hintBtns ? '||' + hintBtns : '');
           var justFilled = false, ready = false;
           // Never fill HiBob's own password/code fields — the account is
           // Okta-managed; a fresh device's gateway shows the native form next
@@ -470,6 +476,16 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             if (r === 2) ready = true;
           });
           if (!\(click ? "true" : "false")) return step + pageHint;
+          // Self-heal a stalled step: the per-step submit guard fires once,
+          // and a click that lands before the SPA enables its button is lost
+          // for good. If the step hasn't changed in ~7s, clear the guard so
+          // the next tick may click again.
+          if (window.__bbLastStep === step) {
+            window.__bbSameTicks = (window.__bbSameTicks || 0) + 1;
+            if (window.__bbSameTicks >= 6) { window.__bbSubmitted = null; window.__bbSameTicks = 0; }
+          } else {
+            window.__bbLastStep = step; window.__bbSameTicks = 0;
+          }
           if (onHibob) {
             // HiBob's gateway: click "Continue with Okta" if it's there —
             // regardless of whether the native form is also showing. Only an
@@ -493,6 +509,32 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // (ready) and we didn't just type it (justFilled). Clicking in the same
           // tick as filling submits before the widget registers the value → the
           // "username cannot be blank" error.
+          // Okta's post-auth "Stay signed in?" prompt is fieldless, so no
+          // branch below would touch it — click Stay (exact match: the other
+          // button is "Don't stay signed in") to finish and keep the session.
+          if (!onHibob) {
+            var stay = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]')).find(function(x){
+              return shown(x) && (x.value || x.textContent || '').trim().toLowerCase() === 'stay signed in';
+            });
+            if (stay && !window.__bbStayClicked) {
+              window.__bbStayClicked = true; stay.click(); return step + pageHint;
+            }
+          }
+          // Okta FastPass interstitial: a fieldless page probing the local
+          // Okta Verify app — in a hidden web view that probe never resolves
+          // (it can't show its prompts). Its own "Back to sign in" link drops
+          // to the normal identifier form, so click it once after ~5s stuck.
+          if (step === 'loading' && !present) {
+            window.__bbStuckTicks = (window.__bbStuckTicks || 0) + 1;
+            if (window.__bbStuckTicks >= 4 && !window.__bbBackClicked) {
+              var back = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
+                return shown(x) && /back to sign ?in/.test((x.textContent || x.value || '').trim().toLowerCase());
+              });
+              if (back) { window.__bbBackClicked = true; back.click(); }
+            }
+          } else {
+            window.__bbStuckTicks = 0;
+          }
           if (present) {
             if (ready && !justFilled) {
               // Okta's widget is a single page — track the submit per step (which
