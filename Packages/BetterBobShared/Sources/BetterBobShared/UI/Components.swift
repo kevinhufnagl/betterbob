@@ -274,18 +274,12 @@ public struct SignInFactorGroup: View {
                     HStack(spacing: 0) {
                         ForEach(Array(orderedFactors.enumerated()), id: \.element.id) { i, factor in
                             if i > 0 { Divider().frame(height: 34) }
-                            let lead = factor.isPush   // the recommended one
                             Button { state.startAutoSignIn(factor: factor) } label: {
                                 VStack(spacing: 3) {
-                                    Image(systemName: factor.icon)
-                                        .font(.system(size: 13, weight: lead ? .bold : .semibold))
-                                    Text(factor.shortLabel)
-                                        .font(.system(size: 10, weight: lead ? .semibold : .medium))
+                                    Image(systemName: factor.icon).font(.system(size: 13, weight: .semibold))
+                                    Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
                                 }
-                                .foregroundStyle(lead ? AnyShapeStyle(Color.accentColor)
-                                                      : AnyShapeStyle(.primary))
                                 .frame(maxWidth: .infinity).padding(.vertical, 8)
-                                .background(lead ? Color.accentColor.opacity(0.12) : .clear)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)

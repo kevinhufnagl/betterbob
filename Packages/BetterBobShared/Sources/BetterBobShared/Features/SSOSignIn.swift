@@ -121,24 +121,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         self.lastStep = nil
         self.lastStepSince = nil
         self.deadline = Date().addingTimeInterval(300)
-        // Start every assisted sign-in from a clean slate. Okta remembers the
-        // device/last factor via cookies + web storage, so a reused session
-        // skips straight to the remembered method (Okta Verify) and never
-        // shows the chooser — making a different chosen factor (Google, code)
-        // unreachable. Wiping first reproduces the anonymous-session flow,
-        // where every enrolled factor is offered. Load only once it's cleared.
-        let types: Set<String> = [
-            WKWebsiteDataTypeCookies,
-            WKWebsiteDataTypeLocalStorage,
-            WKWebsiteDataTypeSessionStorage,
-            WKWebsiteDataTypeIndexedDBDatabases,
-        ]
-        WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) { [weak self] in
-            guard let self, self.drive == .assisted, self.onFinish != nil else { return }
-            self.makeSession(visible: false)   // browser stays invisible the whole time
-            self.load()
-            self.startAutofill()
-        }
+        makeSession(visible: false)   // browser stays invisible the whole time
+        load()
+        startAutofill()
     }
 
     /// Copy the persisted web-view session cookies into the URLSession store the
