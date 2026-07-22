@@ -36,7 +36,7 @@ struct PopoverRootView: View {
                             // Dock straddles the hero's bottom edge, same as
                             // the dashboard; the padding reserves its lower half.
                             workedHeader(now: context.date)
-                                .padding(.bottom, 25)
+                                .padding(.bottom, ActionDock.halfHeight)
                                 .overlay(alignment: .bottom) {
                                     ActionDock(state: state, now: context.date)
                                 }

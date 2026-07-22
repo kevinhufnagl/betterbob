@@ -34,7 +34,7 @@ struct TodayScreen: View {
                             // The dock straddles the hero's bottom edge, like
                             // the Mac popover — padding reserves its lower half.
                             hero(vals, now: ctx.date)
-                                .padding(.bottom, 25)
+                                .padding(.bottom, ActionDock.halfHeight)
                                 .overlay(alignment: .bottom) {
                                     ActionDock(state: state, now: ctx.date)
                                 }

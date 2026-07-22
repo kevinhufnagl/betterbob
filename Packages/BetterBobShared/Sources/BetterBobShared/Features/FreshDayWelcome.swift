@@ -166,6 +166,16 @@ public struct FreshDayWelcome: View {
 
     private var target: TimeInterval { TodayVals(state, now: Date()).targetSecs }
 
+    /// Half the bare clock-in button's height (46pt Mac / 56pt iOS) — the
+    /// waterline runs through the resting control's vertical center.
+    private var welcomeActionHalf: CGFloat {
+        #if os(iOS)
+        28
+        #else
+        23
+        #endif
+    }
+
     /// Whether today's summary row carries a positive target. TodayVals falls
     /// back to 8h when it's missing, so the raw row is checked here — no
     /// target means a weekend / non-working day. While the summary hasn't
@@ -322,7 +332,9 @@ public struct FreshDayWelcome: View {
                         ActionDock(state: state, now: Date())
                     }
                 }
-                .padding(.bottom, line - (compact ? 20 : 24))
+                // Centered on the waterline: reserve half the resting
+                // control's height (the bare clock-in button) below it.
+                .padding(.bottom, line - welcomeActionHalf)
 
                 // Greeting block, centered in the sky above the water.
                 VStack(spacing: compact ? 6 : 10) {

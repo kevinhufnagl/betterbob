@@ -92,6 +92,17 @@ public struct ActionDock: View {
 
     @Namespace private var glassNS
 
+    /// Half the pills' height. Hosts that straddle the dock over an edge
+    /// reserve exactly this much below the line, so the pills sit vertically
+    /// centered on it — the old wrapper capsule's 25 no longer applies.
+    public static var halfHeight: CGFloat {
+        #if os(iOS)
+        24
+        #else
+        20
+        #endif
+    }
+
     public var body: some View {
         // One shared glass layer: each button is its own Liquid Glass capsule
         // and matched glassEffectIDs make state changes morph — one pill
@@ -465,7 +476,7 @@ public struct TodayTimeline: View {
                 // The action dock floats half over the water, half over the
                 // page — the bottom padding reserves room for the lower half
                 // so it never overlaps the next card.
-                .padding(.bottom, 25)
+                .padding(.bottom, ActionDock.halfHeight)
                 .overlay(alignment: .bottom) {
                     ActionDock(state: state, now: ctxDate)
                 }
