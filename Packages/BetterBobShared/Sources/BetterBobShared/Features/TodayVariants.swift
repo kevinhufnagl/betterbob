@@ -331,7 +331,7 @@ struct DayStrip: View {
             : bw > 34 ? Fmt.clock(e.start) : nil
         if let text {
             Text(text)
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(.bobUI(9, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 5).padding(.vertical, 2)
                 .background(Capsule().fill(.regularMaterial))

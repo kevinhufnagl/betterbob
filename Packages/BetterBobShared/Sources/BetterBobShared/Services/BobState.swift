@@ -535,9 +535,65 @@ public final class BobState: ObservableObject {
         dayEntries.contains { $0.kind == .work && ($0.reason ?? "").isEmpty }
     }
 
+    /// A day with at least one open-ended entry (no end) — e.g. a forgotten
+    /// clock-out. Used to flag past days in the month grid; today's live entry
+    /// is legitimately open, so the caller gates this on the day being past.
+    public func hasOpenEntry(_ dayEntries: [AttendanceEntry]) -> Bool {
+        dayEntries.contains { $0.end == nil }
+    }
+
+    /// Smart default end when closing an open entry: the user's usual
+    /// check-out time from other days this cycle, then the day's target, then
+    /// the current time (see `AttendanceLogic.suggestedEnd`). Drives the
+    /// editor's End default so a forgotten past-day check-out lands sensibly.
+    public func suggestedEndForOpenEntry(_ entry: AttendanceEntry) -> Date {
+        let key = DayFmt.iso.string(from: entry.start)
+        // Prefer the durable history (outlives the cycle); fall back to the
+        // in-memory month if it's still empty. Never count the day being edited.
+        var samples = DayHistory.load()
+            .filter { $0.date != key }
+            .map { TimeInterval($0.outSec) }
+        if samples.isEmpty {
+            let cal = Calendar.current
+            samples = monthDays.filter { $0.dateKey != key }
+                .compactMap { AttendanceLogic.lastCheckoutSeconds(entries: $0.entries, calendar: cal) }
+        }
+        let target = cycleSummary?.days.first { $0.date == key }?.target.map { $0 * 3600 }
+        return AttendanceLogic.suggestedEnd(entryStart: entry.start, checkoutSamples: samples,
+                                            target: target, now: now)
+    }
+
     /// How many loaded month days have at least one work entry with no reason.
     public var daysMissingReason: Int {
         monthDays.filter { missingReason($0.entries) }.count
+    }
+
+    // MARK: - Needs-attention digest
+    // Cycle days (by "yyyy-MM-dd" key, chronological) that need attention, per
+    // category. Past-day gating matches the month grid: an unclosed entry or a
+    // missing reason only flags a finished day, while over-max and break
+    // issues apply to any day, today included.
+
+    public var unclosedDays: [String] {
+        monthDays.filter { $0.dateKey < DayFmt.today() && hasOpenEntry($0.entries) }
+            .map(\.dateKey).sorted()
+    }
+    public var overMaxDays: [String] {
+        monthDays.filter { isOverDailyMax($0.entries) }.map(\.dateKey).sorted()
+    }
+    public var breakIssueDays: [String] {
+        monthDays.filter { hasOverLongStretch($0.entries) || breakShortfall($0.entries) != nil }
+            .map(\.dateKey).sorted()
+    }
+    public var missingReasonDays: [String] {
+        monthDays.filter { $0.dateKey < DayFmt.today() && missingReason($0.entries) }
+            .map(\.dateKey).sorted()
+    }
+
+    /// Any day at all needs attention this cycle — drives showing the digest.
+    public var hasAttentionItems: Bool {
+        !unclosedDays.isEmpty || !overMaxDays.isEmpty
+            || !breakIssueDays.isEmpty || !missingReasonDays.isEmpty
     }
 
     /// Set `option` on every reasonless work entry across the loaded month,
@@ -645,7 +701,28 @@ public final class BobState: ObservableObject {
         if let m = try? await client.fetchMonthDays(employeeID: id, cycleId: cycle?.id ?? 0,
                                                     reasonOptions: reasonOptions) {
             monthDays = m
+            recordDayHistory()
         }
+    }
+
+    /// Fold the freshly-loaded month into the durable `DayHistory`, so the
+    /// weekly-rhythm chart and check-out habit survive the cycle rollover.
+    /// Only complete days (a check-in and a closed check-out) are recorded.
+    private func recordDayHistory() {
+        let cal = Calendar.current
+        let facts: [DayFact] = monthDays.compactMap { day in
+            guard let inSec = AttendanceLogic.firstCheckinSeconds(entries: day.entries, calendar: cal),
+                  let outSec = AttendanceLogic.lastCheckoutSeconds(entries: day.entries, calendar: cal),
+                  outSec > inSec else { return nil }
+            return DayFact(date: day.dateKey, inSec: Int(inSec), outSec: Int(outSec))
+        }
+        DayHistory.merge(facts)
+    }
+
+    /// Average check-in / check-out by weekday, from the durable history —
+    /// drives the weekly-rhythm chart.
+    public var weekdayRhythm: [AttendanceLogic.WeekdayStat] {
+        AttendanceLogic.weekdayRhythm(facts: DayHistory.load())
     }
 
     /// Today's clock/edit history for the activity feed.

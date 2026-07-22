@@ -83,6 +83,7 @@ struct DayDetailScreen: View {
                     EntryEditSheet(entry: edit.entry,
                                    reasonOptions: state.reasonOptions,
                                    isLast: day.entries.max(by: { $0.start < $1.start })?.id == edit.entry.id,
+                                   suggestedEnd: state.suggestedEndForOpenEntry(edit.entry),
                                    onSave: { start, end in
                                        state.updateEntryTimes(edit.entry, in: day.entries,
                                                               on: day.date, start: start, end: end)

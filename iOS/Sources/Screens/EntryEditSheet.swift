@@ -15,6 +15,9 @@ struct EntryEditSheet: View {
     /// The day's chronologically last entry can be reopened (clear its end),
     /// like the Mac — reverts a clock-out / end-break so you're still going.
     var isLast: Bool = false
+    /// Smart default End for closing an open entry (usual check-out → target →
+    /// now on the entry's day). The caller computes it from BobState.
+    var suggestedEnd: Date? = nil
     var onSave: (Date, Date?) -> Void
     var onReason: (ReasonOption) -> Void = { _ in }
     var onDelete: () -> Void
@@ -23,22 +26,29 @@ struct EntryEditSheet: View {
     @State private var start: Date
     @State private var end: Date
     @State private var reasonName: String
+    /// An open entry the user chose to close by giving it an end time.
+    @State private var endingOpen = false
     private let isOpen: Bool
 
     init(entry: AttendanceEntry,
          reasonOptions: [ReasonOption] = [],
          isLast: Bool = false,
+         suggestedEnd: Date? = nil,
          onSave: @escaping (Date, Date?) -> Void,
          onReason: @escaping (ReasonOption) -> Void = { _ in },
          onDelete: @escaping () -> Void) {
         self.entry = entry
         self.reasonOptions = reasonOptions
         self.isLast = isLast
+        self.suggestedEnd = suggestedEnd
         self.onSave = onSave
         self.onReason = onReason
         self.onDelete = onDelete
         _start = State(initialValue: entry.start)
-        _end = State(initialValue: entry.end ?? Date())
+        // Open entries default their end to a smart guess on the entry's OWN
+        // day (usual check-out → target → now); the .hourAndMinute picker keeps
+        // that date, so a forgotten past-day check-out lands on the right day.
+        _end = State(initialValue: entry.end ?? suggestedEnd ?? entry.start)
         _reasonName = State(initialValue: entry.reason ?? "")
         isOpen = entry.end == nil
     }
@@ -49,13 +59,15 @@ struct EntryEditSheet: View {
                 VStack(spacing: 16) {
                     GlassGroupedSection(
                         header: entry.kind == .breakTime ? "Break" : "Work",
-                        footer: isOpen ? "This entry is still running — only its start can move." : nil
+                        footer: (isOpen && !endingOpen) ? "This entry is still running — end it to fix a forgotten check-out."
+                              : (isOpen && endingOpen) ? "Suggested from your recent days — adjust if needed."
+                              : nil
                     ) {
                         GlassRow(showDivider: false) {
                             DatePicker("Start", selection: $start,
                                        displayedComponents: .hourAndMinute)
                         }
-                        if !isOpen {
+                        if !isOpen || endingOpen {
                             GlassRow {
                                 DatePicker("End", selection: $end, in: start...,
                                            displayedComponents: .hourAndMinute)
@@ -80,7 +92,8 @@ struct EntryEditSheet: View {
                     }
 
                     Button {
-                        onSave(start, isOpen ? nil : end)
+                        // Open entry stays open unless the user chose to end it.
+                        onSave(start, (isOpen && !endingOpen) ? nil : end)
                         dismiss()
                     } label: {
                         Text("Save")
@@ -89,6 +102,19 @@ struct EntryEditSheet: View {
                     }
                     .buttonStyle(.glassProminent)
                     .controlSize(.large)
+
+                    // End an open entry by giving it an end time — mirror of
+                    // Reopen. Any open entry can be closed (fixing past data).
+                    if isOpen, !endingOpen {
+                        Button {
+                            endingOpen = true
+                        } label: {
+                            Label("End entry", systemImage: "arrow.right.to.line")
+                                .font(.body.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 28)
+                        }
+                        .buttonStyle(.glass)
+                    }
 
                     // Reopen: clear the end so the entry is running again.
                     // Only the day's last entry — reopening a middle one would

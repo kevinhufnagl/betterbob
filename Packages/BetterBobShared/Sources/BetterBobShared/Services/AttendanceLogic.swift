@@ -516,4 +516,119 @@ public enum AttendanceLogic {
         guard let due = breakDue, due < regular else { return regular }
         return max(due, now.addingTimeInterval(60))
     }
+
+    /// Minimum recent check-outs needed before we trust the "usual check-out"
+    /// habit over the simpler fallbacks.
+    public static let checkoutHabitMinSamples = 3
+
+    /// The time-of-day (seconds since local midnight) of a day's last logged
+    /// clock-out — the end of its latest closed work entry. Nil for a day with
+    /// no closed work entry (empty, or still running). The building block for
+    /// both the smart end-time guess and a by-weekday check-out chart.
+    public static func lastCheckoutSeconds(entries: [AttendanceEntry],
+                                           calendar: Calendar = .current) -> TimeInterval? {
+        let end = entries
+            .filter { $0.kind == .work && $0.end != nil }
+            .compactMap { $0.end }
+            .max()
+        guard let end else { return nil }
+        return end.timeIntervalSince(calendar.startOfDay(for: end))
+    }
+
+    /// The time-of-day (seconds since local midnight) of a day's first logged
+    /// clock-in — the start of its earliest work entry. Nil for a day with no
+    /// work. Pairs with `lastCheckoutSeconds` for the weekly-rhythm chart.
+    public static func firstCheckinSeconds(entries: [AttendanceEntry],
+                                           calendar: Calendar = .current) -> TimeInterval? {
+        guard let start = entries.filter({ $0.kind == .work }).map(\.start).min() else { return nil }
+        return start.timeIntervalSince(calendar.startOfDay(for: start))
+    }
+
+    /// Best guess for when an open entry should have ended — reconstructing a
+    /// forgotten check-out. Prefers the user's usual check-out time-of-day
+    /// (the median `lastCheckoutSeconds` across `history` days, once there are
+    /// at least `checkoutHabitMinSamples` of them), placed on the open entry's
+    /// own date; falls back to filling the day to `target` from the start,
+    /// then to the current time on that date. Always returns a time strictly
+    /// after `entryStart` unless even `now` on that day isn't — in which case
+    /// it returns `entryStart` and the caller's start<end guard takes over.
+    public static func suggestedEnd(entryStart: Date,
+                                    history: [[AttendanceEntry]],
+                                    target: TimeInterval?,
+                                    now: Date,
+                                    calendar: Calendar = .current) -> Date {
+        suggestedEnd(entryStart: entryStart,
+                     checkoutSamples: history.compactMap { lastCheckoutSeconds(entries: $0, calendar: calendar) },
+                     target: target, now: now, calendar: calendar)
+    }
+
+    /// Same guess, but from pre-extracted check-out times-of-day (seconds since
+    /// midnight) — lets the caller pull samples from a persisted history that
+    /// outlives the current cycle, not just the entries in memory.
+    public static func suggestedEnd(entryStart: Date,
+                                    checkoutSamples: [TimeInterval],
+                                    target: TimeInterval?,
+                                    now: Date,
+                                    calendar: Calendar = .current) -> Date {
+        let dayStart = calendar.startOfDay(for: entryStart)
+        func onDay(_ seconds: TimeInterval) -> Date { dayStart.addingTimeInterval(seconds) }
+
+        // 1) Usual check-out, if we have enough history.
+        let samples = checkoutSamples.sorted()
+        if samples.count >= checkoutHabitMinSamples {
+            let mid = samples.count / 2
+            let median = samples.count.isMultiple(of: 2)
+                ? (samples[mid - 1] + samples[mid]) / 2
+                : samples[mid]
+            let candidate = onDay(median)
+            if candidate > entryStart { return candidate }
+        }
+
+        // 2) Fill the day to target from the start.
+        if let target, target > 0 {
+            let candidate = entryStart.addingTimeInterval(target)
+            if candidate > entryStart { return candidate }
+        }
+
+        // 3) The current time-of-day on the entry's own date.
+        let nowSecs = now.timeIntervalSince(calendar.startOfDay(for: now))
+        let candidate = onDay(nowSecs)
+        return candidate > entryStart ? candidate : entryStart
+    }
+
+    // MARK: - Weekly rhythm (average check-in / check-out by weekday)
+
+    /// One weekday's average working window across the persisted history.
+    /// `weekday` is 0 = Monday … 6 = Sunday; `avgIn`/`avgOut` are seconds
+    /// since midnight.
+    public struct WeekdayStat: Equatable {
+        public var weekday: Int
+        public var avgIn: TimeInterval
+        public var avgOut: TimeInterval
+        public var count: Int
+        public init(weekday: Int, avgIn: TimeInterval, avgOut: TimeInterval, count: Int) {
+            self.weekday = weekday; self.avgIn = avgIn; self.avgOut = avgOut; self.count = count
+        }
+    }
+
+    /// Average check-in / check-out per weekday from stored day facts, in
+    /// weekday order (Mon…Sun), skipping weekdays with no data.
+    public static func weekdayRhythm(facts: [DayFact],
+                                     calendar: Calendar = .current) -> [WeekdayStat] {
+        var byWeekday: [Int: (inSum: Int, outSum: Int, n: Int)] = [:]
+        for f in facts {
+            guard let date = DayFmt.date(f.date) else { continue }
+            let wd = (calendar.component(.weekday, from: date) + 5) % 7   // Mon = 0
+            var acc = byWeekday[wd] ?? (0, 0, 0)
+            acc.inSum += f.inSec; acc.outSum += f.outSec; acc.n += 1
+            byWeekday[wd] = acc
+        }
+        return byWeekday.keys.sorted().map { wd in
+            let a = byWeekday[wd]!
+            return WeekdayStat(weekday: wd,
+                               avgIn: TimeInterval(a.inSum) / Double(a.n),
+                               avgOut: TimeInterval(a.outSum) / Double(a.n),
+                               count: a.n)
+        }
+    }
 }

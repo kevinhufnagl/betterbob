@@ -76,6 +76,7 @@ struct TodayScreen: View {
             EntryEditSheet(entry: edit.entry,
                            reasonOptions: state.reasonOptions,
                            isLast: isLastEntry(edit.entry),
+                           suggestedEnd: state.suggestedEndForOpenEntry(edit.entry),
                            onSave: { start, end in
                                state.updateEntryTimes(edit.entry, start: start, end: end)
                            },

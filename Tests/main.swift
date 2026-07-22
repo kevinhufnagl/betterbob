@@ -910,6 +910,100 @@ expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: t(10).addingT
 expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: t(12)) == t(10).addingTimeInterval(15 * 60),
        "break due far out: default cadence wins")
 
+// MARK: - suggestedEnd (smart default when closing a forgotten open entry)
+
+print("AttendanceLogic.suggestedEnd")
+
+// A UTC calendar so time-of-day math matches the UTC test anchor regardless
+// of the machine's zone.
+var utcCal = Calendar(identifier: .gregorian); utcCal.timeZone = utc
+
+// lastCheckoutSeconds: end of the day's latest closed work entry, as
+// seconds-since-midnight.
+expect(AttendanceLogic.lastCheckoutSeconds(entries: [work(9, 17)], calendar: utcCal) == 17 * 3600,
+       "checkout secs: single closed day")
+expect(AttendanceLogic.lastCheckoutSeconds(entries: [work(9, 12), brk(12, 12.5), work(12.5, 17.5)], calendar: utcCal) == 17.5 * 3600,
+       "checkout secs: latest work end wins")
+expect(AttendanceLogic.lastCheckoutSeconds(entries: [work(9, nil)], calendar: utcCal) == nil,
+       "checkout secs: open day → nil")
+expect(AttendanceLogic.lastCheckoutSeconds(entries: [], calendar: utcCal) == nil,
+       "checkout secs: empty day → nil")
+
+// Usual check-out: median of three closed days (17, 17.5, 18) → 17.5, placed
+// on the open entry's own day even though `now` is far past it.
+let history3 = [[work(9, 17)], [work(9, 17.5)], [work(9, 18)]]
+expect(AttendanceLogic.suggestedEnd(entryStart: t(9), history: history3, target: sixH,
+                                    now: t(30), calendar: utcCal) == t(17.5),
+       "usual check-out: median of recent days on the entry's day")
+
+// Fewer than the minimum samples → fall through to target fill.
+expect(AttendanceLogic.suggestedEnd(entryStart: t(9), history: [[work(9, 17)], [work(9, 18)]],
+                                    target: sixH, now: t(30), calendar: utcCal) == t(15),
+       "too little history → fill to target (9 + 6h)")
+
+// Enough history but the usual check-out is before this entry's start →
+// skip it and fill to target instead.
+expect(AttendanceLogic.suggestedEnd(entryStart: t(19), history: history3, target: sixH,
+                                    now: t(30), calendar: utcCal) == t(25),
+       "usual check-out before start → fall through to target")
+
+// No history and no target → current time-of-day on the entry's own day.
+expect(AttendanceLogic.suggestedEnd(entryStart: t(9), history: [], target: nil,
+                                    now: t(24 + 16), calendar: utcCal) == t(16),
+       "no habit, no target → now's time-of-day on the entry's day")
+
+// Nothing usable and now is before the start → clamp to the start.
+expect(AttendanceLogic.suggestedEnd(entryStart: t(20), history: [], target: nil,
+                                    now: t(24 + 8), calendar: utcCal) == t(20),
+       "no habit/target and now-of-day before start → clamp to start")
+
+// MARK: - Weekly rhythm (check-in / check-out by weekday)
+
+print("AttendanceLogic.weekdayRhythm")
+
+expect(AttendanceLogic.firstCheckinSeconds(entries: [work(9, 12), work(13, 17)], calendar: utcCal) == 9 * 3600,
+       "checkin secs: earliest work start")
+expect(AttendanceLogic.firstCheckinSeconds(entries: [], calendar: utcCal) == nil,
+       "checkin secs: empty → nil")
+
+// 2026-07-13 is a Monday, -14 Tuesday. Two Mondays average their in/out.
+let facts = [
+    DayFact(date: "2026-07-13", inSec: 9 * 3600, outSec: 17 * 3600),   // Mon
+    DayFact(date: "2026-07-20", inSec: 10 * 3600, outSec: 18 * 3600),  // Mon
+    DayFact(date: "2026-07-14", inSec: 8 * 3600, outSec: 16 * 3600),   // Tue
+]
+// Default (.current) calendar — matches DayFmt's own zone, so the weekday of
+// a calendar date is read consistently regardless of the machine's timezone.
+let rhythm = AttendanceLogic.weekdayRhythm(facts: facts)
+expect(rhythm.count == 2, "rhythm: two weekdays present")
+expect(rhythm[0].weekday == 0 && rhythm[0].count == 2, "rhythm: Monday first, two samples")
+expect(rhythm[0].avgIn == 9.5 * 3600 && rhythm[0].avgOut == 17.5 * 3600, "rhythm: Monday averages")
+expect(rhythm[1].weekday == 1 && rhythm[1].avgIn == 8 * 3600, "rhythm: Tuesday single sample")
+
+// suggestedEnd from pre-extracted samples (the store-fed path).
+expect(AttendanceLogic.suggestedEnd(entryStart: t(9), checkoutSamples: [17 * 3600, 17.5 * 3600, 18 * 3600],
+                                    target: sixH, now: t(30), calendar: utcCal) == t(17.5),
+       "suggestedEnd(samples): median check-out on the entry's day")
+expect(AttendanceLogic.suggestedEnd(entryStart: t(9), checkoutSamples: [],
+                                    target: sixH, now: t(30), calendar: utcCal) == t(15),
+       "suggestedEnd(samples): no samples → fill to target")
+
+// MARK: - DayHistory store (rolling, capped, upsert-by-date)
+
+print("DayHistory")
+
+let hDefaults = UserDefaults(suiteName: "test.dayhistory")!
+hDefaults.removePersistentDomain(forName: "test.dayhistory")
+DayHistory.merge([DayFact(date: "2026-07-13", inSec: 9 * 3600, outSec: 17 * 3600)], into: hDefaults)
+DayHistory.merge([DayFact(date: "2026-07-13", inSec: 8 * 3600, outSec: 16 * 3600),   // refine same day
+                  DayFact(date: "2026-07-14", inSec: 9 * 3600, outSec: 18 * 3600)], into: hDefaults)
+let stored = DayHistory.load(hDefaults)
+expect(stored.count == 2, "history: two distinct days")
+expect(stored.first(where: { $0.date == "2026-07-13" })?.inSec == 8 * 3600,
+       "history: same-date merge refines the record")
+expect(stored.map(\.date) == ["2026-07-13", "2026-07-14"], "history: kept chronological")
+hDefaults.removePersistentDomain(forName: "test.dayhistory")
+
 // MARK: - Summary
 
 print("")

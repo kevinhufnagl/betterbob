@@ -155,6 +155,19 @@ public struct DayHours: Equatable, Hashable {
     public var overtime: Double?
 }
 
+/// A tiny, durable record of one worked day's shape — first check-in and last
+/// check-out as seconds since local midnight. Persisted across cycles (HiBob
+/// only serves the current sheet) so the weekly-rhythm chart and the smart
+/// end-time guess keep working after the month rolls over.
+public struct DayFact: Codable, Equatable {
+    public var date: String     // "yyyy-MM-dd"
+    public var inSec: Int
+    public var outSec: Int
+    public init(date: String, inSec: Int, outSec: Int) {
+        self.date = date; self.inSec = inSec; self.outSec = outSec
+    }
+}
+
 /// One day's full attendance entries (from the monthly timesheet grid),
 /// used for the by-day list and editing past days.
 public struct DayEntries: Identifiable, Equatable {

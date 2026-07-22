@@ -33,6 +33,7 @@ struct MonthScreen: View {
                     if summary?.days.isEmpty == false {
                         BalanceTrendCard(state: state)
                     }
+                    WeekdayRhythmCard(state: state)
                 }
             }
             .padding(.horizontal, 16)

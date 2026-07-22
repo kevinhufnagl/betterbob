@@ -57,6 +57,7 @@ struct EntryRowView: View {
     @State private var editing = false
     @State private var editStart = Date()
     @State private var editEnd = Date()
+    @State private var endingOpen = false
     @State private var timeHover = false
     @State private var rowHover = false
 
@@ -71,7 +72,12 @@ struct EntryRowView: View {
                 .frame(width: 52, alignment: .leading)
 
             Button {
-                editStart = e.start; editEnd = e.end ?? Date()
+                editStart = e.start
+                // Open entries default their end to a smart guess on the
+                // entry's OWN day (usual check-out → target → now) — so ending
+                // a forgotten past-day entry lands a sensible time on that date.
+                editEnd = e.end ?? state.suggestedEndForOpenEntry(e)
+                endingOpen = false
                 editing = true
             } label: {
                 HStack(spacing: 5) {
@@ -148,19 +154,38 @@ struct EntryRowView: View {
                     }
                     .buttonStyle(.plain).foregroundStyle(.blue)
                 }
+            } else if endingOpen {
+                // Ending an open entry: reveal an editable End, pre-filled with
+                // a best guess (usual check-out) so a forgotten check-out gets
+                // a real time — adjust if the guess is off.
+                HStack { Text("End").font(.system(size: 12)); Spacer()
+                    timeField($editEnd) }
+                Text("Suggested from your recent days — adjust if needed.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
             } else {
                 Text("Open entry — ends when you clock out.").font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                Button {
+                    // Mirror of "Clear end (reopen)": close an open entry by
+                    // giving it an end time.
+                    endingOpen = true
+                } label: {
+                    Label("End entry…", systemImage: "arrow.right.to.line")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain).foregroundStyle(.blue)
             }
             HStack {
                 Spacer()
                 Button("Cancel") { editing = false }
                 Button("Save") {
+                    // Open entry stays open unless the user chose to end it.
+                    let newEnd: Date? = e.end == nil ? (endingOpen ? editEnd : nil) : editEnd
                     state.updateEntryTimes(e, in: dayEntries, on: date,
-                                           start: editStart, end: e.end == nil ? nil : editEnd)
+                                           start: editStart, end: newEnd)
                     editing = false
                 }.buttonStyle(.borderedProminent)
-                    .disabled(e.end != nil && editEnd <= editStart)
+                    .disabled(shouldHaveEnd(e) && editEnd <= editStart)
             }
         }
         .padding(16).frame(width: 240)
@@ -170,6 +195,12 @@ struct EntryRowView: View {
     /// broken inside this one), no spinner arrows.
     private func timeField(_ value: Binding<Date>) -> some View {
         TimeTextField(date: value)
+    }
+
+    /// Whether Save will write an end (so start<end validation applies): a
+    /// closed entry always, an open one only once the user chose to end it.
+    private func shouldHaveEnd(_ e: AttendanceEntry) -> Bool {
+        e.end != nil || endingOpen
     }
 }
 
@@ -436,6 +467,7 @@ public struct CyclePane: View {
             kpiGrid
             CalendarHeatmap(state: state, onOpenToday: onOpenToday)
             BalanceTrendCard(state: state)
+            WeekdayRhythmCard(state: state)
             rhythm
             compliance
             // Last — the heatmap above already carries the per-day picture;
@@ -600,66 +632,121 @@ public struct CalendarHeatmap: View {
                 VStack(spacing: 8) {
                     LazyVGrid(columns: cols, spacing: 6) {
                         ForEach(weekdays, id: \.self) { wd in
-                            Text(wd).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                            Text(wd).font(.bobUI(10, weight: .semibold)).foregroundStyle(.secondary)
                         }
                         ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 46) }
                         ForEach(days, id: \.date) { day in cell(day) }
                     }
                     legend
-                    if state.daysMissingReason > 0, !state.reasonOptions.isEmpty {
+                    if state.hasAttentionItems {
                         Divider().opacity(0.12).padding(.vertical, 4)
-                        missingReasonControl
+                        needsAttentionCard
                     }
                 }
             } else {
-                Text("Loading cycle…").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("Loading cycle…").font(.bobUI(12)).foregroundStyle(.secondary)
             }
         }
     }
 
-    /// When any loaded day has a work entry with no reason (the violet cells),
-    /// offer to tag them all at once — pick a reason, applied only to the
-    /// entries that are missing one; anything already tagged is left alone.
-    @ViewBuilder private var missingReasonControl: some View {
-        let n = state.daysMissingReason
-        HStack(spacing: 11) {
-            Image(systemName: "tag.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.bobViolet)
-                .frame(width: 28, height: 28)
-                .background(Color.bobViolet.opacity(0.14),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(n == 1 ? "1 day needs a reason" : "\(n) days need a reason")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("Tag every work entry that has none — tagged ones stay as they are.")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Menu {
-                ForEach(state.reasonOptions, id: \.self) { opt in
-                    Button(opt.name) { state.applyReasonToMissing(opt) }
-                }
-            } label: {
-                Label("Set reason", systemImage: "wand.and.stars")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.bobViolet)
-                    .padding(.horizontal, 12).frame(height: 30)
-                    .background(Capsule().fill(Color.bobViolet.opacity(0.16)))
-                    .overlay(Capsule().strokeBorder(Color.bobViolet.opacity(0.4), lineWidth: 0.8))
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .disabled(state.busy)
+    /// The cycle's flagged days grouped by issue: each category's colored icon,
+    /// a count, and tappable day-number chips that open that day's detail. The
+    /// "No reason" row folds in the old bulk "Set reason" action. Rows with no
+    /// days render nothing, and the whole card is gated on `hasAttentionItems`.
+    @ViewBuilder private var needsAttentionCard: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Needs attention")
+                .font(.bobUI(10, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase).kerning(0.5)
+            attentionRow(color: .bobMagenta, icon: "clock.badge.exclamationmark",
+                         title: "Unclosed", days: state.unclosedDays)
+            attentionRow(color: .bobRed, icon: "exclamationmark.triangle.fill",
+                         title: "Over daily max", days: state.overMaxDays)
+            attentionRow(color: .bobOrange, icon: "cup.and.saucer.fill",
+                         title: "Break issue", days: state.breakIssueDays)
+            attentionRow(color: .bobViolet, icon: "tag.fill",
+                         title: "No reason", days: state.missingReasonDays,
+                         showReasonFix: true)
         }
-        .padding(12)
-        .background(Color.bobViolet.opacity(0.07),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(Color.bobViolet.opacity(0.25), lineWidth: 0.8))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Each category is its own inset chip, faintly tinted in the category's
+    // flag color — the tint both separates the rows and reinforces the same
+    // color language the grid cells use.
+    @ViewBuilder
+    private func attentionRow(color: Color, icon: String, title: String,
+                              days: [String], showReasonFix: Bool = false) -> some View {
+        if !days.isEmpty {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.bobUI(11, weight: .semibold))
+                    .foregroundStyle(color)
+                    .frame(width: 26, height: 26)
+                    .background(color.opacity(0.18),
+                                in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    // Count as an app-icon-style badge on the tile's corner.
+                    .overlay(alignment: .topTrailing) {
+                        Text("\(days.count)")
+                            .font(.bobUI(9, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4).frame(minWidth: 15, minHeight: 15)
+                            .background(Circle().fill(color))
+                            .overlay(Circle().strokeBorder(scheme == .dark ? Color.black : Color.white,
+                                                           lineWidth: 1.2))
+                            .offset(x: 6, y: -6)
+                    }
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).font(.bobUI(12, weight: .semibold))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 5) {
+                            ForEach(days, id: \.self) { key in
+                                Button { openDay(key) } label: {
+                                    Text(dayNum(key))
+                                        .font(.bobUI(11, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(color)
+                                        .frame(minWidth: 20)
+                                        .padding(.horizontal, 6).padding(.vertical, 3)
+                                        .background(Capsule().fill(color.opacity(0.16)))
+                                        .overlay(Capsule().strokeBorder(color.opacity(0.4), lineWidth: 0.7))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Open \(key)")
+                            }
+                        }
+                    }
+                }
+                Spacer(minLength: 8)
+                if showReasonFix, !state.reasonOptions.isEmpty {
+                    Menu {
+                        ForEach(state.reasonOptions, id: \.self) { opt in
+                            Button(opt.name) { state.applyReasonToMissing(opt) }
+                        }
+                    } label: {
+                        Label("Set reason", systemImage: "wand.and.stars")
+                            .font(.bobUI(11, weight: .semibold))
+                            .foregroundStyle(Color.bobViolet)
+                            .padding(.horizontal, 10).frame(height: 28)
+                            .background(Capsule().fill(Color.bobViolet.opacity(0.16)))
+                            .overlay(Capsule().strokeBorder(Color.bobViolet.opacity(0.4), lineWidth: 0.8))
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+                    .fixedSize().disabled(state.busy)
+                }
+            }
+            .padding(9)
+            .background(color.opacity(0.07),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(color.opacity(0.22), lineWidth: 0.8))
+        }
+    }
+
+    /// Open a flagged day: hand it to the host on iOS, or trip the matching
+    /// cell's own popover on the Mac.
+    private func openDay(_ key: String) {
+        if let onOpenDay { onOpenDay(key) } else { selected = key }
     }
 
     private func leadingBlanks(_ days: [DayHours]) -> Int {
@@ -685,6 +772,12 @@ public struct CalendarHeatmap: View {
             .first(where: { $0.dateKey == day.date })
             .map { state.isOverDailyMax($0.entries) }
             ?? (day.worked * 3600 > Prefs.shared.maxDayLimit)
+        // A past day left with an open-ended entry (forgotten check-out) —
+        // magenta, the most urgent flag. Today's open entry is normal, so this
+        // is gated on the day being in the past.
+        let unclosed = day.date < DayFmt.today()
+            && (state.monthDays.first(where: { $0.dateKey == day.date })
+                .map { state.hasOpenEntry($0.entries) } ?? false)
         // A past day with any untagged work entry (no reason) — violet, the
         // mildest flag, so a real break/max issue still wins the cell color.
         let missingReason = day.date < DayFmt.today()
@@ -695,8 +788,9 @@ public struct CalendarHeatmap: View {
         // quickly — fainter when under, stronger when over. ±21% deviation
         // spans the whole range.
         let deviation: Double? = hasTarget ? (day.worked - (day.target ?? 0)) / (day.target ?? 1) : nil
-        let flagged = overMax || breakIssue || missingReason
-        let accent = overMax ? Color.bobRed
+        let flagged = unclosed || overMax || breakIssue || missingReason
+        let accent = unclosed ? Color.bobMagenta
+                   : overMax ? Color.bobRed
                    : breakIssue ? Color.bobOrange
                    : missingReason ? Color.bobViolet
                    : Color.workAccent(scheme)
@@ -720,6 +814,7 @@ public struct CalendarHeatmap: View {
             let delta = day.worked - (day.target ?? 0)
             helpText += delta > 0 ? " · \(hoursText(delta)) over" : " · \(hoursText(-delta)) under"
         }
+        if unclosed { helpText += " · unclosed — an entry never got an end" }
         if breakIssue { helpText += " · break issue — needs a break" }
         if overMax { helpText += " · over the daily max" }
         if missingReason { helpText += " · a work entry has no reason set" }
@@ -728,7 +823,7 @@ public struct CalendarHeatmap: View {
             .frame(height: 46)
             .overlay(alignment: .topLeading) {
                 Text(dayNum(day.date))
-                    .font(.system(size: 11, weight: worked || isToday ? .bold : .medium))
+                    .font(.bobUI(11, weight: worked || isToday ? .bold : .medium))
                     .foregroundStyle(worked || isToday ? accent : .secondary)
                     .padding(6)
             }
@@ -736,7 +831,7 @@ public struct CalendarHeatmap: View {
                 if worked {
                     // Phone cells are ~44pt wide — scale down rather than
                     // wrap "7h 30m" onto two lines.
-                    Text(hoursText(day.worked)).font(.system(size: 9, weight: .bold, design: .rounded))
+                    Text(hoursText(day.worked)).font(.bobUI(9, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                         .foregroundStyle(accent).padding(5)
@@ -765,18 +860,20 @@ public struct CalendarHeatmap: View {
     private var legend: some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.12)).frame(width: 14, height: 10)
-            Text("Under").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text("Under").font(.bobUI(9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.4)).frame(width: 14, height: 10)
-            Text("On target").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text("On target").font(.bobUI(9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.85)).frame(width: 14, height: 10)
-            Text("Over").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text("Over").font(.bobUI(9)).foregroundStyle(.secondary)
             Spacer()
             RoundedRectangle(cornerRadius: 3).fill(Color.bobViolet.opacity(0.6)).frame(width: 14, height: 10)
-            Text("No reason").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text("No reason").font(.bobUI(9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.bobOrange.opacity(0.5)).frame(width: 14, height: 10)
-            Text("Break issue").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text("Break issue").font(.bobUI(9)).foregroundStyle(.secondary)
             RoundedRectangle(cornerRadius: 3).fill(Color.bobRed.opacity(0.5)).frame(width: 14, height: 10)
-            Text("Over daily max").font(.system(size: 9)).foregroundStyle(.secondary)
+            Text("Over daily max").font(.bobUI(9)).foregroundStyle(.secondary)
+            RoundedRectangle(cornerRadius: 3).fill(Color.bobMagenta.opacity(0.6)).frame(width: 14, height: 10)
+            Text("Unclosed day").font(.bobUI(9)).foregroundStyle(.secondary)
         }
     }
 }
@@ -802,7 +899,7 @@ public struct BalanceTrendCard: View {
     public var body: some View {
         Card(title: "Running over / under", symbol: "chart.xyaxis.line") {
             if points.count < 2 {
-                Text("Not enough days yet.").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("Not enough days yet.").font(.bobUI(12)).foregroundStyle(.secondary)
             } else {
                 // A connected series can only carry ONE style — per-point
                 // colors silently collapse to the first point's, tinting the
@@ -836,12 +933,69 @@ public struct BalanceTrendCard: View {
                 .chartYScale(domain: bottom...(bottom + span))
                 .chartYAxis { AxisMarks(position: .leading) { v in
                     AxisGridLine().foregroundStyle(.secondary.opacity(0.12))
-                    AxisValueLabel { if let h = v.as(Double.self) { Text("\(Int(h))h").font(.system(size: 9)) } } } }
+                    AxisValueLabel { if let h = v.as(Double.self) { Text("\(Int(h))h").font(.bobUI(9)) } } } }
                 .chartXAxis { AxisMarks(values: .stride(by: .day, count: 5)) { _ in
-                    AxisValueLabel(format: .dateTime.month().day()).font(.system(size: 9)) } }
+                    AxisValueLabel(format: .dateTime.month().day()).font(.bobUI(9)) } }
                 .frame(height: 160)
             }
         }
+    }
+}
+
+// MARK: - Weekly rhythm
+
+/// Average check-in → check-out per weekday, drawn as range bars — the typical
+/// working window for each day. Fed by the durable `DayHistory`, so it fills
+/// in over time and survives the cycle rollover.
+public struct WeekdayRhythmCard: View {
+    public init(state: BobState) { self.state = state }
+    @ObservedObject var state: BobState
+    @Environment(\.colorScheme) private var scheme
+    private let names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    public var body: some View {
+        let stats = state.weekdayRhythm
+        Card(title: "Weekly rhythm", symbol: "clock.arrow.2.circlepath") {
+            if stats.count < 2 {
+                Text("Not enough history yet — this fills in as you log more days.")
+                    .font(.bobUI(12)).foregroundStyle(.secondary)
+            } else {
+                let lo = (stats.map(\.avgIn).min() ?? 0) / 3600 - 0.4
+                let hi = (stats.map(\.avgOut).max() ?? 24 * 3600) / 3600 + 0.4
+                Chart(stats, id: \.weekday) { s in
+                    BarMark(
+                        x: .value("Day", names[s.weekday]),
+                        yStart: .value("Check-in", s.avgIn / 3600),
+                        yEnd: .value("Check-out", s.avgOut / 3600),
+                        width: .fixed(16)
+                    )
+                    .clipShape(Capsule())
+                    .foregroundStyle(LinearGradient(
+                        colors: [Color.workAccent(scheme), Color.workAccent(scheme).opacity(0.55)],
+                        startPoint: .top, endPoint: .bottom))
+                    .annotation(position: .top, spacing: 3) {
+                        Text(clockLabel(s.avgIn)).font(.bobUI(8, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .annotation(position: .bottom, spacing: 3) {
+                        Text(clockLabel(s.avgOut)).font(.bobUI(8, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .chartYScale(domain: lo...hi)
+                .chartYAxis { AxisMarks(position: .leading, values: .stride(by: 1)) { v in
+                    AxisGridLine().foregroundStyle(.secondary.opacity(0.12))
+                    AxisValueLabel { if let h = v.as(Double.self) { Text("\(Int(h)):00").font(.bobUI(9)) } } } }
+                .chartXAxis { AxisMarks { _ in AxisValueLabel().font(.bobUI(9)) } }
+                .frame(height: 168)
+            }
+        }
+    }
+
+    /// Seconds-since-midnight → "HH:MM".
+    private func clockLabel(_ seconds: TimeInterval) -> String {
+        let m = Int((seconds / 60).rounded())
+        return String(format: "%02d:%02d", (m / 60) % 24, m % 60)
     }
 }
 

@@ -123,6 +123,33 @@ struct SectionCaption: View {
     }
 }
 
+// MARK: - Platform-adaptive small UI font
+//
+// The Mac app was hand-tuned at fixed 9–13pt. On iOS those fixed sizes ignore
+// the user's Dynamic Type setting, so shared components that iOS renders route
+// their fonts through this helper: macOS keeps the exact fixed size, iOS maps
+// the size to the nearest Dynamic Type text style so copy scales (and the
+// weight/design still apply).
+extension Font {
+    public static func bobUI(_ size: CGFloat, weight: Font.Weight = .regular,
+                             design: Font.Design = .default) -> Font {
+        #if os(macOS)
+        return .system(size: size, weight: weight, design: design)
+        #else
+        let style: Font.TextStyle
+        switch size {
+        case ..<10.5:  style = .caption2
+        case ..<11.5:  style = .caption
+        case ..<12.5:  style = .footnote
+        case ..<13.5:  style = .subheadline
+        case ..<15.5:  style = .callout
+        default:       style = .body
+        }
+        return .system(style, design: design).weight(weight)
+        #endif
+    }
+}
+
 // MARK: - Theme-adaptive accent colors
 //
 // The stock .green/.orange read as washed-out on the popover's glass panel.
@@ -196,6 +223,9 @@ extension Color {
     /// A cool violet, distinct from teal/orange/red — flags a past day whose
     /// work entries carry no reason (untagged).
     static let bobViolet = Color(red: 0.58, green: 0.44, blue: 0.86)
+    /// A hot pink-magenta, distinct from the rose-leaning red — flags a past
+    /// day left with an unclosed (open-ended) entry, the most broken state.
+    static let bobMagenta = Color(red: 0.83, green: 0.24, blue: 0.55)
 
     public static func workAccent(_ scheme: ColorScheme) -> Color {
         primaryAccent(scheme)
