@@ -79,6 +79,11 @@ public struct OnboardingView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var editing = false
+    // Advanced: the stored authenticator secret for fully automatic sign-in.
+    @State private var advancedOpen = false
+    @State private var secretDraft = ""
+    @State private var editingSecret = false
+    @State private var hasSecret = false
     @Environment(\.colorScheme) private var scheme
 
     private var canSetUp: Bool { !email.isEmpty && !password.isEmpty }
@@ -89,6 +94,8 @@ public struct OnboardingView: View {
             VStack(spacing: 18) {
                 header
                 autoCard
+                advancedToggle
+                if advancedOpen { advancedCard }
                 Text("Your details are stored only in your Mac's login Keychain and used only against HiBob's login form — never sent anywhere else.")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -179,11 +186,97 @@ public struct OnboardingView: View {
     /// Remove the stored credentials and turn automatic sign-in off.
     private func forget() {
         Keychain.set(nil, for: .password)
+        Keychain.set(nil, for: .totpSecret)
+        hasSecret = false
         UserDefaults.standard.removeObject(forKey: "lastAccountEmail")
         Prefs.shared.autofillEnabled = false
         Prefs.shared.autoReloginOnExpiry = false
         email = ""; password = ""
         editing = true
+    }
+
+    // MARK: Advanced — fully automatic (stored authenticator secret)
+
+    /// A quiet toggle line, so the option stays out of the way until sought.
+    private var advancedToggle: some View {
+        Button {
+            withAnimation(Motion.quick) { advancedOpen.toggle() }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .rotationEffect(.degrees(advancedOpen ? 90 : 0))
+                Text("Advanced")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 4)
+    }
+
+    private var advancedCard: some View {
+        OnboardingCard(
+            symbol: "lock.rotation", tint: .orange,
+            title: "Fully automatic", badge: nil, tag: "No prompts",
+            blurb: "Also store your authenticator secret (the Base32 string or otpauth:// link behind the QR code) and Bob generates the codes himself — sign-ins, including after the session expires, need no prompt at all."
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                if hasSecret && !editingSecret {
+                    summaryRow("lock.rotation",
+                               TOTP.code(secretBase32: Keychain.get(.totpSecret) ?? "")
+                                   .map { "Secret saved — current code \($0)" }
+                               ?? "Invalid stored secret",
+                               mono: true)
+                    HStack(spacing: 8) {
+                        Spacer()
+                        Button("Replace") { editingSecret = true }.controlSize(.small)
+                        Button("Remove", role: .destructive) {
+                            Keychain.set(nil, for: .totpSecret)
+                            hasSecret = false
+                            secretDraft = ""
+                        }.controlSize(.small)
+                    }
+                } else {
+                    field("Secret") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            SecureField("Base32 secret or otpauth:// link", text: $secretDraft)
+                                .textFieldStyle(.roundedBorder)
+                            if !secretDraft.isEmpty {
+                                if let code = TOTP.code(secretBase32: secretDraft) {
+                                    Text("Current code: \(code)")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("Not a valid Base32 secret")
+                                        .font(.system(size: 10)).foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Spacer()
+                        if hasSecret {
+                            Button("Cancel") { editingSecret = false; secretDraft = "" }
+                                .controlSize(.small)
+                        }
+                        Button("Save secret") {
+                            Keychain.set(TOTP.base32Secret(from: secretDraft), for: .totpSecret)
+                            hasSecret = Keychain.has(.totpSecret)
+                            editingSecret = false
+                            secretDraft = ""
+                        }
+                        .controlSize(.small).buttonStyle(.borderedProminent)
+                        .disabled(TOTP.code(secretBase32: secretDraft) == nil)
+                    }
+                }
+                Label("This weakens two-factor sign-in: the secret sits in this Mac's Keychain next to your password, so anyone who can unlock this Mac can generate your codes. Prefer the typed code or the push unless you really want zero prompts.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func summaryRow(_ symbol: String, _ text: String, mono: Bool = false, tint: Color = .secondary) -> some View {
@@ -231,6 +324,9 @@ public struct OnboardingView: View {
         email = UserDefaults.standard.string(forKey: "lastAccountEmail") ?? ""
         password = Keychain.get(.password) ?? ""
         editing = false
+        hasSecret = Keychain.has(.totpSecret)
+        editingSecret = false
+        secretDraft = ""
     }
 
     private func field<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {

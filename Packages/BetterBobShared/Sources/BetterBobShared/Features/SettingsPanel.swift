@@ -13,11 +13,6 @@ public struct SettingsPanel: View {
         self.prefs = prefs
     }
     @State private var confirmingUninstall = false
-    // Advanced sign-in (stored authenticator secret) — collapsed by default.
-    @State private var advancedOpen = false
-    @State private var secretDraft = ""
-    @State private var editingSecret = false
-    @State private var hasSecret = false
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -90,7 +85,7 @@ public struct SettingsPanel: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(state.autoLoginInProgress)
 
-                Text("Opens the sign-in window where you set up automatic sign-in — your password is stored in the Keychain, and at sign-in you type the one-time code or approve the Okta push. Edit or forget your saved sign-in there any time.")
+                Text("Opens the sign-in window where you set up automatic sign-in — your password is stored in the Keychain, and at sign-in you type the one-time code or approve the Okta push. Edit or forget your saved sign-in there any time; a fully automatic option lives under Advanced there.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -100,85 +95,7 @@ public struct SettingsPanel: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            advancedGroup
         }
-    }
-
-    // MARK: Advanced — fully automatic sign-in (stored authenticator secret)
-
-    @ViewBuilder private var advancedGroup: some View {
-        DisclosureGroup(isExpanded: $advancedOpen) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Fully automatic sign-in")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("Store your authenticator secret (the Base32 string or otpauth:// link behind the QR code) and Bob generates the one-time codes himself — sign-ins, including after expiry, need no code prompt at all.")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if hasSecret && !editingSecret {
-                    HStack(spacing: 8) {
-                        Label {
-                            Text(TOTP.code(secretBase32: Keychain.get(.totpSecret) ?? "")
-                                    .map { "Secret stored — current code \($0)" }
-                                 ?? "Stored secret is not valid Base32")
-                                .font(.system(size: 11, design: .monospaced))
-                        } icon: {
-                            Image(systemName: "lock.rotation").font(.system(size: 11))
-                        }
-                        Spacer()
-                        Button("Remove", role: .destructive) {
-                            Keychain.set(nil, for: .totpSecret)
-                            secretDraft = ""
-                            hasSecret = false
-                        }.controlSize(.small)
-                    }
-                } else {
-                    SecureField("Base32 secret or otpauth:// link", text: $secretDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 340)
-                    HStack(spacing: 8) {
-                        if !secretDraft.isEmpty {
-                            if let code = TOTP.code(secretBase32: secretDraft) {
-                                Text("Current code: \(code)")
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("Not a valid Base32 secret")
-                                    .font(.system(size: 10)).foregroundStyle(.orange)
-                            }
-                        }
-                        Spacer()
-                        if hasSecret {
-                            Button("Cancel") { editingSecret = false; secretDraft = "" }
-                                .controlSize(.small)
-                        }
-                        Button("Save") {
-                            Keychain.set(TOTP.base32Secret(from: secretDraft), for: .totpSecret)
-                            hasSecret = Keychain.has(.totpSecret)
-                            editingSecret = false
-                            secretDraft = ""
-                        }
-                        .controlSize(.small).buttonStyle(.borderedProminent)
-                        .disabled(TOTP.code(secretBase32: secretDraft) == nil)
-                    }
-                }
-
-                Label {
-                    Text("This weakens two-factor sign-in: the secret lives in this Mac's Keychain next to your password, so anyone who can unlock this Mac (or its backups) can generate your codes. Prefer typing the code or the Okta push unless you really want zero prompts.")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10)).foregroundStyle(.orange)
-                }
-            }
-            .padding(.top, 6)
-        } label: {
-            Text("Advanced")
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-        }
-        .onAppear { hasSecret = Keychain.has(.totpSecret) }
     }
 
     // MARK: - Auto-break
