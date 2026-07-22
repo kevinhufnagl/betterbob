@@ -913,6 +913,27 @@ expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: t(12)) == t(1
 // MARK: - Summary
 
 print("")
+// MARK: - TOTP (RFC 6238 SHA-1 vectors, 6-digit)
+
+print("TOTP")
+let totpSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"   // base32 of "12345678901234567890"
+func totpAt(_ unix: Double) -> String? {
+    TOTP.code(secretBase32: totpSecret, at: Date(timeIntervalSince1970: unix))
+}
+expect(totpAt(59) == "287082", "RFC 6238 vector @ T=59")
+expect(totpAt(1111111109) == "081804", "RFC 6238 vector @ T=1111111109")
+expect(totpAt(1234567890) == "005924", "RFC 6238 vector @ T=1234567890")
+expect(TOTP.code(secretBase32: "not base32 !!!") == nil, "invalid base32 → nil")
+expect(TOTP.base32Decode(totpSecret).flatMap { String(data: $0, encoding: .utf8) } == "12345678901234567890",
+       "base32 decodes to the ASCII secret")
+expect(TOTP.code(secretBase32: "jbsw y3dp ehpk 3pxp") != nil, "spaces in the secret are tolerated")
+// otpauth:// URL → the secret is extracted (and a code computes from it).
+expect(TOTP.base32Secret(from: "otpauth://totp/Okta:me@co.com?secret=\(totpSecret)&issuer=Okta&period=30") == totpSecret,
+       "otpauth:// URL → base32 secret extracted")
+expect(TOTP.base32Secret(from: "  \(totpSecret)  ") == totpSecret, "bare secret is just trimmed")
+expect(TOTP.code(secretBase32: "otpauth://totp/x?secret=\(totpSecret)", at: Date(timeIntervalSince1970: 59)) == "287082",
+       "code computes straight from an otpauth:// URL")
+
 if failures == 0 {
     print("All tests passed.")
 } else {

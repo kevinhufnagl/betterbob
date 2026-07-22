@@ -194,10 +194,13 @@ struct MainWindow: View {
                         // doesn't stretch across the wide dashboard.
                         SignInFactorGroup(state: state)
                             .frame(maxWidth: 300)
+                    } else {
+                        // No stored credentials yet: the sign-in window is
+                        // where they get set up.
+                        Button { OnboardingController.shared.present() } label: {
+                            Label("Set up sign-in…", systemImage: "person.badge.key.fill")
+                        }.buttonStyle(.bordered)
                     }
-                    Button { state.startSSOSignIn() } label: {
-                        Label("Sign in with browser…", systemImage: "safari")
-                    }.buttonStyle(.bordered)
                 }
             }
             .padding(.top, 4)

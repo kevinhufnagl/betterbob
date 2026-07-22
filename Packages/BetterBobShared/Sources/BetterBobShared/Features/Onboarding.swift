@@ -5,7 +5,7 @@ import AppKit
 
 /// First-run welcome window: Bob greets the user and walks them through signing
 /// in, leading with automatic sign-in and clearly contrasting it with the
-/// browser option. Presented as a plain AppKit window (like the SSO window) so
+/// factor choice. Presented as a plain AppKit window (like the SSO window) so
 /// it centres nicely and doesn't tangle with the main window scene.
 @MainActor
 public final class OnboardingController {
@@ -89,7 +89,6 @@ public struct OnboardingView: View {
             VStack(spacing: 18) {
                 header
                 autoCard
-                browserCard
                 Text("Your details are stored only in your Mac's login Keychain and used only against HiBob's login form — never sent anywhere else.")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -135,7 +134,7 @@ public struct OnboardingView: View {
             blurb: "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Best when your login is a password + authenticator code. For Okta Verify push approvals, use the browser option below.",
+                Label("Works with a password plus any second factor — a typed authenticator code or an Okta Verify push.",
                       systemImage: "info.circle")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -154,26 +153,6 @@ public struct OnboardingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-        }
-    }
-
-    // MARK: Browser sign-in
-
-    private var browserCard: some View {
-        OnboardingCard(
-            symbol: "safari", tint: .secondary,
-            title: "Sign in with a browser", badge: nil, tag: "Every time",
-            blurb: "Sign in through HiBob's normal login page in a secure window — including Okta Verify push. Quick to start, but you'll sign in again each time the session expires (for example, after a weekend)."
-        ) {
-            Button {
-                state.startSSOSignIn()
-                onDone()
-            } label: {
-                Label("Open browser sign-in", systemImage: "arrow.up.forward.app")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .controlSize(.large).buttonStyle(.bordered)
         }
     }
 

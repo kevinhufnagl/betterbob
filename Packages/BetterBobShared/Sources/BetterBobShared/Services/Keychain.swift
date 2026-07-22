@@ -9,6 +9,11 @@ public enum Keychain {
 
     public enum Key: String {
         case password = "hibobPassword"
+        // The authenticator secret for fully automatic sign-in (Advanced
+        // settings, off by default): with it stored, codes are generated
+        // locally and re-login needs no human. Same account name earlier
+        // versions used, so an old grant carries over.
+        case totpSecret = "hibobTOTPSecret"
     }
 
     public static func set(_ value: String?, for key: Key) {
@@ -57,16 +62,6 @@ public enum Keychain {
 
     public static func has(_ key: Key) -> Bool { get(key) != nil }
 
-    /// One-time cleanup for the authenticator seed earlier versions stored under
-    /// this service. The feature is gone; delete any lingering item so the seed
-    /// doesn't sit on disk unused.
-    static func wipeLegacyTOTPSecret() {
-        SecItemDelete([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: "hibobTOTPSecret",
-        ] as CFDictionary)
-    }
 
     /// Delete every item under the service in one call — the uninstaller's
     /// half of the cleanup. Silent, because this build created the items.

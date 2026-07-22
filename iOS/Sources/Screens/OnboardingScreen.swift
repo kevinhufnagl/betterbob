@@ -33,7 +33,6 @@ struct OnboardingScreen: View {
                         autoSection
                             .opacity(didAppear ? 1 : 0)
                             .offset(y: didAppear ? 0 : 18)
-                        browserSection
                             .opacity(didAppear ? 1 : 0)
                             .offset(y: didAppear ? 0 : 22)
                     }
@@ -165,19 +164,6 @@ struct OnboardingScreen: View {
         }
     }
 
-    // MARK: Browser sign-in
-
-    private var browserSection: some View {
-        Button {
-            state.startSSOSignIn()
-        } label: {
-            Label("Sign in with a browser", systemImage: "safari")
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .buttonStyle(.glass)
-        .controlSize(.large)
-    }
 
     // MARK: Engine plumbing (same as the Mac onboarding)
 

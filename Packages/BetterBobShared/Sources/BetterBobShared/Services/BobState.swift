@@ -110,9 +110,6 @@ public final class BobState: ObservableObject {
     // MARK: - Lifecycle
 
     public func start() {
-        // Older versions could store the authenticator seed; it's no longer
-        // used or accepted, so clear any lingering item on launch.
-        Keychain.wipeLegacyTOTPSecret()
         Notifier.requestAuthorization()
         #if os(macOS)
         // Reading the Wi-Fi SSID needs Location authorization on modern macOS.
@@ -141,17 +138,15 @@ public final class BobState: ObservableObject {
 
     // MARK: - Account
 
-    /// SSO sign-in: open the embedded browser; on success adopt the session.
-    public func startSSOSignIn() {
-        SSOSignInController.shared.present { [weak self] in
-            Task { await self?.completeSSOSignIn() }
-        }
-    }
-
     /// True when a re-login can be started from stored credentials (autofill on
     /// + a password saved). Completion still needs the user to type the current
     /// authenticator code into the native prompt.
     public var canAutoSignIn: Bool { Prefs.shared.autofillEnabled && Keychain.has(.password) }
+
+    /// Password AND authenticator secret on file (the Advanced setting):
+    /// re-login is hands-free — codes are generated from the stored secret,
+    /// so expiry can kick off a sign-in without waiting for a human.
+    public var fullyAutomatic: Bool { canAutoSignIn && Keychain.has(.totpSecret) }
 
     /// Re-login using the stored password: the hidden browser fills email +
     /// password and advances to the authenticator step, where the inline field
@@ -261,7 +256,13 @@ public final class BobState: ObservableObject {
             signedIn = false
             lastError = BobError.sessionExpired.localizedDescription
             // Re-login starts on demand (see startAutoSignIn) — just nudge.
-            if Prefs.shared.autoReloginOnExpiry, canAutoSignIn { Notifier.awaitingCode() }
+            // With a stored authenticator secret there is no one to wait for:
+            // start the hands-free sign-in right away.
+            if Prefs.shared.autoReloginOnExpiry, fullyAutomatic {
+                startAutoSignIn()
+            } else if Prefs.shared.autoReloginOnExpiry, canAutoSignIn {
+                Notifier.awaitingCode()
+            }
         }
     }
 
@@ -795,7 +796,10 @@ public final class BobState: ObservableObject {
             // is fresh when the user actually enters the code — see note in
             // startAutoSignIn. Just nudge them to reconnect; the drive begins
             // when they open BetterBob and hit "Sign in automatically".
-            if Prefs.shared.autoReloginOnExpiry, canAutoSignIn {
+            if Prefs.shared.autoReloginOnExpiry, fullyAutomatic {
+                // Hands-free: the stored secret supplies the code.
+                startAutoSignIn()
+            } else if Prefs.shared.autoReloginOnExpiry, canAutoSignIn {
                 Notifier.awaitingCode()
             } else {
                 Notifier.failure(BobError.sessionExpired.localizedDescription)

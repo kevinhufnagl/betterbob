@@ -71,6 +71,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     /// When we first sat on the code step with a code to submit — used to
     /// notice a rejected code (still on the code step well after injecting).
     private var codeStepSince: Date?
+    /// A generated code (stored authenticator secret) was rejected — stop
+    /// generating and fall back to the typed prompt for this run.
+    private var autoOTPFailed = false
     private var onSuccess: (() -> Void)?
     private var onFinish: ((Bool) -> Void)?
     private var autofillTimer: Timer?
@@ -107,6 +110,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         self.drive = .assisted
         self.factor = factor
         self.enteredCode = nil
+        self.autoOTPFailed = false
         self.deadline = Date().addingTimeInterval(300)
         makeSession(visible: false)   // browser stays invisible the whole time
         load()
@@ -311,17 +315,26 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     /// still on that step ~8s later, treats it as rejected so the user can retry.
     private func trackCodeStep(_ step: String) {
         let atCode = step == "code"
-        BobState.shared.awaitingOTP = atCode
-        guard atCode, enteredCode != nil else { codeStepSince = nil; return }
+        // While a stored secret is supplying the code, the flow is hands-free —
+        // no prompt. It appears only if generation fails or gets rejected.
+        let autoCode = factor == .googleAuthenticator && enteredCode == nil
+            && !autoOTPFailed && Keychain.has(.totpSecret)
+        BobState.shared.awaitingOTP = atCode && !autoCode
+        guard atCode, enteredCode != nil || autoCode else { codeStepSince = nil; return }
         if codeStepSince == nil {
             codeStepSince = Date()
         } else if Date().timeIntervalSince(codeStepSince!) > 8 {
             // A correct code navigates away within a couple of seconds; still
             // being here means Okta rejected it.
-            enteredCode = nil
             codeStepSince = nil
-            BobState.shared.otpSubmitting = false
-            BobState.shared.otpError = "That code didn't work — check it and try again."
+            if autoCode {
+                autoOTPFailed = true
+                BobState.shared.otpError = "The generated code was rejected — type the current one from your app."
+            } else {
+                enteredCode = nil
+                BobState.shared.otpSubmitting = false
+                BobState.shared.otpError = "That code didn't work — check it and try again."
+            }
         }
     }
 
@@ -345,7 +358,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     /// the value the user typed into the native prompt (assisted mode).
     private func autofillJS(click: Bool) -> String? {
         let pw = Keychain.get(.password) ?? ""
-        let otp = drive == .assisted ? (enteredCode ?? "") : ""
+        // Fully automatic (Advanced): with a stored authenticator secret and
+        // no typed code, generate the current TOTP. fill() writes a field
+        // only once, so each page gets exactly one attempt — trackCodeStep
+        // flips autoOTPFailed if Okta rejects it and the prompt takes over.
+        let generated = (drive == .assisted && factor == .googleAuthenticator
+                         && enteredCode == nil && !autoOTPFailed)
+            ? Keychain.get(.totpSecret).flatMap { TOTP.code(secretBase32: $0) } : nil
+        let otp = drive == .assisted ? (enteredCode ?? generated ?? "") : ""
         let email = BobState.shared.accountEmail
             ?? UserDefaults.standard.string(forKey: "lastAccountEmail") ?? ""
         guard !(pw.isEmpty && otp.isEmpty && email.isEmpty) else { return nil }

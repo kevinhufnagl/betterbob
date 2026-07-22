@@ -52,17 +52,18 @@ one-click update when a new version is out.
 
 ## Signing in
 
-The first time — or any time you're signed out — Bob opens a sign-in window with
-two choices:
+The first time — or any time you're signed out — Bob opens a sign-in window:
+save your password once (it lives only in your Mac's Keychain) and pick your
+second factor — a Google Authenticator code, an Okta Verify code, or an Okta
+Verify push. Bob fills the password and drives Okta by himself; you just type
+the current 6-digit code into a small prompt, or tap Approve on your phone.
+Codes are never stored, only the password.
 
-- **Automatic** *(recommended)* — save your password once (it lives only in
-  your Mac's Keychain) and pick your second factor: a Google Authenticator
-  code, an Okta Verify code, or an Okta Verify push. Bob fills the password
-  and drives Okta by himself; you just type the current 6-digit code into a
-  small prompt — or tap Approve on your phone for push. Codes are never
-  stored, only the password.
-- **Browser** — sign in through HiBob's normal login page. Quick, but you'll
-  sign in again whenever the session expires.
+For zero prompts there's a tucked-away extra under **Settings → Advanced**:
+store your authenticator secret and Bob generates the codes himself, signing
+you back in completely hands-free whenever the session expires. Mind the
+trade-off it spells out — the secret then lives in your Keychain next to your
+password, which weakens two-factor sign-in.
 
 ## Around the app
 
