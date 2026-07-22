@@ -1,7 +1,7 @@
 # BetterBob — agent notes
 
 macOS menu-bar client for HiBob time tracking, plus an iOS companion app
-sharing the same `Sources/` core. The Mac app is a single-module SwiftUI app
+sharing the `Packages/BetterBobShared` core. The Mac app is a single-module SwiftUI app
 built with plain `swiftc` — no Xcode project. Requires Apple Silicon +
 macOS 26 toolchain (`xcrun --show-sdk-version` → 26.x).
 
@@ -43,7 +43,8 @@ native iOS 26 Liquid Glass app:
   Type styles — never the Mac's fixed 10–12pt fonts.
 - `iOS/Sources/App` — shell, lifecycle, BGAppRefreshTask, widget bridge;
   `iOS/Sources/Widgets` — widget extension + Live Activity;
-  `iOS/Resources/Assets.xcassets` — Bob app icon + teal AccentColor.
+  `iOS/Resources/Assets.xcassets` — Bob app icon + navy AccentColor (the
+  icon's background; the brand color is pinned, hue 0.598).
 - Build/run on a device from Xcode (personal team, automatic signing):
   `./Scripts/gen-ios.sh && open iOS/BetterBob-iOS.xcodeproj`.
 - Verification builds go against the iOS simulator with
@@ -94,27 +95,35 @@ native iOS 26 Liquid Glass app:
 - **Don't launch the built app to verify UI** — a second instance polls HiBob
   and the auto-break engine may write real attendance entries. Verify drawing
   code by compiling the file standalone with a small driver (works for
-  self-contained files like `Sources/UI/BobMascot.swift`).
+  self-contained files like the package's `UI/BobMascot.swift`).
 - **`Bob-TimeZoneOffset` header is required** on clockStatus calls or HiBob
   computes "now" in UTC (phantom clocked-in state, midnight bugs). Routes live
-  in `Sources/Services/BobClient.swift`; if HiBob's private API changes,
+  in the package's `Services/BobClient.swift`; if HiBob's private API changes,
   re-capture per `Docs/endpoints.md` (`--capture-endpoints` launch flag).
 - **No emojis in UI copy** — BetterBob's text and Bob's captions stay plain.
-- Attendance math is pure and unit-tested in `Services/AttendanceLogic` —
-  put new time logic there (functions take entries + explicit `now`) and add
-  `expect()` cases to `Tests/main.swift`.
+- Attendance math is pure and unit-tested in the package's
+  `Services/AttendanceLogic.swift` — put new time logic there (functions take
+  entries + explicit `now`) and add `expect()` cases to `Tests/main.swift`.
 
 ## Layout
 
 ```
-Sources/
-  App/          @main + menu-bar status item
-  Models/       core value types (entries, clock state, Fmt helpers)
-  Services/     AttendanceLogic (pure math), BobClient (API), BobState
-                (polling engine), BobParsing, Keychain, TOTP, Prefs, Updater, …
-  Features/     Popover, Dashboard (today/month/time off), Onboarding, Settings
-  Intents/      Siri / Shortcuts
-  UI/           Bob the mascot (incl. menu-bar icon drawing) + shared components
-Tests/          unit tests
-Docs/           internal API capture guide + route table
+Sources/                          Mac-only
+  App/                            @main + menu-bar status item
+  Features/                       Popover, Dashboard (MainWindow + panes), Settings glue
+  Services/                       Updater, Uninstaller, WiFiMonitor
+  Intents/                        Siri / Shortcuts (compiles into both app targets)
+Packages/BetterBobShared/Sources/BetterBobShared/
+  Models/                         core value types (entries, clock state, Fmt helpers)
+  Services/                       AttendanceLogic (pure math), BobClient (API),
+                                  BobState (polling engine), BobParsing, Keychain,
+                                  TOTP, Prefs, Notifier, …
+  Features/                       shared UI: heroes + glass dock (TodayVariants),
+                                  FreshDayWelcome, dashboard sections, day strip,
+                                  time off, Settings panel, Onboarding, SSO sign-in
+  UI/                             Bob mascot family (incl. menu-bar icon), colors,
+                                  motion, window-visibility tracker
+iOS/                              XcodeGen app + widgets (see above)
+Tests/                            unit tests
+Docs/                             internal API capture guide + route table
 ```

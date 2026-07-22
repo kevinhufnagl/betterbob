@@ -55,13 +55,14 @@ one-click update when a new version is out.
 The first time — or any time you're signed out — Bob opens a sign-in window with
 two choices:
 
-- **Automatic** *(recommended)* — save your password and authenticator code once,
-  and Bob signs you back in by himself after sleep, restarts, or when the session
-  expires. Everything is stored only in your Mac's Keychain. Works when your login
-  uses a password plus a 6-digit code (not for Okta Verify "approve on your
-  phone" prompts).
-- **Browser** — sign in through HiBob's normal login page (Okta push included).
-  Quick, but you'll sign in again whenever the session expires.
+- **Automatic** *(recommended)* — save your password once (it lives only in
+  your Mac's Keychain) and pick your second factor: a Google Authenticator
+  code, an Okta Verify code, or an Okta Verify push. Bob fills the password
+  and drives Okta by himself; you just type the current 6-digit code into a
+  small prompt — or tap Approve on your phone for push. Codes are never
+  stored, only the password.
+- **Browser** — sign in through HiBob's normal login page. Quick, but you'll
+  sign in again whenever the session expires.
 
 ## Around the app
 
@@ -99,18 +100,24 @@ Shortcuts, and the Action Button.
 
 ## For developers
 
-A single-module SwiftUI app built with plain `swiftc` — no Xcode project.
-Requires an Apple Silicon Mac on **macOS 26** (Tahoe) and the matching toolchain
-(`xcrun --show-sdk-version` → 26.x).
+The Mac app is a single-module SwiftUI app built with plain `swiftc` — no
+Xcode project. Requires an Apple Silicon Mac on **macOS 26** (Tahoe) and the
+matching toolchain (`xcrun --show-sdk-version` → 26.x). There is also a native
+iOS 26 companion app built from the same shared core (`iOS/`, XcodeGen +
+SwiftPM) — build it on your own device from Xcode; it isn't distributed.
 
 ```sh
-./Scripts/build.sh          # build build/BetterBob.app
+./Scripts/build.sh          # build build/BetterBob.app (macOS)
 ./Scripts/test.sh           # run the unit tests
+./Scripts/gen-ios.sh        # regenerate the iOS Xcode project (brew install xcodegen)
 ./Scripts/release.sh 1.3    # bump, build, tag, push, publish a GitHub release
 ```
 
-The attendance logic lives in `Services/AttendanceLogic` as pure, unit-tested
-functions (auto-break decisions, gap/overlap fixing, moving a break). HiBob's
+Cross-platform code — the engine and the shared SwiftUI — lives in
+`Packages/BetterBobShared`; the Mac build compiles it directly into its single
+module, the iOS app links it as a real SwiftPM dependency. The attendance
+logic lives in the package's `Services/AttendanceLogic.swift` as pure,
+unit-tested functions (auto-break decisions, gap/overlap fixing, moving a break). HiBob's
 routes are all in one place (`BobClient`), the JSON parser is deliberately
 tolerant, and one required header (`Bob-TimeZoneOffset`) makes the server report
 your punch state in your own timezone instead of UTC. The private API is
@@ -118,18 +125,15 @@ unofficial and can change without notice — when it does, re-capture the routes
 per `Docs/endpoints.md`.
 
 ```
-Sources/
-  App/          @main + menu-bar status item
-  Models/       core value types (entries, clock state, …)
-  Services/     AttendanceLogic (pure math), BobClient (API), BobState
-                (polling engine), BobParsing, Keychain, TOTP, Prefs, Updater, …
-  Features/     Popover, Dashboard (today/month/time off + draggable timeline),
-                Onboarding (sign-in), Settings
-  Intents/      Siri / Shortcuts
-  UI/           Bob the mascot + shared components
-Tests/          unit tests (Scripts/test.sh)
-Docs/           internal API capture guide + route table
-Scripts/        build.sh, test.sh, release.sh, generate_icon.swift
+Sources/                  Mac-only: menu-bar app, Popover, Dashboard window,
+                          Updater, Wi-Fi tagging, Siri/Shortcuts
+Packages/BetterBobShared/ the shared core: engine (BobClient, BobState,
+                          AttendanceLogic, Keychain, Prefs, …) and shared UI
+                          (Bob, heroes, welcome, day strip, calendars)
+iOS/                      the iOS app + widgets (XcodeGen project)
+Tests/                    unit tests (Scripts/test.sh)
+Docs/                     internal API capture guide + route table
+Scripts/                  build.sh, test.sh, gen-ios.sh, release.sh, …
 ```
 
 ## License
