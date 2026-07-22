@@ -168,10 +168,14 @@ public struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             summaryRow("envelope.fill", email.isEmpty ? "No email set" : email)
             summaryRow("key.fill", "Password ••••••••")
-            summaryRow("keyboard", "You type the code at sign-in")
+            summaryRow("keyboard", hasSecret ? "Codes come from your stored secret"
+                                             : "You type the code at sign-in")
             if !state.autoLoginInProgress {
                 VStack(spacing: 8) {
-                    SignInFactorGroup(state: state)
+                    // Signing in again only makes sense while signed out.
+                    if !state.signedIn {
+                        SignInFactorGroup(state: state)
+                    }
                     HStack(spacing: 8) {
                         Spacer()
                         Button("Edit") { editing = true }.controlSize(.small)
@@ -188,6 +192,7 @@ public struct OnboardingView: View {
         Keychain.set(nil, for: .password)
         Keychain.set(nil, for: .totpSecret)
         hasSecret = false
+        state.objectWillChange.send()
         UserDefaults.standard.removeObject(forKey: "lastAccountEmail")
         Prefs.shared.autofillEnabled = false
         Prefs.shared.autoReloginOnExpiry = false
@@ -236,6 +241,9 @@ public struct OnboardingView: View {
                             Keychain.set(nil, for: .totpSecret)
                             hasSecret = false
                             secretDraft = ""
+                            // fullyAutomatic is Keychain-derived — nudge the
+                            // shared state so factor groups elsewhere re-read.
+                            state.objectWillChange.send()
                         }.controlSize(.small)
                     }
                 } else {
@@ -266,10 +274,22 @@ public struct OnboardingView: View {
                             hasSecret = Keychain.has(.totpSecret)
                             editingSecret = false
                             secretDraft = ""
+                            state.objectWillChange.send()
                         }
                         .controlSize(.small).buttonStyle(.borderedProminent)
                         .disabled(TOTP.code(secretBase32: secretDraft) == nil)
                     }
+                }
+                if hasSecret {
+                    // Hands-free expiry re-login is only possible with a
+                    // stored secret — the checkbox appears alongside it.
+                    Toggle(isOn: $prefs.autoReloginOnExpiry) {
+                        Text("Sign back in by himself when the session expires")
+                            .font(.system(size: 11))
+                    }
+                    #if os(macOS)
+                    .toggleStyle(.checkbox)
+                    #endif
                 }
                 Label("This weakens two-factor sign-in: the secret sits in this Mac's Keychain next to your password, so anyone who can unlock this Mac can generate your codes. Prefer the typed code or the push unless you really want zero prompts.",
                       systemImage: "exclamationmark.triangle.fill")

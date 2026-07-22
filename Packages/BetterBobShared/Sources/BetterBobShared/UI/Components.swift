@@ -252,18 +252,34 @@ public struct SignInFactorGroup: View {
     public init(state: BobState) { self.state = state }
 
     public var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(SignInFactor.allCases.enumerated()), id: \.element.id) { i, factor in
-                if i > 0 { Divider().frame(height: 34) }
-                Button { state.startAutoSignIn(factor: factor) } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: factor.icon).font(.system(size: 13, weight: .semibold))
-                        Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
+        Group {
+            if state.fullyAutomatic {
+                // A stored authenticator secret only works with the Google
+                // Authenticator flow — nothing to choose, one button does it.
+                Button { state.startAutoSignIn(factor: .googleAuthenticator) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "wand.and.rays").font(.system(size: 12, weight: .semibold))
+                        Text("Log in automatically").font(.system(size: 12, weight: .semibold))
                     }
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity).padding(.vertical, 11)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(Array(SignInFactor.allCases.enumerated()), id: \.element.id) { i, factor in
+                        if i > 0 { Divider().frame(height: 34) }
+                        Button { state.startAutoSignIn(factor: factor) } label: {
+                            VStack(spacing: 3) {
+                                Image(systemName: factor.icon).font(.system(size: 13, weight: .semibold))
+                                Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
         .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
