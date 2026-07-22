@@ -606,7 +606,10 @@ public struct CalendarHeatmap: View {
                         ForEach(days, id: \.date) { day in cell(day) }
                     }
                     legend
-                    missingReasonControl
+                    if state.daysMissingReason > 0, !state.reasonOptions.isEmpty {
+                        Divider().opacity(0.12).padding(.vertical, 4)
+                        missingReasonControl
+                    }
                 }
             } else {
                 Text("Loading cycle…").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -619,27 +622,44 @@ public struct CalendarHeatmap: View {
     /// entries that are missing one; anything already tagged is left alone.
     @ViewBuilder private var missingReasonControl: some View {
         let n = state.daysMissingReason
-        if n > 0, !state.reasonOptions.isEmpty {
-            HStack(spacing: 8) {
-                Circle().fill(Color.bobViolet).frame(width: 8, height: 8)
-                Text(n == 1 ? "1 day has a work entry with no reason"
-                            : "\(n) days have work entries with no reason")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                Spacer()
-                Menu {
-                    ForEach(state.reasonOptions, id: \.self) { opt in
-                        Button(opt.name) { state.applyReasonToMissing(opt) }
-                    }
-                } label: {
-                    Label("Set reason for all", systemImage: "wand.and.stars")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .menuStyle(.button)
-                .fixedSize()
-                .disabled(state.busy)
+        HStack(spacing: 11) {
+            Image(systemName: "tag.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.bobViolet)
+                .frame(width: 28, height: 28)
+                .background(Color.bobViolet.opacity(0.14),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(n == 1 ? "1 day needs a reason" : "\(n) days need a reason")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Tag every work entry that has none — tagged ones stay as they are.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 2)
+            Spacer(minLength: 8)
+            Menu {
+                ForEach(state.reasonOptions, id: \.self) { opt in
+                    Button(opt.name) { state.applyReasonToMissing(opt) }
+                }
+            } label: {
+                Label("Set reason", systemImage: "wand.and.stars")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.bobViolet)
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Capsule().fill(Color.bobViolet.opacity(0.16)))
+                    .overlay(Capsule().strokeBorder(Color.bobViolet.opacity(0.4), lineWidth: 0.8))
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .disabled(state.busy)
         }
+        .padding(12)
+        .background(Color.bobViolet.opacity(0.07),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(Color.bobViolet.opacity(0.25), lineWidth: 0.8))
     }
 
     private func leadingBlanks(_ days: [DayHours]) -> Int {
