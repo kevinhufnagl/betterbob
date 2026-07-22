@@ -78,6 +78,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     private var onFinish: ((Bool) -> Void)?
     private var autofillTimer: Timer?
     private var deadline: Date?
+    /// Stall tracking: the last step token and when it first appeared.
+    private var lastStep: String?
+    private var lastStepSince: Date?
 
     // MARK: - Entry points
 
@@ -111,6 +114,8 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         self.factor = factor
         self.enteredCode = nil
         self.autoOTPFailed = false
+        self.lastStep = nil
+        self.lastStepSince = nil
         self.deadline = Date().addingTimeInterval(300)
         makeSession(visible: false)   // browser stays invisible the whole time
         load()
@@ -287,8 +292,22 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                 if driven || Prefs.shared.autofillEnabled,
                    let js = self.autofillJS(click: driven) {
                     web.evaluateJavaScript(js) { result, _ in
-                        if driven, let step = result as? String {
-                            BobState.shared.autoLoginStatus = self.friendlyStatus(step)
+                        if driven, let raw = result as? String {
+                            let parts = raw.components(separatedBy: "||")
+                            let step = parts[0]
+                            let hint = parts.dropFirst().joined(separator: " — ")
+                            if step != self.lastStep {
+                                self.lastStep = step
+                                self.lastStepSince = Date()
+                            }
+                            // A stalled drive names the page it's stuck on —
+                            // that detail is the whole diagnosis when a
+                            // teammate's flow differs from the known one.
+                            let stalled = Date().timeIntervalSince(self.lastStepSince ?? Date()) > 18
+                                && !BobState.shared.awaitingOTP && !BobState.shared.pushPending
+                            BobState.shared.autoLoginStatus = stalled && !hint.isEmpty
+                                ? self.friendlyStatus(step) + " — stuck at \(hint)"
+                                : self.friendlyStatus(step)
                             if self.drive == .assisted {
                                 if self.factor.isPush {
                                     BobState.shared.pushPending = (step == "push")
@@ -433,6 +452,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // Push factor: once we've selected it and there's no field left, we're
           // on the "we sent a push, approve on your phone" screen — waiting.
           if (factor === 'ovp' && window.__bbFactorPicked && !present && !onHibob) step = 'push';
+          // Compact page hint carried on every return — surfaced in the
+          // status line when a step stalls, naming the exact stuck page.
+          var hintBtns = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]'))
+            .filter(shown)
+            .map(function(x){ return (x.value || x.textContent || '').trim().replace(/\\s+/g,' ').slice(0, 24); })
+            .filter(function(t){ return t; })
+            .slice(0, 3).join(', ');
+          var pageHint = '||' + location.hostname + (hintBtns ? '||' + hintBtns : '');
           var justFilled = false, ready = false;
           // Never fill HiBob's own password/code fields — the account is
           // Okta-managed; a fresh device's gateway shows the native form next
@@ -442,7 +469,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             if (r === 1) justFilled = true;
             if (r === 2) ready = true;
           });
-          if (!\(click ? "true" : "false")) return step;
+          if (!\(click ? "true" : "false")) return step + pageHint;
           if (onHibob) {
             // HiBob's gateway: click "Continue with Okta" if it's there —
             // regardless of whether the native form is also showing. Only an
@@ -454,13 +481,13 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                 var s2 = (x.value || x.textContent || '').toLowerCase();
                 return s2.indexOf('okta') >= 0 || s2.indexOf('continue with') >= 0 || s2.indexOf('sso') >= 0;
               });
-              if (t) { window.__bbSsoClicked = true; t.click(); return step; }
+              if (t) { window.__bbSsoClicked = true; t.click(); return step + pageHint; }
             }
             if (email && email.value && !justFilled) {
               var esig = 'gw:' + email.value;
               if (window.__bbSubmitted !== esig) { window.__bbSubmitted = esig; clickSubmit(email); }
             }
-            return step;
+            return step + pageHint;
           }
           // Only submit on a later tick — once the field already holds the value
           // (ready) and we didn't just type it (justFilled). Clicking in the same
@@ -521,7 +548,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               b.click();
             }
           }
-          return step;
+          return step + pageHint;
         })();
         """
     }
