@@ -151,29 +151,29 @@ struct PopoverRootView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if state.signedIn {
-                // A labeled capsule rather than a bare glyph — opening the
-                // dashboard is the header's one action, so it reads as one.
-                Button {
-                    openAppWindow("main")
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "macwindow")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Dashboard")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(Color.primaryAccent(scheme))
-                    .padding(.horizontal, 9)
-                    .frame(height: 22)
-                    .background(Capsule().fill(Color.primaryAccent(scheme).opacity(0.13)))
-                    .overlay(Capsule().strokeBorder(
-                        Color.primaryAccent(scheme).opacity(0.30), lineWidth: 0.7))
-                    .contentShape(Capsule())
+            // A labeled capsule rather than a bare glyph — opening the
+            // dashboard is the header's one action, so it reads as one.
+            // Shown signed out too, since the dashboard is also where sign-in
+            // setup lives.
+            Button {
+                openAppWindow("main")
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Dashboard")
+                        .font(.system(size: 10, weight: .semibold))
                 }
-                .buttonStyle(.plain)
-                .fastTooltip("Open the BetterBob dashboard")
+                .foregroundStyle(Color.primaryAccent(scheme))
+                .padding(.horizontal, 9)
+                .frame(height: 22)
+                .background(Capsule().fill(Color.primaryAccent(scheme).opacity(0.13)))
+                .overlay(Capsule().strokeBorder(
+                    Color.primaryAccent(scheme).opacity(0.30), lineWidth: 0.7))
+                .contentShape(Capsule())
             }
+            .buttonStyle(.plain)
+            .fastTooltip("Open the BetterBob dashboard")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
