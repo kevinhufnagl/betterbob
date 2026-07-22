@@ -59,12 +59,6 @@ Verify push. Bob fills the password and drives Okta by himself; you just type
 the current 6-digit code into a small prompt, or tap Approve on your phone.
 Codes are never stored, only the password.
 
-For zero prompts there's a tucked-away extra under **Settings → Advanced**:
-store your authenticator secret and Bob generates the codes himself, signing
-you back in completely hands-free whenever the session expires. Mind the
-trade-off it spells out — the secret then lives in your Keychain next to your
-password, which weakens two-factor sign-in.
-
 ## Around the app
 
 **Menu bar** — your status at a glance: Bob wears a little play or pause badge
