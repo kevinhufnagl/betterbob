@@ -66,6 +66,11 @@ public final class Prefs: ObservableObject {
         didSet { UserDefaults.standard.set(notifyOverMax, forKey: "notifyOverMax") }
     }
 
+    /// Notify when the in-app updater has installed a new version.
+    @Published public var notifyAppUpdate: Bool {
+        didSet { UserDefaults.standard.set(notifyAppUpdate, forKey: "notifyAppUpdate") }
+    }
+
     /// Total worked time per day past which the day is flagged red. Warning
     /// only — unlike a missing break there is nothing to auto-fix. Default 10h.
     @Published public var maxDayMinutes: Int {
@@ -215,6 +220,7 @@ public final class Prefs: ObservableObject {
         self.notifyTargetReached = d.object(forKey: "notifyTargetReached") as? Bool ?? true
         self.notifyDeadline = d.object(forKey: "notifyDeadline") as? Bool ?? true
         self.notifyOverMax = d.object(forKey: "notifyOverMax") as? Bool ?? true
+        self.notifyAppUpdate = d.object(forKey: "notifyAppUpdate") as? Bool ?? true
         self.maxDayMinutes = d.object(forKey: "maxDayMinutes") as? Int ?? 600
         // Per-state menu-bar text. Seed from the old single choice (or the even
         // older boolean) so the menu bar looks the same after updating: the old

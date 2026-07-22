@@ -78,7 +78,9 @@ final class Updater: ObservableObject {
                 try await downloadAndInstall(release)
                 installed = release
                 phase = .upToDate
-                Notifier.updateInstalled(version: release.version)
+                if Prefs.shared.notifyAppUpdate {
+                    Notifier.updateInstalled(version: release.version)
+                }
             } else {
                 phase = .upToDate
             }

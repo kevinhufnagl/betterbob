@@ -94,8 +94,14 @@ public struct OnboardingView: View {
             VStack(spacing: 18) {
                 header
                 autoCard
-                advancedToggle
-                if advancedOpen { advancedCard }
+                // The Advanced path stores an authenticator secret for
+                // hands-free Google Authenticator sign-in — which also can't
+                // work once Okta Verify routes this Mac through its device
+                // flow. Hide it there too.
+                if !SignInFactorGroup.oktaVerifyInstalled {
+                    advancedToggle
+                    if advancedOpen { advancedCard }
+                }
                 Text("Your details are stored only in your Mac's login Keychain and used only against HiBob's login form — never sent anywhere else.")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

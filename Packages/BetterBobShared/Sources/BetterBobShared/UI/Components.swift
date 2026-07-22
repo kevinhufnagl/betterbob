@@ -257,7 +257,7 @@ public struct SignInFactorGroup: View {
     /// Authenticator, Okta Verify code) are dropped server-side and can't be
     /// reached. So there's no point offering them; show only push. Computed
     /// once — the install state won't change mid-session.
-    static let oktaVerifyInstalled: Bool = {
+    public static let oktaVerifyInstalled: Bool = {
         #if os(macOS)
         if FileManager.default.fileExists(atPath: "/Applications/Okta Verify.app") { return true }
         for id in ["com.okta.verify", "com.okta.mobile", "com.okta.macos.verify"] {
@@ -302,7 +302,7 @@ public struct SignInFactorGroup: View {
                 } else if orderedFactors.count == 1, let only = orderedFactors.first {
                     // Just one usable method (Okta Verify installed): a single,
                     // clearly-a-button row rather than a lone segment.
-                    soloButton(icon: only.icon, title: "Sign in with \(only.shortLabel)") {
+                    soloButton(icon: only.icon, title: "Sign in with Okta Verify") {
                         state.startAutoSignIn(factor: only)
                     }
                 } else {

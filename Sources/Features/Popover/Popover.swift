@@ -446,12 +446,17 @@ struct PopoverRootView: View {
                 // for browser / other options.
                 VStack(spacing: 8) {
                     SignInFactorGroup(state: state)
-                    Button("More options") {
-                        NotificationCenter.default.post(name: .closePopover, object: nil)
-                        OnboardingController.shared.present()
+                    // "More options" opens the window's factor choices/Advanced
+                    // path — pointless when Okta Verify is the only usable
+                    // method, so hide it then.
+                    if !SignInFactorGroup.oktaVerifyInstalled {
+                        Button("More options") {
+                            NotificationCenter.default.post(name: .closePopover, object: nil)
+                            OnboardingController.shared.present()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
             } else {
                 // No stored credentials: the window is where you set up automatic

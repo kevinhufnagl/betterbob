@@ -266,6 +266,10 @@ public struct SettingsPanel: View {
                 .font(.system(size: 12))
             Toggle("Authenticator code needed to reconnect", isOn: $prefs.notifyAwaitingCode)
                 .font(.system(size: 12))
+            #if os(macOS)
+            Toggle("App updated to a new version", isOn: $prefs.notifyAppUpdate)
+                .font(.system(size: 12))
+            #endif
         }
     }
 
