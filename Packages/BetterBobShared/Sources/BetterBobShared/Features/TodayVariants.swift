@@ -194,12 +194,14 @@ private struct DockButton: View {
             .padding(.horizontal, padH)
             .frame(height: dockHeight)
             .background(
-                // Solid fill sits a notch deeper than controlAccent in dark
-                // mode so the white label keeps its contrast.
+                // Accent fill sits a notch deeper than controlAccent in dark
+                // mode so the white label keeps its contrast — and stays
+                // translucent so the dock's glass (and the water behind it)
+                // shimmers through instead of reading as a solid sticker.
                 Capsule().fill(prominent
-                    ? AnyShapeStyle(scheme == .dark
+                    ? AnyShapeStyle((scheme == .dark
                         ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
-                        : Color.controlAccent(scheme))
+                        : Color.controlAccent(scheme)).opacity(0.75))
                     : AnyShapeStyle(Color.primary.opacity(hovering ? 0.10 : 0.05))))
             .overlay {
                 if prominent {
