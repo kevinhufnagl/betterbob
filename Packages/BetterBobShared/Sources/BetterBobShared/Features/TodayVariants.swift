@@ -189,19 +189,17 @@ private struct DockButton: View {
                         .font(.system(size: captionSize, weight: .medium)).opacity(0.75)
                 }
             }
-            .foregroundStyle(prominent ? AnyShapeStyle(.white)
-                                       : AnyShapeStyle(Color.primary.opacity(0.85)))
+            .foregroundStyle(Color.primary.opacity(prominent ? 0.9 : 0.85))
             .padding(.horizontal, padH)
             .frame(height: dockHeight)
             .background(
-                // Accent fill sits a notch deeper than controlAccent in dark
-                // mode so the white label keeps its contrast — and stays
-                // translucent so the dock's glass (and the water behind it)
-                // shimmers through instead of reading as a solid sticker.
+                // The welcome button's soft accent wash, as a fill: the dock's
+                // glass beneath supplies the blur, so a 30% accent over it
+                // reads as tinted glass — prominent without a solid sticker.
                 Capsule().fill(prominent
                     ? AnyShapeStyle((scheme == .dark
                         ? Color.systemAccentHued(sat: 0.72, bri: 0.78)
-                        : Color.controlAccent(scheme)).opacity(0.75))
+                        : Color.controlAccent(scheme)).opacity(0.30))
                     : AnyShapeStyle(Color.primary.opacity(hovering ? 0.10 : 0.05))))
             .overlay {
                 if prominent {
