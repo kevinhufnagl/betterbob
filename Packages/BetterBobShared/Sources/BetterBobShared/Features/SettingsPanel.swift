@@ -85,7 +85,7 @@ public struct SettingsPanel: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(state.autoLoginInProgress)
 
-                Text("Opens the sign-in window where you save your password (Keychain only) — at sign-in Bob fills it and you type the one-time code or approve the Okta push. Edit or forget your saved sign-in there any time; a fully automatic option lives under Advanced there.")
+                Text("Opens the sign-in window where you save your password (Keychain only) — at sign-in Bob fills it and you type the one-time code or approve the Okta Verify push. Edit or forget your saved sign-in there any time; a fully automatic option lives under Advanced there.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

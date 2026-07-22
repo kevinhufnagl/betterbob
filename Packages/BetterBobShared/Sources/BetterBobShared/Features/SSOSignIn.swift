@@ -30,8 +30,8 @@ public enum SignInFactor: String, CaseIterable, Identifiable {
     public var shortLabel: String {
         switch self {
         case .googleAuthenticator: return "Google"
-        case .oktaVerifyCode: return "Okta code"
-        case .oktaVerifyPush: return "Okta push"
+        case .oktaVerifyCode: return "Okta Verify code"
+        case .oktaVerifyPush: return "Okta Verify push"
         }
     }
     public var icon: String {
