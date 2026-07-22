@@ -303,7 +303,7 @@ public struct SignInFactorGroup: View {
             // by what's enrolled — many tenants only accept Okta Verify, so the
             // code options can silently fail. Say so rather than let it surprise.
             if !state.fullyAutomatic {
-                Text("Okta Verify push is the reliable choice. If your company requires it, Google Authenticator and Okta Verify code may not be offered.")
+                Text("Okta Verify push is the most reliable. The code methods depend on Okta offering them at sign-in.")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
