@@ -96,7 +96,11 @@ struct MainWindow: View {
                     }
                 }
             }
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            // Hide the toolbar material only on the fresh-day pool, where the
+            // water must show through. On the scrolling tabs keep it automatic
+            // so macOS blurs content as it passes under the toolbar (the native
+            // look) — the backdrop still shows through that translucent material.
+            .toolbarBackgroundVisibility(showFreshWelcome ? .hidden : .automatic, for: .windowToolbar)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button { Task { await state.reconcile() } } label: {
