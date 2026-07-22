@@ -140,14 +140,23 @@ public struct OnboardingView: View {
 
     // MARK: Automatic sign-in (recommended, first)
 
+    /// This Mac signs in with Okta Verify (its SSO extension is installed), so
+    /// no code is ever typed — copy that mentions a code must adapt.
+    private var oktaOnly: Bool { SignInFactorGroup.oktaVerifyInstalled }
+
     private var autoCard: some View {
         OnboardingCard(
             symbol: "wand.and.rays", tint: .accentColor,
-            title: "Sign in with your password", badge: "Recommended", tag: "One code",
-            blurb: "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
+            title: "Sign in with your password", badge: "Recommended",
+            tag: oktaOnly ? "" : "One code",
+            blurb: oktaOnly
+                ? "Save your HiBob password. When the session expires Bob fills it in and you approve the sign-in in Okta Verify."
+                : "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Works with a password plus any second factor — a typed authenticator code or an Okta Verify push.",
+                Label(oktaOnly
+                      ? "Works with your password plus Okta Verify on this Mac."
+                      : "Works with a password plus any second factor — a typed authenticator code or an Okta Verify push.",
                       systemImage: "info.circle")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -174,15 +183,11 @@ public struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             summaryRow("envelope.fill", email.isEmpty ? "No email set" : email)
             summaryRow("key.fill", "Password ••••••••")
-            // How the second factor is handled — accurate to the environment:
-            // Okta Verify installed → push approval; stored secret → generated;
-            // otherwise → typed at sign-in.
-            if SignInFactorGroup.oktaVerifyInstalled {
-                summaryRow("bell.badge.fill", "Approve the sign-in in Okta Verify")
-            } else if hasSecret {
-                summaryRow("keyboard", "Codes come from your stored secret")
-            } else {
-                summaryRow("keyboard", "You type the code at sign-in")
+            // The code line is only accurate when a code is actually typed —
+            // omit it when Okta Verify handles sign-in on this Mac.
+            if !SignInFactorGroup.oktaVerifyInstalled {
+                summaryRow("keyboard", hasSecret ? "Codes come from your stored secret"
+                                                 : "You type the code at sign-in")
             }
             if !state.autoLoginInProgress {
                 VStack(spacing: 8) {
@@ -332,7 +337,9 @@ public struct OnboardingView: View {
             field("Password") {
                 SecureField("HiBob / Okta password", text: $password).textFieldStyle(.roundedBorder)
             }
-            Label("Bob saves your password, then you pick how to sign in. He fills your email + password automatically and stops at the authenticator step so you type the current code (or approve a push). Your code is never stored.",
+            Label(oktaOnly
+                  ? "Bob saves your password, fills your email + password automatically, and stops at the authenticator step so you approve the sign-in in Okta Verify."
+                  : "Bob saves your password, then you pick how to sign in. He fills your email + password automatically and stops at the authenticator step so you type the current code (or approve a push). Your code is never stored.",
                   systemImage: "keyboard")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -401,12 +408,14 @@ private struct OnboardingCard<Content: View>: View {
                         .background(Capsule().fill(tint == .secondary ? Color.primary : tint))
                 }
                 Spacer()
-                Text(tag)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Capsule().fill(Color.primary.opacity(0.06)))
-                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.7))
+                if !tag.isEmpty {
+                    Text(tag)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.primary.opacity(0.06)))
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.7))
+                }
             }
             Text(blurb)
                 .font(.system(size: 11)).foregroundStyle(.secondary)
