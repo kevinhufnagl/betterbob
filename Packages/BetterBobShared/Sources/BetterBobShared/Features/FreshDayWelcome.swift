@@ -379,18 +379,20 @@ public struct FreshDayWelcome: View {
 private struct WelcomeClockInButton: View {
     @ObservedObject var state: BobState
 
+    // A size up from the dock's buttons — the lone action on the whole
+    // screen can afford the presence.
     #if os(iOS)
+    private let symSize: CGFloat = 16
+    private let labelSize: CGFloat = 17
+    private let captionSize: CGFloat = 12
+    private let height: CGFloat = 56
+    private let padH: CGFloat = 28
+    #else
     private let symSize: CGFloat = 14
     private let labelSize: CGFloat = 15
-    private let captionSize: CGFloat = 11
-    private let height: CGFloat = 48
-    private let padH: CGFloat = 22
-    #else
-    private let symSize: CGFloat = 12
-    private let labelSize: CGFloat = 13
-    private let captionSize: CGFloat = 9
-    private let height: CGFloat = 40
-    private let padH: CGFloat = 18
+    private let captionSize: CGFloat = 10
+    private let height: CGFloat = 46
+    private let padH: CGFloat = 24
     #endif
 
     var body: some View {
