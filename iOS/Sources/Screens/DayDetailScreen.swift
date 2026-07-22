@@ -82,6 +82,7 @@ struct DayDetailScreen: View {
                 if let day {
                     EntryEditSheet(entry: edit.entry,
                                    reasonOptions: state.reasonOptions,
+                                   isLast: day.entries.max(by: { $0.start < $1.start })?.id == edit.entry.id,
                                    onSave: { start, end in
                                        state.updateEntryTimes(edit.entry, in: day.entries,
                                                               on: day.date, start: start, end: end)

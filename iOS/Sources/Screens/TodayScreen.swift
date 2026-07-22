@@ -75,6 +75,7 @@ struct TodayScreen: View {
         .sheet(item: $editingEntry) { edit in
             EntryEditSheet(entry: edit.entry,
                            reasonOptions: state.reasonOptions,
+                           isLast: isLastEntry(edit.entry),
                            onSave: { start, end in
                                state.updateEntryTimes(edit.entry, start: start, end: end)
                            },
@@ -90,6 +91,12 @@ struct TodayScreen: View {
             }
             .presentationDetents([.medium])
         }
+    }
+
+    /// The day's chronologically last entry — the only one that can be
+    /// reopened by clearing its end.
+    private func isLastEntry(_ entry: AttendanceEntry) -> Bool {
+        state.entries.max(by: { $0.start < $1.start })?.id == entry.id
     }
 
     /// A one-hour slot ending at the most recent entry's start (so a new entry

@@ -12,6 +12,9 @@ struct EntryEdit: Identifiable {
 struct EntryEditSheet: View {
     let entry: AttendanceEntry
     var reasonOptions: [ReasonOption] = []
+    /// The day's chronologically last entry can be reopened (clear its end),
+    /// like the Mac — reverts a clock-out / end-break so you're still going.
+    var isLast: Bool = false
     var onSave: (Date, Date?) -> Void
     var onReason: (ReasonOption) -> Void = { _ in }
     var onDelete: () -> Void
@@ -24,11 +27,13 @@ struct EntryEditSheet: View {
 
     init(entry: AttendanceEntry,
          reasonOptions: [ReasonOption] = [],
+         isLast: Bool = false,
          onSave: @escaping (Date, Date?) -> Void,
          onReason: @escaping (ReasonOption) -> Void = { _ in },
          onDelete: @escaping () -> Void) {
         self.entry = entry
         self.reasonOptions = reasonOptions
+        self.isLast = isLast
         self.onSave = onSave
         self.onReason = onReason
         self.onDelete = onDelete
@@ -84,6 +89,21 @@ struct EntryEditSheet: View {
                     }
                     .buttonStyle(.glassProminent)
                     .controlSize(.large)
+
+                    // Reopen: clear the end so the entry is running again.
+                    // Only the day's last entry — reopening a middle one would
+                    // leave an open entry stranded between later ones.
+                    if !isOpen, isLast {
+                        Button {
+                            onSave(start, nil)
+                            dismiss()
+                        } label: {
+                            Label("Reopen — clear end time", systemImage: "arrow.uturn.backward")
+                                .font(.body.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 28)
+                        }
+                        .buttonStyle(.glass)
+                    }
 
                     Button(role: .destructive) {
                         onDelete()
