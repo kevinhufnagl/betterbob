@@ -8,11 +8,6 @@ struct PopoverRootView: View {
     @ObservedObject var updater = Updater.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var scheme
-    // Measured live so Bob floats in the water beside the text only when the
-    // popover is genuinely wide enough for his whole body (see workedHeader).
-    @State private var heroWidth: CGFloat = 0
-    @State private var heroTextWidth: CGFloat = 0
-    @State private var heroWaterFraction: CGFloat = 0
 
     private func kindColor(_ kind: AttendanceEntry.Kind) -> Color {
         kind == .breakTime ? .breakAccent(scheme) : .workAccent(scheme)
@@ -312,37 +307,10 @@ struct PopoverRootView: View {
     private func workedHeader(now: Date) -> some View {
         let v = TodayVals(state, now: now)
         let dryAwake = v.fraction < 0.15 && state.clockState != .clockedOut
-        // Float Bob fully inside the water toward its right edge once the
-        // waterline clears the text. Compact leading pad is 12; Bob is 44.
-        let bobSize: CGFloat = 44
-        let inset: CGFloat = 10
-        let gap: CGFloat = 8
-        let textRight = 12 + heroTextWidth
-        // Floater-vs-straddler from the TARGET fill (stable across the reopen
-        // sweep); reveal + position from the DISPLAYED waterline so he rides
-        // the wave in and never flashes top-left or sits ahead of it.
-        let targetRight = CGFloat(v.fraction) * heroWidth - inset
-        let shownRight = heroWaterFraction * heroWidth - inset
-        let isFloater = v.fraction >= 0.15 && heroWidth > 0
-            && (targetRight - bobSize) >= (textRight + gap)
-        let canFloat = isFloater && (shownRight - bobSize) >= (textRight + gap)
-        let bobCenterX = max(bobSize / 2, shownRight - bobSize / 2)
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                        compact: true, bottomInset: 20)
                 .statusTint(state.heroLimitTint)
-                .waterRider(canFloat ? 0.5 : nil)
-                .overlay(alignment: .leading) {
-                    if canFloat {
-                        BuoyBob(sleeping: state.clockState == .clockedOut,
-                                onBreak: v.onBreak, size: bobSize, submerged: true)
-                            .offset(x: bobCenterX - bobSize / 2)
-                            .transition(.bobReplace)
-                    }
-                }
-                .background(GeometryReader { p in
-                    Color.clear.preference(key: HeroWidthKey.self, value: p.size.width)
-                })
                 .frame(height: 112)
                 .padding(.top, dryAwake ? 28 : 21)
                 .overlay(alignment: .bottomTrailing) {
@@ -354,10 +322,9 @@ struct PopoverRootView: View {
                             .transition(.bobReplace)
                     }
                 }
-            // Swimming at ~15%+ but no room to float free: straddle the top
-            // edge. Gated on heroWidth > 0 so he doesn't flash top-left before
-            // the measurement lands.
-            if v.fraction >= 0.15 && heroWidth > 0 && !isFloater {
+            // Swimming once the water is ~15% deep — otherwise (awake)
+            // standing on the deck, watching the pool fill below.
+            if v.fraction >= 0.15 {
                 BuoyBob(sleeping: state.clockState == .clockedOut,
                         onBreak: v.onBreak, size: 44)
                     .padding(.leading, 14)
@@ -371,10 +338,6 @@ struct PopoverRootView: View {
                     .transition(.bobReplace)
             }
         }
-        .onPreferenceChange(HeroWidthKey.self) { heroWidth = $0 }
-        .onPreferenceChange(HeroTextWidthKey.self) { heroTextWidth = $0 }
-        .onPreferenceChange(HeroWaterFractionKey.self) { heroWaterFraction = $0 }
-        .animation(Motion.standard, value: canFloat)
     }
 
     // MARK: - Today's timeline
