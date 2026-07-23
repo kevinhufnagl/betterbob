@@ -83,6 +83,13 @@ struct MainWindow: View {
                     .background {
                         if !showFreshWelcome { DashboardBG().ignoresSafeArea() }
                     }
+                    // The old bottom status strip's live bits float here now as
+                    // hand-rolled capsules (the app's idiom — not native toolbar
+                    // chrome, which wraps custom views in its own glass pill).
+                    // Transient: nothing shows when idle, so nothing sits over
+                    // content. Clock state + worked-today live in the hero;
+                    // version lives in Settings.
+                    .overlay(alignment: .bottomTrailing) { StatusChips(state: state) }
                     .navigationTitle(tab.title)
             }
             .frame(minWidth: 940, minHeight: 620)
@@ -99,12 +106,6 @@ struct MainWindow: View {
             // empty content — flattens the toolbar and kills the native
             // scroll-under blur, so it's applied ONLY when fresh.
             .modifier(FreshDayWindowBackdrop(show: showFreshWelcome, windowVisible: windowVisible))
-            // The footer strip would sit between the water and the window's
-            // bottom edge, breaking the waterline alignment — the welcome
-            // owns the whole height on a fresh day.
-            if !showFreshWelcome {
-                FooterBar(state: state)
-            }
         }
     }
 
@@ -229,51 +230,78 @@ private struct FreshDayWindowBackdrop: ViewModifier {
     }
 }
 
-/// Thin status strip pinned to the window bottom.
-struct FooterBar: View {
+/// Floating status chips over the pane's top-right — a transient saving/error
+/// chip beside the pending-punch queue. The only bits of the old bottom status
+/// strip worth keeping visible. Nothing renders when idle, so the overlay never
+/// sits over content unless there's something to say.
+struct StatusChips: View {
     @ObservedObject var state: BobState
-    @Environment(\.colorScheme) private var scheme
+
+    // Only surface the queue once something will actually wait — a punch that
+    // fires (near-)immediately would otherwise flash the chip for a frame.
+    private var showsQueue: Bool {
+        state.queue.contains { $0.fireAt.timeIntervalSinceNow > 2 }
+    }
+
+    private var hasStatus: Bool {
+        state.busy || !state.deletingEntries.isEmpty
+            || state.lastError != nil || showsQueue
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle().fill(state.clockState.tint).frame(width: 8, height: 8)
-            Text(state.clockState.title).font(.system(size: 11, weight: .medium))
-                .contentTransition(.opacity)
-            if state.clockState != .clockedOut {
-                Text("· \(Fmt.hm(state.workedToday)) today")
-                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-                    .transition(.opacity)
+        if hasStatus {
+            HStack(spacing: 8) {
+                SyncStatusChip(state: state)
+                if showsQueue { QueueChip(state: state).transition(.bobReplace) }
             }
-            if !state.queue.isEmpty { QueueChip(state: state).transition(.bobReplace) }
-            Spacer()
-            if state.busy || !state.deletingEntries.isEmpty {
-                HStack(spacing: 5) {
-                    ProgressView().controlSize(.small).scaleEffect(0.7)
-                    Text("Saving…").font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-                .transition(.opacity)
-            } else if let err = state.lastError {
-                Label(err, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10)).foregroundStyle(Color.bobOrange).lineLimit(1)
-            } else if let sync = state.lastSync {
-                Text("Synced \(Fmt.clock(sync))")
-                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-            }
-            Text("v\(Updater.shared.currentVersion)")
-                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+            .padding(.bottom, 12).padding(.trailing, 16)
+            .transition(.opacity)
+            .animation(Motion.quick, value: showsQueue)
         }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 28)
-        .background(.thinMaterial)
-        .overlay(alignment: .top) { Divider().opacity(0.4) }
-        .animation(Motion.standard, value: state.clockState)
-        .animation(Motion.standard, value: state.queue.isEmpty)
-        .animation(Motion.quick, value: state.busy || !state.deletingEntries.isEmpty)
     }
 }
 
-/// The pending action queue, shown in the footer. Click to see each queued
+/// A transient save/error indicator: a spinner while writing, an error chip
+/// when the last sync failed, nothing when idle.
+struct SyncStatusChip: View {
+    @ObservedObject var state: BobState
+
+    var body: some View {
+        Group {
+            if state.busy || !state.deletingEntries.isEmpty {
+                chip(tint: .secondary) {
+                    ProgressView().controlSize(.mini).scaleEffect(0.7)
+                        .frame(width: 11, height: 11)
+                    Text("Saving…").font(.system(size: 10, weight: .semibold))
+                }
+            } else if let err = state.lastError {
+                chip(tint: Color.bobOrange) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(err).font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .help(err)
+            }
+        }
+        .animation(Motion.quick, value: state.busy || !state.deletingEntries.isEmpty)
+        .animation(Motion.quick, value: state.lastError)
+    }
+
+    /// A compact toolbar chip sized to match `QueueChip` (height 18, capsule).
+    @ViewBuilder
+    private func chip<Content: View>(tint: Color, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 4) { content() }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8).frame(height: 18)
+            .background(Capsule().fill(tint.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.30), lineWidth: 0.7))
+            .fixedSize()
+            .transition(.opacity)
+    }
+}
+
+/// The pending action queue, shown in the toolbar. Click to see each queued
 /// punch, when it fires, and remove any before it does.
 struct QueueChip: View {
     @ObservedObject var state: BobState

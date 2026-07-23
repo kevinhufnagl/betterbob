@@ -55,9 +55,6 @@ struct EntryRowView: View {
     var isLast: Bool = false
     @Environment(\.colorScheme) private var scheme
     @State private var editing = false
-    @State private var editStart = Date()
-    @State private var editEnd = Date()
-    @State private var endingOpen = false
     @State private var timeHover = false
     @State private var rowHover = false
 
@@ -72,12 +69,6 @@ struct EntryRowView: View {
                 .frame(width: 52, alignment: .leading)
 
             Button {
-                editStart = e.start
-                // Open entries default their end to a smart guess on the
-                // entry's OWN day (usual check-out → target → now) — so ending
-                // a forgotten past-day entry lands a sensible time on that date.
-                editEnd = e.end ?? state.suggestedEndForOpenEntry(e)
-                endingOpen = false
                 editing = true
             } label: {
                 HStack(spacing: 5) {
@@ -104,7 +95,10 @@ struct EntryRowView: View {
             }
             #endif
             .animation(.easeOut(duration: 0.12), value: timeHover)
-            .popover(isPresented: $editing, arrowEdge: .bottom) { timeEditor(e) }
+            .popover(isPresented: $editing, arrowEdge: .bottom) {
+                EntryTimeEditor(state: state, entry: e, dayEntries: dayEntries,
+                                date: date, isLast: isLast, isPresented: $editing)
+            }
 
             if e.kind == .work { ReasonPicker(state: state, entry: e, dayEntries: dayEntries, date: date) }
             Spacer()
@@ -134,7 +128,25 @@ struct EntryRowView: View {
         .animation(Motion.quick, value: state.deletingEntries)
     }
 
-    private func timeEditor(_ e: AttendanceEntry) -> some View {
+}
+
+/// The "Adjust times" popover shared by the dashboard entry rows and the
+/// menu-bar popover's entry list. Owns the in-flight edit state; seeds it on
+/// appear so each open starts from the entry's current times.
+struct EntryTimeEditor: View {
+    @ObservedObject var state: BobState
+    let entry: AttendanceEntry
+    var dayEntries: [AttendanceEntry]
+    var date: Date
+    var isLast: Bool
+    @Binding var isPresented: Bool
+
+    @State private var editStart = Date()
+    @State private var editEnd = Date()
+    @State private var endingOpen = false
+
+    var body: some View {
+        let e = entry
         VStack(alignment: .leading, spacing: 12) {
             Text("Adjust times").font(.system(size: 12, weight: .semibold))
             HStack { Text("Start").font(.system(size: 12)); Spacer()
@@ -147,7 +159,7 @@ struct EntryRowView: View {
                         // Clear the end → reopen the entry (revert a clock-out
                         // / end-break, so you're "still going").
                         state.updateEntryTimes(e, in: dayEntries, on: date, start: editStart, end: nil)
-                        editing = false
+                        isPresented = false
                     } label: {
                         Label("Clear end (reopen)", systemImage: "arrow.uturn.backward")
                             .font(.system(size: 11))
@@ -177,18 +189,26 @@ struct EntryRowView: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") { editing = false }
+                Button("Cancel") { isPresented = false }
                 Button("Save") {
                     // Open entry stays open unless the user chose to end it.
                     let newEnd: Date? = e.end == nil ? (endingOpen ? editEnd : nil) : editEnd
                     state.updateEntryTimes(e, in: dayEntries, on: date,
                                            start: editStart, end: newEnd)
-                    editing = false
+                    isPresented = false
                 }.buttonStyle(.borderedProminent)
-                    .disabled(shouldHaveEnd(e) && editEnd <= editStart)
+                    .disabled(shouldHaveEnd && editEnd <= editStart)
             }
         }
         .padding(16).frame(width: 240)
+        .onAppear {
+            editStart = e.start
+            // Open entries default their end to a smart guess on the entry's
+            // OWN day (usual check-out → target → now) — so ending a forgotten
+            // past-day entry lands a sensible time on that date.
+            editEnd = e.end ?? state.suggestedEndForOpenEntry(e)
+            endingOpen = false
+        }
     }
 
     /// Inline HH:MM field — no nested popover (the pill's own popover rendered
@@ -199,8 +219,8 @@ struct EntryRowView: View {
 
     /// Whether Save will write an end (so start<end validation applies): a
     /// closed entry always, an open one only once the user chose to end it.
-    private func shouldHaveEnd(_ e: AttendanceEntry) -> Bool {
-        e.end != nil || endingOpen
+    private var shouldHaveEnd: Bool {
+        entry.end != nil || endingOpen
     }
 }
 
@@ -210,7 +230,7 @@ struct EntryRowView: View {
 /// bound date as you go (so Save always has the latest value), and on
 /// submit / focus loss the text snaps to the formatted time — nonsense
 /// reverts to the last valid one.
-private struct TimeTextField: View {
+struct TimeTextField: View {
     @Binding var date: Date
     @State private var text = ""
     @FocusState private var focused: Bool
@@ -857,23 +877,24 @@ public struct CalendarHeatmap: View {
     }
     private func dayNum(_ s: String) -> String { String(s.suffix(2)).drop(while: { $0 == "0" }).description }
 
+    // Wraps onto multiple rows so the seven keys don't overrun a phone's width.
     private var legend: some View {
-        HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.12)).frame(width: 14, height: 10)
-            Text("Under").font(.bobUI(9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.4)).frame(width: 14, height: 10)
-            Text("On target").font(.bobUI(9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.workAccent(scheme).opacity(0.85)).frame(width: 14, height: 10)
-            Text("Over").font(.bobUI(9)).foregroundStyle(.secondary)
-            Spacer()
-            RoundedRectangle(cornerRadius: 3).fill(Color.bobViolet.opacity(0.6)).frame(width: 14, height: 10)
-            Text("No reason").font(.bobUI(9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.bobOrange.opacity(0.5)).frame(width: 14, height: 10)
-            Text("Break issue").font(.bobUI(9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.bobRed.opacity(0.5)).frame(width: 14, height: 10)
-            Text("Over daily max").font(.bobUI(9)).foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 3).fill(Color.bobMagenta.opacity(0.6)).frame(width: 14, height: 10)
-            Text("Unclosed day").font(.bobUI(9)).foregroundStyle(.secondary)
+        FlowLayout(spacing: 10, lineSpacing: 6) {
+            legendItem(Color.workAccent(scheme).opacity(0.12), "Under")
+            legendItem(Color.workAccent(scheme).opacity(0.4), "On target")
+            legendItem(Color.workAccent(scheme).opacity(0.85), "Over")
+            legendItem(Color.bobViolet.opacity(0.6), "No reason")
+            legendItem(Color.bobOrange.opacity(0.5), "Break issue")
+            legendItem(Color.bobRed.opacity(0.5), "Over daily max")
+            legendItem(Color.bobMagenta.opacity(0.6), "Unclosed day")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func legendItem(_ fill: Color, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 3).fill(fill).frame(width: 14, height: 10)
+            Text(label).font(.bobUI(9)).foregroundStyle(.secondary)
         }
     }
 }
@@ -959,35 +980,47 @@ public struct WeekdayRhythmCard: View {
             if stats.count < 2 {
                 Text("Not enough history yet — this fills in as you log more days.")
                     .font(.bobUI(12)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                let lo = (stats.map(\.avgIn).min() ?? 0) / 3600 - 0.4
-                let hi = (stats.map(\.avgOut).max() ?? 24 * 3600) / 3600 + 0.4
-                Chart(stats, id: \.weekday) { s in
-                    BarMark(
-                        x: .value("Day", names[s.weekday]),
-                        yStart: .value("Check-in", s.avgIn / 3600),
-                        yEnd: .value("Check-out", s.avgOut / 3600),
-                        width: .fixed(16)
-                    )
-                    .clipShape(Capsule())
-                    .foregroundStyle(LinearGradient(
-                        colors: [Color.workAccent(scheme), Color.workAccent(scheme).opacity(0.55)],
-                        startPoint: .top, endPoint: .bottom))
-                    .annotation(position: .top, spacing: 3) {
-                        Text(clockLabel(s.avgIn)).font(.bobUI(8, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                let totalN = max(stats.reduce(0) { $0 + $1.count }, 1)
+                let meanIn = stats.reduce(0.0) { $0 + $1.avgIn * Double($1.count) } / Double(totalN)
+                let meanOut = stats.reduce(0.0) { $0 + $1.avgOut * Double($1.count) } / Double(totalN)
+                let lo = floor((stats.map(\.avgIn).min() ?? 0) / 3600) - 0.3
+                let hi = ceil((stats.map(\.avgOut).max() ?? 24 * 3600) / 3600) + 0.3
+
+                VStack(alignment: .leading, spacing: 10) {
+                    // Headline summary — the key numbers, read cleanly, so the
+                    // bars don't need cramped per-column labels on a phone.
+                    HStack(spacing: 6) {
+                        Text("Typical day").font(.bobUI(10, weight: .semibold))
+                            .foregroundStyle(.secondary).textCase(.uppercase).kerning(0.5)
+                        Text("\(clockLabel(meanIn)) – \(clockLabel(meanOut))")
+                            .font(.bobUI(12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.workAccent(scheme))
                     }
-                    .annotation(position: .bottom, spacing: 3) {
-                        Text(clockLabel(s.avgOut)).font(.bobUI(8, weight: .semibold))
-                            .foregroundStyle(.secondary)
+
+                    Chart(stats, id: \.weekday) { s in
+                        BarMark(
+                            x: .value("Day", names[s.weekday]),
+                            yStart: .value("Check-in", s.avgIn / 3600),
+                            yEnd: .value("Check-out", s.avgOut / 3600),
+                            width: .ratio(0.5)
+                        )
+                        .clipShape(Capsule())
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.workAccent(scheme), Color.workAccent(scheme).opacity(0.5)],
+                            startPoint: .top, endPoint: .bottom))
                     }
+                    .chartYAxis { AxisMarks(position: .leading, values: .stride(by: 2)) { v in
+                        AxisGridLine().foregroundStyle(.secondary.opacity(0.10))
+                        AxisValueLabel { if let h = v.as(Double.self) { Text(hourLabel(h)).font(.bobUI(9)) } }
+                    } }
+                    .chartXAxis { AxisMarks { _ in
+                        AxisValueLabel().font(.bobUI(10, weight: .medium))
+                    } }
+                    .chartYScale(domain: lo...hi)
+                    .frame(height: 172)
                 }
-                .chartYScale(domain: lo...hi)
-                .chartYAxis { AxisMarks(position: .leading, values: .stride(by: 1)) { v in
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.12))
-                    AxisValueLabel { if let h = v.as(Double.self) { Text("\(Int(h)):00").font(.bobUI(9)) } } } }
-                .chartXAxis { AxisMarks { _ in AxisValueLabel().font(.bobUI(9)) } }
-                .frame(height: 168)
             }
         }
     }
@@ -996,6 +1029,14 @@ public struct WeekdayRhythmCard: View {
     private func clockLabel(_ seconds: TimeInterval) -> String {
         let m = Int((seconds / 60).rounded())
         return String(format: "%02d:%02d", (m / 60) % 24, m % 60)
+    }
+
+    /// Whole hour → compact 12-hour axis label ("7a", "12p", "5p").
+    private func hourLabel(_ hour: Double) -> String {
+        let h = ((Int(hour) % 24) + 24) % 24
+        let suffix = h < 12 ? "a" : "p"
+        let h12 = h % 12 == 0 ? 12 : h % 12
+        return "\(h12)\(suffix)"
     }
 }
 

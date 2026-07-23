@@ -150,6 +150,44 @@ extension Font {
     }
 }
 
+// MARK: - Flow layout
+//
+// Wraps its subviews onto as many rows as the available width needs — the
+// legend has too many chips to sit on one row on a phone. Left-aligned, with
+// independent item and line spacing.
+public struct FlowLayout: Layout {
+    public var spacing: CGFloat
+    public var lineSpacing: CGFloat
+    public init(spacing: CGFloat = 8, lineSpacing: CGFloat = 6) {
+        self.spacing = spacing; self.lineSpacing = lineSpacing
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0, widest: CGFloat = 0
+        for v in subviews {
+            let sz = v.sizeThatFits(.unspecified)
+            if x > 0, x + sz.width > maxWidth { x = 0; y += lineHeight + lineSpacing; lineHeight = 0 }
+            x += sz.width + spacing
+            lineHeight = max(lineHeight, sz.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: min(widest, maxWidth), height: y + lineHeight)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
+        for v in subviews {
+            let sz = v.sizeThatFits(.unspecified)
+            if x > 0, x + sz.width > bounds.width { x = 0; y += lineHeight + lineSpacing; lineHeight = 0 }
+            v.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
+                    anchor: .topLeading, proposal: ProposedViewSize(sz))
+            x += sz.width + spacing
+            lineHeight = max(lineHeight, sz.height)
+        }
+    }
+}
+
 // MARK: - Theme-adaptive accent colors
 //
 // The stock .green/.orange read as washed-out on the popover's glass panel.

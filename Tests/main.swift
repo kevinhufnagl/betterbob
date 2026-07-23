@@ -1028,6 +1028,59 @@ expect(TOTP.base32Secret(from: "  \(totpSecret)  ") == totpSecret, "bare secret 
 expect(TOTP.code(secretBase32: "otpauth://totp/x?secret=\(totpSecret)", at: Date(timeIntervalSince1970: 59)) == "287082",
        "code computes straight from an otpauth:// URL")
 
+// MARK: - Water physics (interactive wave surface)
+
+print("")
+print("WaterPhysics")
+
+func waterEnergy(_ d: [CGFloat], _ v: [CGFloat]) -> CGFloat {
+    zip(d, v).reduce(CGFloat(0)) { $0 + $1.0 * $1.0 + $1.1 * $1.1 }
+}
+func maxAbs(_ x: [CGFloat]) -> CGFloat { x.map { abs($0) }.max() ?? 0 }
+
+// A centred tilt is mean-zero: it angles the surface without moving the average
+// waterline — i.e. it changes the wave's angle, never the fill level/progress.
+do {
+    let n = 56
+    let flat = [CGFloat](repeating: 0, count: n)
+    let a = WaterPhysics.acceleration(disp: flat, vel: flat, tilt: 24, level: 0.5)
+    let mean = a.reduce(0, +) / CGFloat(n)
+    expect(abs(mean) < 1e-6, "tilt is mean-zero (angle, not progress)")
+    expect((a.first! < 0 && a.last! > 0) || (a.first! > 0 && a.last! < 0),
+           "tilt leans the two ends opposite ways")
+}
+
+// The lean fades out as the surface nears a full/empty edge, so a tilt can't
+// clip the container wall (which would leak into an apparent progress change).
+do {
+    let n = 56
+    let flat = [CGFloat](repeating: 0, count: n)
+    let mid = WaterPhysics.acceleration(disp: flat, vel: flat, tilt: 24, level: 0.5)
+    let edge = WaterPhysics.acceleration(disp: flat, vel: flat, tilt: 24, level: 0.02)
+    expect(maxAbs(edge) < maxAbs(mid) * 0.25, "lean fades near a full/empty edge")
+}
+
+// With no input the surface loses energy and stays finite (stable, no blow-up).
+do {
+    let n = 56
+    var d = [CGFloat](repeating: 0, count: n); d[n / 2] = 20
+    let v = [CGFloat](repeating: 0, count: n)
+    let e0 = waterEnergy(d, v)
+    let out = WaterPhysics.advanceFreeSurface(disp: d, vel: v, dt: 1.0 / 120.0, steps: 600)
+    expect(waterEnergy(out.disp, out.vel) < e0 * 0.5, "free surface loses energy (damped)")
+    expect(out.disp.allSatisfy { $0.isFinite } && out.vel.allSatisfy { $0.isFinite },
+           "surface stays finite (numerically stable)")
+}
+
+// A disturbance propagates along the surface to distant columns.
+do {
+    let n = 56
+    var d = [CGFloat](repeating: 0, count: n); d[n / 2] = 20
+    let v = [CGFloat](repeating: 0, count: n)
+    let out = WaterPhysics.advanceFreeSurface(disp: d, vel: v, dt: 1.0 / 120.0, steps: 40)
+    expect(abs(out.disp[n / 2 - 6]) > 1e-3, "a ripple travels to neighbouring columns")
+}
+
 if failures == 0 {
     print("All tests passed.")
 } else {

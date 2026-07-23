@@ -627,18 +627,30 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     // MARK: - Delegates
 
     public nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Task { @MainActor in self.attemptCompletion() }
+    }
+
+    /// Sync the web session into the API cookie store and finish if it's real.
+    /// Runs after every navigation AND when the app returns to the foreground:
+    /// on iOS the completing redirect often lands while the app is backgrounded
+    /// (you're in Okta Verify approving the push), so `didFinish` alone can miss
+    /// it and the driver would re-run the whole flow into a second push. A
+    /// foreground re-check catches that first, already-valid session instead.
+    func attemptCompletion() {
+        guard let web = webView else { return }
         Task { @MainActor in
-            let store = webView.configuration.websiteDataStore.httpCookieStore
-            let cookies = await store.allCookies()
-            for cookie in cookies where cookie.domain.contains("hibob.com") {
+            let store = web.configuration.websiteDataStore.httpCookieStore
+            for cookie in await store.allCookies() where cookie.domain.contains("hibob.com") {
                 HTTPCookieStorage.shared.setCookie(cookie)
             }
-            // Probe after every load — cheap, only succeeds once the session is real.
-            if await BobState.shared.probeSession() {
-                self.finish(true)
-            }
+            // Cheap — only succeeds once the session is real.
+            if await BobState.shared.probeSession() { self.finish(true) }
         }
     }
+
+    /// Called when the app returns to the foreground so a sign-in that completed
+    /// while backgrounded is picked up immediately.
+    public func resumeCheck() { attemptCompletion() }
 
     // MARK: - Inline one-time-code entry (assisted mode)
 

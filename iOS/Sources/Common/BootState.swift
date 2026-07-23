@@ -6,10 +6,13 @@ extension BobState {
     /// hasn't landed — the window where screens should show the loading Bob
     /// instead of flashing a signed-out or zeroed-out state. Both terms
     /// self-terminate: a reconcile flips `ready`, a session probe ends in
-    /// `signedIn` or `lastError`. Stored credentials alone must NOT count —
-    /// nothing probes for a signed-out user, so that state never resolves
-    /// and the placeholder would trap the sign-in buttons forever.
+    /// `signedIn` or `lastError`.
+    ///
+    /// Keys off `connecting` (the launch probe actually running), NOT the
+    /// persistent `usedSSO` preference: a stored SSO flag whose session never
+    /// established would otherwise hold the loader on screen forever, masking
+    /// the sign-in card with no way through. `connecting` always resolves.
     var bootingUp: Bool {
-        !ready && lastError == nil && (signedIn || usedSSO)
+        !ready && lastError == nil && (signedIn || connecting)
     }
 }

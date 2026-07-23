@@ -2,6 +2,34 @@ import SwiftUI
 #if os(macOS)
 import AppKit
 #endif
+#if os(iOS)
+import CoreMotion
+#endif
+
+/// Width of the hero's text column, and of the hero itself — reported via
+/// preferences so a host can tell whether there's room to float Bob beside the
+/// text (the threshold then tracks window size AND the actual copy length).
+struct HeroTextWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+struct HeroWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+/// The water's *currently displayed* fill fraction (0…1) — eased during the
+/// arrival sweep and level glides, not the raw target. A rider (Bob) reads this
+/// so he tracks the visible waterline instead of jumping ahead of the wave.
+struct HeroWaterFractionKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
 
 // The Today layout and its shared helpers — TodayVals, the actions row and
 // the interactive timeline strip.
@@ -405,6 +433,14 @@ public struct TodayTimeline: View {
     // gate it on real window visibility — otherwise it re-lays-out the whole
     // Today pane every second in the background, burning CPU for nobody.
     @State private var windowVisible = true
+    // Measured live so Bob only floats beside the text when there's genuinely
+    // room — the threshold then tracks both the window width and the copy
+    // length, rather than a hard-coded guess.
+    @State private var heroWidth: CGFloat = 0
+    @State private var heroTextWidth: CGFloat = 0
+    // The water's actual displayed fill (eased), so Bob rides the visible
+    // waterline rather than jumping to the target ahead of the wave.
+    @State private var heroWaterFraction: CGFloat = 0
 
     public var body: some View {
         Group {
@@ -423,6 +459,23 @@ public struct TodayTimeline: View {
     private func content(now: Date) -> some View {
         let ctxDate = now
         let v = TodayVals(state, now: ctxDate)
+        // Float Bob fully INSIDE the water (his right edge just inside the
+        // waterline), toward its right edge — not straddling it. Leading text
+        // pad is 20; 72 is BuoyBob's size; `inset` keeps him off the very edge.
+        let bobSize: CGFloat = 72
+        let inset: CGFloat = 16
+        let gap: CGFloat = 10
+        let textRight = 20 + heroTextWidth
+        // Decide floater-vs-straddler from the TARGET fill (stable), so a
+        // re-entry sweep never flips him to the top-left straddle mid-sweep.
+        // Reveal + position use the DISPLAYED waterline, so he rides the wave in
+        // and is hidden until it actually reaches him — never ahead of it.
+        let targetRight = CGFloat(v.fraction) * heroWidth - inset
+        let shownRight = heroWaterFraction * heroWidth - inset
+        let isFloater = v.fraction >= 0.15 && heroWidth > 0
+            && (targetRight - bobSize) >= (textRight + gap)
+        let canFloat = isFloater && (shownRight - bobSize) >= (textRight + gap)
+        let bobCenterX = max(bobSize / 2, shownRight - bobSize / 2)
         VStack(alignment: .leading, spacing: 16) {
                 // Bob straddles the hero's top edge: the ring floats on the
                 // waterline (the card's boundary), his head is out of the
@@ -441,6 +494,21 @@ public struct TodayTimeline: View {
                     // cells (red past the daily max, orange for an over-long run
                     // or break shortfall).
                     .statusTint(state.heroLimitTint)
+                    // Once the waterline has moved far enough right to clear the
+                    // text, Bob floats vertically centred on it and stirs ripples.
+                    .waterRider(canFloat ? 0.5 : nil)
+                    .overlay(alignment: .leading) {
+                        if canFloat {
+                            BuoyBob(sleeping: state.clockState == .clockedOut,
+                                    onBreak: v.onBreak, size: bobSize, submerged: true)
+                                .offset(x: bobCenterX - bobSize / 2)
+                                .transition(.bobReplace)
+                        }
+                    }
+                    // Measure the hero's own width for the waterline maths above.
+                    .background(GeometryReader { p in
+                        Color.clear.preference(key: HeroWidthKey.self, value: p.size.width)
+                    })
                     // Content-sized: a fixed frame smaller than the content
                     // makes the hero spill past it top and bottom (SwiftUI
                     // doesn't clip), eating the gap to the next card.
@@ -454,18 +522,18 @@ public struct TodayTimeline: View {
                                 .transition(.bobReplace)
                         }
                     }
-                    // Swimming once it's ~15% deep, straddling the top edge —
-                    // sitting a touch lower so he reads properly submerged.
-                    if v.fraction >= 0.15 {
-                        // Flush with the section top — no dead air above his
-                        // head; the ring stays just as submerged (center 8pt
-                        // below the hero's edge).
+                    // Swimming once it's ~15% deep but before there's room to
+                    // float free: straddle the top edge, sitting a touch lower
+                    // so he reads properly submerged. Wait for the width to be
+                    // measured (heroWidth > 0) so he doesn't flash top-left for
+                    // a frame before jumping to the centre on window reopen.
+                    if v.fraction >= 0.15 && heroWidth > 0 && !isFloater {
                         BuoyBob(sleeping: state.clockState == .clockedOut,
                                 onBreak: v.onBreak)
                             .padding(.top, 2)
                             .padding(.leading, 24)
                             .transition(.bobReplace)
-                    } else if state.clockState != .clockedOut {
+                    } else if v.fraction < 0.15 && state.clockState != .clockedOut {
                         // Not enough water to swim: he hangs behind the card,
                         // paws on the lip, head peeking over at the water.
                         PeekingBob(size: 64, onBreak: v.onBreak)
@@ -473,6 +541,10 @@ public struct TodayTimeline: View {
                             .transition(.bobReplace)
                     }
                 }
+                .onPreferenceChange(HeroWidthKey.self) { heroWidth = $0 }
+                .onPreferenceChange(HeroTextWidthKey.self) { heroTextWidth = $0 }
+                .onPreferenceChange(HeroWaterFractionKey.self) { heroWaterFraction = $0 }
+                .animation(Motion.standard, value: canFloat)
                 // The action dock floats half over the water, half over the
                 // page — the bottom padding reserves room for the lower half
                 // so it never overlaps the next card.
@@ -682,6 +754,10 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     /// via `.statusTint(_:)` so callers don't touch the init.
     var statusTint: Color?
 
+    /// Normalized height (0…1) of a floating rider on the water (Bob), so the
+    /// wave sheds ripples around him. Set via `.waterRider(_:)`; nil = none.
+    var riderY: Double?
+
     /// The water's hue: the status tint when over a limit, else the accent.
     private var activeHue: Double { statusTint?.hueComponent ?? Color.accentHue }
 
@@ -721,6 +797,17 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     /// Eases the waterline toward a changed fraction (an entry edit moves the
     /// level by a lot at once) instead of snapping. Nil while tracking live.
     @State private var levelAnim: (from: Double, to: Double, start: Date)?
+    /// The interactive height-field surface, stirred by the cursor (macOS) or
+    /// device tilt (iOS). A plain reference held in state: the physics step
+    /// mutates it in place inside the frame clock, so it never re-triggers the
+    /// view the way reassigning a value `@State` would.
+    @State private var sim = WaterSim()
+    /// Bumped on cursor activity so a finished day's still edge wakes back into
+    /// the animated clock; throttled to avoid a re-render per pointer sample.
+    @State private var lastInput: Date?
+    #if os(iOS)
+    @State private var motion = WaterMotionDriver()
+    #endif
 
     private var fraction: Double {
         customFraction ?? (target > 0 ? min(1, worked / target) : 0)
@@ -743,14 +830,18 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     // saturation/brightness recipe: deep and saturated in dark mode,
     // pastel with dark ink in light mode.
     private var dark: Bool { scheme == .dark }
-    private var waterGradient: LinearGradient {
+    /// `skew` rotates the deep→light axis so the depth shading leans WITH the
+    /// surface on an iOS tilt (0 = the flat, horizontal wipe).
+    private func waterGradient(skew: CGFloat = 0) -> LinearGradient {
         let h = activeHue
         let stops = dark
             ? [Color.hued(h, sat: 0.76, bri: 0.28), Color.hued(h, sat: 0.72, bri: 0.44),
                Color.hued(h, sat: 0.68, bri: 0.60)]
             : [Color.hued(h, sat: 0.32, bri: 0.80), Color.hued(h, sat: 0.30, bri: 0.86),
                Color.hued(h, sat: 0.28, bri: 0.91)]
-        return LinearGradient(colors: stops, startPoint: .leading, endPoint: .trailing)
+        return LinearGradient(colors: stops,
+                              startPoint: UnitPoint(x: 0, y: 0.5 - skew),
+                              endPoint: UnitPoint(x: 1, y: 0.5 + skew))
     }
     private var glowColor: Color {
         dark ? Color.hued(activeHue, sat: 0.45, bri: 0.88) : Color.hued(activeHue, sat: 0.14, bri: 0.99)
@@ -786,6 +877,12 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                     .font(.system(size: compact ? 10 : 11))
                     .foregroundStyle(ink.opacity(0.66))
             }
+            // Report the text column's real width so a host can decide whether
+            // there's room to float Bob beside it (threshold tracks both the
+            // window size and the actual copy length). Bubbles up the tree.
+            .background(GeometryReader { p in
+                Color.clear.preference(key: HeroTextWidthKey.self, value: p.size.width)
+            })
             bottom
         }
         .padding(compact ? 12 : 20)
@@ -801,10 +898,27 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                     // unfinished one keeps a small standing wave going after
                     // the arrival slosh dies down.
                     let animating = levelAnim.map { Date().timeIntervalSince($0.start) < 0.9 } ?? false
-                    let settled = fraction >= 1 && !animating
+                    // A finished day settles to a still edge to spare the CPU on
+                    // Mac's retained windows — but only once the interactive
+                    // surface is calm and the pointer has been idle. iOS keeps
+                    // the clock running while the screen is up so device tilt
+                    // always registers (it can't wake it via discrete events).
+                    let cursorIdle = lastInput.map { Date().timeIntervalSince($0) > 0.4 } ?? true
+                    #if os(iOS)
+                    let maySettle = false
+                    #else
+                    // A floating rider keeps shedding ripples, so never settle to
+                    // a still edge while Bob is on the water.
+                    let maySettle = cursorIdle && sim.energy < 0.4 && riderY == nil
+                    #endif
+                    let settled = maySettle && fraction >= 1 && !animating
                         && (appearedAt.map { Date().timeIntervalSince($0) > 14 } ?? true)
-                    if Motion.reduce || settled || !windowVisible {
+                    // Low Power Mode: the phone (or Mac) is trying to save
+                    // battery — hold a still surface rather than run the clock.
+                    if Motion.reduce || settled || !windowVisible
+                        || ProcessInfo.processInfo.isLowPowerModeEnabled {
                         water(level: fraction, amplitude: 0, phase: 0)
+                            .preference(key: HeroWaterFractionKey.self, value: CGFloat(fraction))
                     } else {
                         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
                             // Clamped: the anchor sits slightly in the future
@@ -819,12 +933,34 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                             let sustain: CGFloat = fraction < 1 ? 5 : 0
                             let amp = sustain + (11 - sustain) * decay * (0.3 + 0.7 * eased)
                             let phase = seedPhase + 1.5 * t + (3.3 - 1.5) * 3.0 * (1 - decay)
-                            water(level: displayedFraction(at: ctx.date) * eased,
-                                  amplitude: amp, phase: phase,
-                                  asym: 0.55 * exp(-t / 2.5))
+                            let asymNow = 0.55 * exp(-t / 2.5)
+                            let lvl = displayedFraction(at: ctx.date) * eased
+                            // Step the interactive surface up to this frame, then
+                            // read its displacement into the drawn waterline.
+                            let rect = CGRect(origin: .zero, size: geo.size)
+                            sim.level = CGFloat(lvl)
+                            sim.riderY = riderY
+                            sim.advance(to: ctx.date, height: geo.size.height) {
+                                guard let c = sim.cursor else { return 0 }
+                                return WaveField(level: lvl, amplitude: amp, phase: phase,
+                                                 asym: asymNow, freq: seedFreq,
+                                                 asymPhase: seedAsymPhase,
+                                                 detail2: seedDetail2,
+                                                 detail3: seedDetail3).x(c.y, in: rect)
+                            }
+                            // Lean the depth gradient with the surface: normalise
+                            // the sim's tilt (points) by height so the shading
+                            // rotates with the waterline on an iOS tilt.
+                            let skew = max(-0.4, min(0.4, sim.tilt / max(1, geo.size.height)))
+                            return water(level: lvl, amplitude: amp, phase: phase,
+                                         asym: asymNow, disp: sim.snapshot, gradientSkew: skew)
+                                .preference(key: HeroWaterFractionKey.self, value: CGFloat(lvl))
                         }
                     }
                 }
+                // Purely decorative — VoiceOver should read the hero's worked
+                // time and percent, not narrate the animated fill.
+                .accessibilityHidden(true)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -835,6 +971,24 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                                   lineWidth: 0.6)
             }
         }
+        #if os(macOS)
+        // Pointer stirs the surface at its own row. `.background` fills this same
+        // frame, so `.local` here shares the shape's coordinate space — and the
+        // whole card tracks, foreground text included.
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let p):
+                sim.cursor = p
+                // Throttle the state write: one wake unsticks a settled edge;
+                // the running clock paints every frame after that.
+                if lastInput.map({ Date().timeIntervalSince($0) > 0.3 }) ?? true {
+                    lastInput = Date()
+                }
+            case .ended:
+                sim.cursor = nil
+            }
+        }
+        #endif
         .onChange(of: fraction) { old, new in
             guard !Motion.reduce else { return }
             let now = Date()
@@ -860,8 +1014,23 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
             if visible && !windowVisible && !compact && HeroSweep.shared.shouldPlay() {
                 appearedAt = Date().addingTimeInterval(0.4)
             }
+            if !visible { sim.rest() }   // drop the pointer; freeze the surface
             windowVisible = visible
         }
+        #if os(iOS)
+        .onAppear {
+            // Reduce Motion / Low Power Mode keep the water static (see the draw
+            // branch), so there's no point spinning Core Motion — skip it.
+            guard !Motion.reduce, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+            // Device tilt drives the surface; feed tilt/shake straight into the
+            // sim (no `@State`, so the frame clock — not a re-render — paints it).
+            motion.start { tilt, shake in
+                sim.tilt = tilt
+                if shake > 0 { sim.splash(min(9, shake * 5)) }
+            }
+        }
+        .onDisappear { motion.stop(); sim.rest() }
+        #endif
         .onAppear {
             if compact {
                 appearedAt = HeroSweep.shared.shouldPlayPopover()
@@ -885,25 +1054,30 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     /// Explicit ZStack: a bare view tuple inside TimelineView stacks
     /// vertically instead of overlapping.
     private func water(level: Double, amplitude: CGFloat, phase: Double,
-                       asym: Double = 0) -> some View {
+                       asym: Double = 0, disp: [CGFloat] = [], gradientSkew: CGFloat = 0) -> some View {
         let field = WaveField(level: level, amplitude: amplitude, phase: phase, asym: asym,
                               freq: seedFreq, asymPhase: seedAsymPhase,
-                              detail2: seedDetail2, detail3: seedDetail3)
+                              detail2: seedDetail2, detail3: seedDetail3, disp: disp)
         let shape = WaterShape(field: field)
         return ZStack(alignment: .topLeading) {
-            shape.fill(waterGradient)
+            shape.fill(waterGradient(skew: gradientSkew))
             if level > 0.02 {
-                let edge = min(1, level)
-                shape.fill(LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: glowColor.opacity(0), location: max(0, edge - 0.05)),
-                        .init(color: glowColor.opacity(0.14), location: max(0.001, edge - 0.014)),
-                        .init(color: glowColor.opacity(0.50), location: max(0.002, edge)),
-                    ]),
-                    startPoint: .leading, endPoint: .trailing))
-                WaterEdgeShape(field: field)
-                    .stroke(glowColor.opacity(0.9),
+                // Near-surface sheen: soft strokes of the real waterline,
+                // blurred and clipped to the body so only the inner half shows.
+                // The light therefore hugs the true edge and fades inward — a
+                // straight gradient stayed pinned to the flat level while a
+                // crest, a cursor reach or an iOS tilt pulled the surface off it.
+                let line = WaterEdgeShape(field: field)
+                line.stroke(glowColor.opacity(0.22),
+                            style: StrokeStyle(lineWidth: 14, lineCap: .round, lineJoin: .round))
+                    .blur(radius: 8)
+                    .clipShape(shape)
+                line.stroke(glowColor.opacity(0.40),
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                    .blur(radius: 2.5)
+                    .clipShape(shape)
+                // Crisp specular rim, exactly along the edge.
+                line.stroke(glowColor.opacity(0.9),
                             style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
             }
         }
@@ -931,6 +1105,14 @@ extension LiquidHero {
         copy.statusTint = tint
         return copy
     }
+
+    /// Tell the water a rider (Bob) floats at normalized height `y` (0…1) so it
+    /// sheds ripples around him. Pass nil for none. Chained like `statusTint`.
+    public func waterRider(_ y: Double?) -> LiquidHero {
+        var copy = self
+        copy.riderY = y
+        return copy
+    }
 }
 
 extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
@@ -955,15 +1137,20 @@ extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
 /// instead of sampled per frame; blinks run on a sparse async loop. Pauses
 /// when the window isn't really visible.
 public struct BuoyBob: View {
-    public init(sleeping: Bool = false, onBreak: Bool = false, size: CGFloat = 72) {
+    public init(sleeping: Bool = false, onBreak: Bool = false, size: CGFloat = 72,
+                submerged: Bool = false) {
         self.sleeping = sleeping
         self.onBreak = onBreak
         self.size = size
+        self.submerged = submerged
     }
     var sleeping = false
     /// On a break he wears sunglasses.
     var onBreak = false
     var size: CGFloat = 72
+    /// Floating fully inside the water: hide the legs/feet below the ring, so
+    /// he reads as submerged to the waterline rather than dangling in mid-water.
+    var submerged = false
     @State private var windowVisible = true
     @State private var swayAngle: Double = 0
     @State private var dipOffset: CGFloat = 0
@@ -1036,9 +1223,14 @@ public struct BuoyBob: View {
         let dash = perimeter / 8
         return ZStack {
             // Whole Bob behind — his body sits inside the ring, feet
-            // sticking out below its bottom arc.
+            // sticking out below its bottom arc. When submerged, mask the feet
+            // away at the ring's waterline so nothing dangles below it.
             BobMascot(blink: blink)
                 .frame(width: size, height: size)
+                .mask(alignment: .top) {
+                    if submerged { Rectangle().frame(height: size * 0.78) }
+                    else { Rectangle() }
+                }
             // Lit from above, shaded below — an inflatable, not a sticker.
             Ellipse()
                 .stroke(LinearGradient(colors: [Color.systemAccentHued(sat: 0.68, bri: 0.82),
@@ -1217,6 +1409,9 @@ private struct WaveField {
     var asymPhase: Double = 1.2
     var detail2 = 0.0
     var detail3 = 0.0
+    /// Live per-column displacement from the interactive `WaterSim`, in points,
+    /// added on top of the analytic waterline. Empty when the sim is idle.
+    var disp: [CGFloat] = []
 
     func x(_ y: CGFloat, in rect: CGRect) -> CGFloat {
         let u = Double(y / rect.height)
@@ -1227,7 +1422,17 @@ private struct WaveField {
         w *= 0.54  // renormalize the component sum to ~unit amplitude
         w += asym * sin(2 * theta + asymPhase)
         let edge = rect.width * min(1, level)
-        return min(rect.width, edge + amplitude * CGFloat(w))
+        return max(0, min(rect.width, edge + amplitude * CGFloat(w) + sampleDisp(u)))
+    }
+
+    /// Linearly interpolate the sim displacement at normalized height `u` (0…1).
+    private func sampleDisp(_ u: Double) -> CGFloat {
+        guard disp.count > 1 else { return 0 }
+        let f = min(max(0, u), 1) * Double(disp.count - 1)
+        let i = Int(f)
+        if i >= disp.count - 1 { return disp[disp.count - 1] }
+        let frac = CGFloat(f - Double(i))
+        return disp[i] * (1 - frac) + disp[i + 1] * frac
     }
 }
 
@@ -1266,3 +1471,268 @@ private struct WaterEdgeShape: Shape {
         return p
     }
 }
+
+/// A one-dimensional height field: a row of columns down the waterline, each
+/// coupled to its neighbours by a damped wave equation. Poke one column and the
+/// bump travels along the surface and reflects off the ends, the way a real
+/// trough of water carries a ripple — none of which a closed-form curve can do.
+///
+/// The analytic `WaveField` still paints the calm ambient wave; this rides on
+/// top as a live displacement, driven by the pointer (macOS) or device tilt
+/// (iOS). It is a reference type mutated in place inside the 30fps frame clock,
+/// so stepping it never triggers a SwiftUI re-render.
+/// The platform-agnostic core of the water surface, as pure functions so the
+/// physics can be exercised without a view or a clock (see Tests/main.swift).
+/// A damped wave equation with reflective ends, plus a centre-pivoting tilt
+/// lean whose ramp has zero mean — so tilt changes the surface ANGLE without
+/// shifting its average position (the fill level).
+enum WaterPhysics {
+    static let c2: CGFloat = 1400   // propagation speed² — how fast ripples travel
+    static let k: CGFloat = 30      // restoring pull toward the level surface
+    static let damp: CGFloat = 2.6  // how quickly it all settles
+
+    static func acceleration(disp: [CGFloat], vel: [CGFloat],
+                             tilt: CGFloat, level: CGFloat,
+                             c2: CGFloat = c2, k: CGFloat = k, damp: CGFloat = damp) -> [CGFloat] {
+        let count = disp.count
+        var accel = [CGFloat](repeating: 0, count: count)
+        guard count > 1 else { return accel }
+        for i in 0..<count {
+            let l = disp[max(0, i - 1)]                 // reflective ends: a
+            let r = disp[min(count - 1, i + 1)]         // ripple bounces back
+            accel[i] = c2 * (l + r - 2 * disp[i]) - k * disp[i] - damp * vel[i]
+        }
+        if tilt != 0 {
+            // Fade the lean out over the outer 15% of fill so it can't clip the
+            // container wall (which would leak into an apparent progress change).
+            let fade = min(1, min(level, 1 - level) / 0.15)
+            for i in 0..<count {
+                let u = CGFloat(i) / CGFloat(count - 1) // 0 top … 1 bottom
+                accel[i] += k * tilt * fade * (u - 0.5) * 2
+            }
+        }
+        return accel
+    }
+
+    /// Integrate the free surface (no pointer forcing) for `steps` fixed steps —
+    /// the exact loop the sim runs, exposed for tests.
+    static func advanceFreeSurface(disp: [CGFloat], vel: [CGFloat], dt: CGFloat, steps: Int,
+                                   tilt: CGFloat = 0, level: CGFloat = 0.5)
+        -> (disp: [CGFloat], vel: [CGFloat]) {
+        var d = disp, v = vel
+        for _ in 0..<steps {
+            let a = acceleration(disp: d, vel: v, tilt: tilt, level: level)
+            for i in 0..<d.count { v[i] += a[i] * dt; d[i] += v[i] * dt }
+        }
+        return (d, v)
+    }
+}
+
+private final class WaterSim {
+    let count: Int
+    private var disp: [CGFloat]
+    private var vel: [CGFloat]
+    private var lastStep: Date?
+    private var accumulator: Double = 0
+
+    // Inputs, all in the hero's own coordinate space / gravity units.
+    var cursor: CGPoint?            // macOS pointer; nil when it leaves
+    private var lastCursor: CGPoint?
+    private var cursorSpeed: CGFloat = 0
+    /// Pointer presence last frame + its last row, so arrival and departure
+    /// each shed a little ripple instead of the reach snapping in and out.
+    private var pointerWasActive = false
+    private var lastActiveU: Double?
+    /// iOS device tilt as a surface *lean* in points (roll + pitch combined).
+    /// Applied as a centre-pivoting ramp, so it changes the waterline's ANGLE
+    /// only — never its average position, i.e. the fill level is untouched.
+    var tilt: CGFloat = 0
+    /// Current fill fraction (0…1). The lean fades out as the surface nears an
+    /// edge, so a tilt can't clip against the container wall and leak into an
+    /// apparent progress change — keeping the tilt strictly angular.
+    var level: CGFloat = 0.5
+    /// Normalized height (0…1) of a floating rider (Bob) sitting on the water,
+    /// or nil when none. He bobs a shallow dimple that keeps shedding little
+    /// ripples along the waterline — the cursor's wake, hands-free.
+    var riderY: Double?
+    private var riderPhase: Double = 0
+
+    init(count: Int = 56) {
+        self.count = count
+        disp = Array(repeating: 0, count: count)
+        vel = Array(repeating: 0, count: count)
+    }
+
+    /// Snapshot of the surface for the drawn `WaveField`.
+    var snapshot: [CGFloat] { disp }
+
+    /// How lively the surface is right now — used to decide when a finished
+    /// day may settle back to a still edge.
+    var energy: CGFloat {
+        var e: CGFloat = 0
+        for i in 0..<count { e += abs(disp[i]) + abs(vel[i]) * 0.1 }
+        return e / CGFloat(count)
+    }
+
+    /// A shake: scatter velocity across the surface for a chaotic splash.
+    func splash(_ strength: CGFloat) {
+        for i in 0..<count { vel[i] += CGFloat.random(in: -strength...strength) }
+    }
+
+    /// A soft, localized velocity kick centred on a normalized-height row —
+    /// used for the pointer's arrival/departure ripples.
+    private func localImpulse(atNormalizedY u: Double, strength: CGFloat, sigma: Double) {
+        let center = min(max(0, u), 1) * Double(count - 1)
+        for i in 0..<count {
+            let d = Double(i) - center
+            vel[i] += strength * CGFloat(exp(-(d * d) / (2 * sigma * sigma)))
+        }
+    }
+
+    /// Drop all input and freeze — called when the view is hidden so nothing
+    /// stale lingers and no huge dt is integrated on the way back.
+    func rest() {
+        cursor = nil; lastCursor = nil; cursorSpeed = 0
+        pointerWasActive = false; lastActiveU = nil
+        tilt = 0
+        riderY = nil; riderPhase = 0
+        for i in 0..<count { disp[i] = 0; vel[i] = 0 }
+        lastStep = nil; accumulator = 0
+    }
+
+    /// Integrate up to `date` in fixed sub-steps (stable regardless of frame
+    /// rate). `baseXAtCursor` gives the analytic waterline x under the pointer,
+    /// so reach/push are measured from the surface actually on screen.
+    func advance(to date: Date, height: CGFloat, baseXAtCursor: () -> CGFloat) {
+        guard let last = lastStep else { lastStep = date; lastCursor = cursor; return }
+        var frameDt = date.timeIntervalSince(last)
+        lastStep = date
+        guard frameDt > 0 else { return }
+        frameDt = min(frameDt, 0.05)   // clamp after a pause; never explode
+
+        if let c = cursor, let lc = lastCursor {
+            cursorSpeed = hypot(c.x - lc.x, c.y - lc.y) / CGFloat(frameDt)
+        } else {
+            cursorSpeed = 0
+        }
+        lastCursor = cursor
+
+        // Arrival / departure ripples: the pointer entering pushes a small
+        // swell at its row; leaving releases the reached peak into a wake,
+        // rather than the reach appearing or vanishing instantly.
+        let active = cursor != nil
+        if let c = cursor { lastActiveU = Double(min(max(0, c.y / max(1, height)), 1)) }
+        if active != pointerWasActive, let u = lastActiveU {
+            localImpulse(atNormalizedY: u, strength: active ? 5 : 8, sigma: 3.5)
+        }
+        pointerWasActive = active
+
+        let base = cursor != nil ? baseXAtCursor() : 0
+
+        accumulator += frameDt
+        let step = 1.0 / 120.0
+        var guardN = 0
+        while accumulator >= step && guardN < 10 {
+            accumulator -= step
+            physics(dt: CGFloat(step), height: height, cursorBaseX: base)
+            guardN += 1
+        }
+    }
+
+    private func physics(dt: CGFloat, height: CGFloat, cursorBaseX: CGFloat) {
+        let c2 = WaterPhysics.c2, k = WaterPhysics.k, damp = WaterPhysics.damp
+
+        // Wave equation + iOS tilt lean — the platform-agnostic core, pulled
+        // out as a pure function so it can be unit-tested (see Tests/main.swift).
+        var accel = WaterPhysics.acceleration(disp: disp, vel: vel,
+                                              tilt: tilt, level: level,
+                                              c2: c2, k: k, damp: damp)
+
+        // macOS pointer: reach toward it in the air, push away from it in the
+        // water — one rule, sign set by which side of the surface it is on. A
+        // Gaussian around its row keeps the disturbance local; faster moves
+        // pull harder; too far to reach and the pull fades to nothing.
+        if let c = cursor {
+            let u = Double(min(max(0, c.y / max(1, height)), 1))
+            let center = u * Double(count - 1)
+            let hot = 1 + min(1.4, cursorSpeed / 320)
+            let reach: CGFloat = 26 * hot
+            let push: CGFloat = 18 * hot
+            let raw = c.x - cursorBaseX
+            let target = max(-push, min(reach, raw))
+            let overshoot = max(0, abs(raw) - reach)
+            let falloff = CGFloat(exp(-Double(overshoot) / 40))
+            let attract: CGFloat = 70
+            let sigma = 3.0
+            for i in 0..<count {
+                let d = Double(i) - center
+                let g = CGFloat(exp(-(d * d) / (2 * sigma * sigma)))
+                accel[i] += g * attract * (target * falloff - disp[i])
+            }
+        }
+
+        // Floating rider (Bob): each bob cycle sheds a distinct ripple at his
+        // row that travels up and down the waterline — the same kind of wake
+        // the cursor leaves, hands-free. A continuous push read too faint under
+        // the standing wave, so this is a clear periodic pulse instead.
+        if let u = riderY {
+            riderPhase += Double(dt) * 4.4          // ~0.7 Hz bob
+            if riderPhase >= 2 * .pi {
+                riderPhase -= 2 * .pi
+                localImpulse(atNormalizedY: u, strength: 10, sigma: 2.4)
+            }
+        }
+
+        for i in 0..<count {
+            vel[i] += accel[i] * dt
+            disp[i] += vel[i] * dt
+        }
+    }
+}
+
+#if os(iOS)
+/// Bridges Core Motion to the water: device tilt becomes a single surface-lean
+/// value and sharp jerks become splashes. Updates arrive on the main queue and
+/// are pushed straight into the sim, so nothing here touches SwiftUI state.
+private final class WaterMotionDriver {
+    private let manager = CMMotionManager()
+    private var lastShakeMag: Double = 0
+    /// A slowly-adapting "level" reference for each tilt axis. Whatever pose the
+    /// phone is held in becomes flat within a couple of seconds, so the surface
+    /// never sits permanently tilted; a held tilt eases back to level like real
+    /// settling water. Nil until the first sample seeds it.
+    private var neutralRoll: Double?
+    private var neutralPitch: Double?
+
+    func start(onUpdate: @escaping (_ tilt: CGFloat, _ shake: CGFloat) -> Void) {
+        guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
+        manager.deviceMotionUpdateInterval = 1.0 / 30.0
+        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+            guard let self, let m = motion else { return }
+            let roll = m.gravity.x   // left-right tilt (0 held upright)
+            let pitch = m.gravity.z  // up-down tilt (0 held vertical)
+            if self.neutralRoll == nil { self.neutralRoll = roll; self.neutralPitch = pitch }
+            // ~2.5s time constant at 30Hz.
+            let adapt = 0.014
+            self.neutralRoll! += (roll - self.neutralRoll!) * adapt
+            self.neutralPitch! += (pitch - self.neutralPitch!) * adapt
+            // Both axes lean the wave's angle; deviation from the adapted
+            // neutral, so rest reads flat. Amplitude in points, clamped low so
+            // even a big tilt stays a gentle lean.
+            let lean = ((roll - self.neutralRoll!) + (pitch - self.neutralPitch!)) * 64
+            let tilt = CGFloat(max(-34, min(34, lean)))
+
+            let a = m.userAcceleration
+            let mag = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
+            // Only the rising edge of a jerk splashes, so a shake makes a few
+            // discrete splashes rather than a continuous churn.
+            let shake: CGFloat = (mag > 0.28 && mag > self.lastShakeMag)
+                ? CGFloat(mag - 0.28) : 0
+            self.lastShakeMag = mag
+            onUpdate(tilt, shake)
+        }
+    }
+
+    func stop() { manager.stopDeviceMotionUpdates() }
+}
+#endif

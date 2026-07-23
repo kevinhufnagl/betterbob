@@ -48,6 +48,11 @@ public final class BobState: ObservableObject {
     /// False until the first reconcile after signing in has fully settled, so
     /// the UI can show a loading placeholder instead of a half-loaded day.
     @Published public private(set) var ready = false
+    /// True only while the launch-time `connect()` probe is actually running.
+    /// The boot loader keys off THIS, not the persistent `usedSSO` preference —
+    /// a stored SSO flag whose session never fully established must never trap
+    /// the loader on screen with no way to reach the sign-in card.
+    @Published public private(set) var connecting = false
     /// True while a window showing the full dashboard is on screen. The
     /// background poll skips the heavy fetches (month grid, activity feed,
     /// time off, per-poll cycle summary) unless something is actually
@@ -242,6 +247,8 @@ public final class BobState: ObservableObject {
     }
 
     private func connect() async {
+        connecting = true
+        defer { connecting = false }
         do {
             busy = true
             defer { busy = false }
@@ -816,6 +823,12 @@ public final class BobState: ObservableObject {
             // one-time code, so we don't auto-open the prompt on every poll —
             // it's offered once when the session first expires (see below) and
             // otherwise started from the sign-in button.
+            if signedIn {
+                // signedIn but no employeeID would leave `ready` unset forever —
+                // the exact shape of the iOS boot trap. Should never happen
+                // (probeSession sets it before signedIn flips), but log it loud.
+                NSLog("BetterBob: reconcile guard hit — signedIn but employeeID nil; ready stays false")
+            }
             return
         }
         do {

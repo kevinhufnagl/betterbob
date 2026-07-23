@@ -8,6 +8,11 @@ struct PopoverRootView: View {
     @ObservedObject var updater = Updater.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var scheme
+    // Measured live so Bob floats in the water beside the text only when the
+    // popover is genuinely wide enough for his whole body (see workedHeader).
+    @State private var heroWidth: CGFloat = 0
+    @State private var heroTextWidth: CGFloat = 0
+    @State private var heroWaterFraction: CGFloat = 0
 
     private func kindColor(_ kind: AttendanceEntry.Kind) -> Color {
         kind == .breakTime ? .breakAccent(scheme) : .workAccent(scheme)
@@ -86,9 +91,6 @@ struct PopoverRootView: View {
                 .animation(Motion.standard, value: updater.phase)
                 .animation(Motion.standard, value: updater.installed)
                 .animation(Motion.standard, value: updater.dismissedVersion)
-
-            Divider().opacity(0.3)
-            footer
         }
         .frame(width: 460)
         .animation(Motion.standard, value: state.signedIn)
@@ -174,6 +176,18 @@ struct PopoverRootView: View {
             }
             .buttonStyle(.plain)
             .fastTooltip("Open the BetterBob dashboard")
+            // Quit sits beside Dashboard now that the bottom bar is gone.
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .fastTooltip("Quit BetterBob")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -298,10 +312,37 @@ struct PopoverRootView: View {
     private func workedHeader(now: Date) -> some View {
         let v = TodayVals(state, now: now)
         let dryAwake = v.fraction < 0.15 && state.clockState != .clockedOut
+        // Float Bob fully inside the water toward its right edge once the
+        // waterline clears the text. Compact leading pad is 12; Bob is 44.
+        let bobSize: CGFloat = 44
+        let inset: CGFloat = 10
+        let gap: CGFloat = 8
+        let textRight = 12 + heroTextWidth
+        // Floater-vs-straddler from the TARGET fill (stable across the reopen
+        // sweep); reveal + position from the DISPLAYED waterline so he rides
+        // the wave in and never flashes top-left or sits ahead of it.
+        let targetRight = CGFloat(v.fraction) * heroWidth - inset
+        let shownRight = heroWaterFraction * heroWidth - inset
+        let isFloater = v.fraction >= 0.15 && heroWidth > 0
+            && (targetRight - bobSize) >= (textRight + gap)
+        let canFloat = isFloater && (shownRight - bobSize) >= (textRight + gap)
+        let bobCenterX = max(bobSize / 2, shownRight - bobSize / 2)
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                        compact: true, bottomInset: 20)
                 .statusTint(state.heroLimitTint)
+                .waterRider(canFloat ? 0.5 : nil)
+                .overlay(alignment: .leading) {
+                    if canFloat {
+                        BuoyBob(sleeping: state.clockState == .clockedOut,
+                                onBreak: v.onBreak, size: bobSize, submerged: true)
+                            .offset(x: bobCenterX - bobSize / 2)
+                            .transition(.bobReplace)
+                    }
+                }
+                .background(GeometryReader { p in
+                    Color.clear.preference(key: HeroWidthKey.self, value: p.size.width)
+                })
                 .frame(height: 112)
                 .padding(.top, dryAwake ? 28 : 21)
                 .overlay(alignment: .bottomTrailing) {
@@ -313,9 +354,10 @@ struct PopoverRootView: View {
                             .transition(.bobReplace)
                     }
                 }
-            // Swimming once the water is ~15% deep — otherwise (awake)
-            // standing on the deck, watching the pool fill below.
-            if v.fraction >= 0.15 {
+            // Swimming at ~15%+ but no room to float free: straddle the top
+            // edge. Gated on heroWidth > 0 so he doesn't flash top-left before
+            // the measurement lands.
+            if v.fraction >= 0.15 && heroWidth > 0 && !isFloater {
                 BuoyBob(sleeping: state.clockState == .clockedOut,
                         onBreak: v.onBreak, size: 44)
                     .padding(.leading, 14)
@@ -329,6 +371,10 @@ struct PopoverRootView: View {
                     .transition(.bobReplace)
             }
         }
+        .onPreferenceChange(HeroWidthKey.self) { heroWidth = $0 }
+        .onPreferenceChange(HeroTextWidthKey.self) { heroTextWidth = $0 }
+        .onPreferenceChange(HeroWaterFractionKey.self) { heroWaterFraction = $0 }
+        .animation(Motion.standard, value: canFloat)
     }
 
     // MARK: - Today's timeline
@@ -354,9 +400,12 @@ struct PopoverRootView: View {
                         reasonMenu(for: entry)
                     }
                     Spacer()
-                    Text("\(Fmt.clock(entry.start)) – \(entry.end.map(Fmt.clock) ?? "now") (\(Fmt.hm((entry.end ?? Date()).timeIntervalSince(entry.start))))")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.primary.opacity(0.85))
+                    // Hover reveals a pencil; click opens the shared time
+                    // editor — same affordance as the dashboard's Today list.
+                    EditableTimePill(state: state, entry: entry,
+                                     dayEntries: state.entries,
+                                     date: Calendar.current.startOfDay(for: Date()),
+                                     isLast: entry == state.entries.last)
                 }
                 .padding(.horizontal, 8)
                 .frame(minHeight: 24)
@@ -474,32 +523,51 @@ struct PopoverRootView: View {
         .padding(.horizontal, 20)
     }
 
-    private var footer: some View {
-        HStack {
-            if state.busy || !state.deletingEntries.isEmpty {
-                HStack(spacing: 5) {
-                    ProgressView().controlSize(.small).scaleEffect(0.7)
-                    Text("Saving…").font(.system(size: 10)).foregroundStyle(.secondary)
+}
+
+/// The time range for one popover entry, made editable: hover reveals a
+/// pencil and a subtle capsule; clicking opens the shared `EntryTimeEditor`.
+/// Read-only (no pencil, no click) for entries the server hasn't assigned an
+/// id yet — those can't be edited until they reconcile.
+private struct EditableTimePill: View {
+    @ObservedObject var state: BobState
+    let entry: AttendanceEntry
+    var dayEntries: [AttendanceEntry]
+    var date: Date
+    var isLast: Bool
+    @State private var editing = false
+    @State private var timeHover = false
+
+    var body: some View {
+        let e = entry
+        let editable = e.id != nil
+        Button { editing = true } label: {
+            HStack(spacing: 5) {
+                Text("\(Fmt.clock(e.start)) – \(e.end.map(Fmt.clock) ?? "now") (\(Fmt.hm((e.end ?? Date()).timeIntervalSince(e.start))))")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.primary.opacity(0.85))
+                if editable {
+                    Image(systemName: "pencil").font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary).opacity(timeHover ? 1 : 0)
                 }
-                .transition(.opacity)
-            } else if let sync = state.lastSync {
-                Text("Synced \(Fmt.clock(sync))")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
             }
-            Spacer()
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                Text("Quit").font(.system(size: 11))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Capsule().fill(Color.primary.opacity(timeHover ? 0.10 : 0)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(timeHover ? 0.18 : 0), lineWidth: 0.7))
+            .contentShape(Capsule())
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .animation(Motion.quick, value: state.busy || !state.deletingEntries.isEmpty)
+        .buttonStyle(.plain)
+        .disabled(!editable)
+        .onHover { h in
+            guard editable else { return }
+            timeHover = h
+            if h { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        .animation(.easeOut(duration: 0.12), value: timeHover)
+        .popover(isPresented: $editing, arrowEdge: .bottom) {
+            EntryTimeEditor(state: state, entry: e, dayEntries: dayEntries,
+                            date: date, isLast: isLast, isPresented: $editing)
+        }
     }
 }
 
