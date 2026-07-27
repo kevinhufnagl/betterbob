@@ -405,6 +405,8 @@ public struct TodayTimeline: View {
     // gate it on real window visibility — otherwise it re-lays-out the whole
     // Today pane every second in the background, burning CPU for nobody.
     @State private var windowVisible = true
+    /// The hero's live wave, so Bob rides the water it draws.
+    @State private var wave = WaveModel()
 
     public var body: some View {
         Group {
@@ -429,7 +431,8 @@ public struct TodayTimeline: View {
                 // water above it, his body inside.
                 ZStack(alignment: .topLeading) {
                     LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                               greeting: greetingText(state), bottomInset: 12) {
+                               greeting: greetingText(state), bottomInset: 12,
+                               wave: wave) {
                         HStack {
                             Spacer()
                             StatusPill(state: state)
@@ -444,6 +447,21 @@ public struct TodayTimeline: View {
                     // Content-sized: a fixed frame smaller than the content
                     // makes the hero spill past it top and bottom (SwiftUI
                     // doesn't clip), eating the gap to the next card.
+                    // Swimming once it's ~15% deep, straddling the top edge —
+                    // sitting a touch lower so he reads properly submerged, and
+                    // riding the hero's own wave. An overlay, not a layout
+                    // sibling, so the float reads the card's geometry.
+                    .overlay(alignment: .topLeading) {
+                        if v.fraction >= 0.15 {
+                            // Flush with the section top — no dead air above his
+                            // head; the ring stays just as submerged (center 8pt
+                            // below the hero's edge).
+                            BuoyBob(sleeping: state.clockState == .clockedOut,
+                                    onBreak: v.onBreak)
+                                .waveFloat(on: wave, at: CGPoint(x: 24, y: -34))
+                                .transition(.bobReplace)
+                        }
+                    }
                     .padding(.top, 36)
                     .overlay(alignment: .bottomTrailing) {
                         // Clocked out on dry land: asleep bottom-right.
@@ -454,18 +472,7 @@ public struct TodayTimeline: View {
                                 .transition(.bobReplace)
                         }
                     }
-                    // Swimming once it's ~15% deep, straddling the top edge —
-                    // sitting a touch lower so he reads properly submerged.
-                    if v.fraction >= 0.15 {
-                        // Flush with the section top — no dead air above his
-                        // head; the ring stays just as submerged (center 8pt
-                        // below the hero's edge).
-                        BuoyBob(sleeping: state.clockState == .clockedOut,
-                                onBreak: v.onBreak)
-                            .padding(.top, 2)
-                            .padding(.leading, 24)
-                            .transition(.bobReplace)
-                    } else if state.clockState != .clockedOut {
+                    if v.fraction < 0.15, state.clockState != .clockedOut {
                         // Not enough water to swim: he hangs behind the card,
                         // paws on the lip, head peeking over at the water.
                         PeekingBob(size: 64, onBreak: v.onBreak)
@@ -687,6 +694,17 @@ final class HeroSweep {
 /// of target, with a sloshing waterline. Optional `top`/`bottom` slots render
 /// on the water — the dashboard puts its greeting row and the timeline-plus-
 /// buttons glass panel there. `cornerRadius: 0` makes it a full-bleed section.
+/// The hero's edge light, as a ramp: thin overlapping bars stepping into the
+/// water, their opacity falling off smoothly. Four wide layers left ridges you
+/// could count; bars narrower than their spacing blend into one gradient that
+/// follows the waterline. (File scope: `LiquidHero` is generic, and generic
+/// types can't hold static stored properties.)
+private let waterEdgeLight: [(inset: CGFloat, opacity: Double)] = (0..<14).map { step in
+    let depth = Double(step) * 2
+    return (inset: CGFloat(-1 - depth), opacity: 0.115 * exp(-pow(depth / 11, 1.7)))
+}
+private let waterEdgeLightWidth: CGFloat = 4.5
+
 public struct LiquidHero<Top: View, Bottom: View>: View {
     let worked: TimeInterval
     let target: TimeInterval
@@ -709,6 +727,10 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     /// straddles the hero's bottom edge, so no text runs under it.
     var bottomInset: CGFloat = 0
 
+    /// Publishes the wave being drawn so a swimmer can ride it. Pass the same
+    /// model to `.waveFloat(…)`; heroes nobody floats on leave it nil.
+    var wave: WaveModel?
+
     /// When set, the water is drawn in this color's hue instead of the system
     /// accent — orange/red for over-limit days, matching the month cells. Set
     /// via `.statusTint(_:)` so callers don't touch the init.
@@ -721,7 +743,7 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
-         bottomInset: CGFloat = 0,
+         bottomInset: CGFloat = 0, wave: WaveModel? = nil,
          @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
         self.worked = worked
         self.target = target
@@ -734,6 +756,7 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
         self.customLine2 = customLine2
         self.customLine3 = customLine3
         self.bottomInset = bottomInset
+        self.wave = wave
         self.top = top()
         self.bottom = bottom()
     }
@@ -836,7 +859,8 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                     let settled = fraction >= 1 && !animating
                         && (appearedAt.map { Date().timeIntervalSince($0) > 14 } ?? true)
                     if Motion.reduce || settled || !windowVisible {
-                        water(level: fraction, amplitude: 0, phase: 0)
+                        water(in: geo.size, field: field(level: fraction, at: Date(),
+                                                         sweep: 1, still: true))
                     } else {
                         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
                             // Clamped: the anchor sits slightly in the future
@@ -844,16 +868,9 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                             // has finished, instead of stuttering through it.
                             let t = max(0, appearedAt.map { ctx.date.timeIntervalSince($0) } ?? 0)
                             let eased = 1 - pow(1 - min(1, t / 1.5), 3)
-                            // The arrival slosh is bigger, faster and lopsided
-                            // (second harmonic); all three fade slowly toward
-                            // the small, slow, symmetric standing wave.
-                            let decay = exp(-t / 3.0)
-                            let sustain: CGFloat = fraction < 1 ? 5 : 0
-                            let amp = sustain + (11 - sustain) * decay * (0.3 + 0.7 * eased)
-                            let phase = seedPhase + 1.5 * t + (3.3 - 1.5) * 3.0 * (1 - decay)
-                            water(level: displayedFraction(at: ctx.date) * eased,
-                                  amplitude: amp, phase: phase,
-                                  asym: 0.55 * exp(-t / 2.5))
+                            water(in: geo.size,
+                                  field: field(level: displayedFraction(at: ctx.date) * eased,
+                                               at: ctx.date, sweep: eased))
                         }
                     }
                 }
@@ -911,29 +928,56 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
         }
     }
 
-    /// The fill plus its edge light: a tight, sharp gradient hugging the
-    /// waterline (clipped by the wave itself) and a crisp rim line stroked
-    /// exactly along the edge — a specular highlight, not a soft blur.
+    /// The wave to draw at `date`: the arrival slosh is bigger, faster and
+    /// lopsided (second harmonic); all three fade slowly toward the small, slow,
+    /// symmetric standing wave. `still` flattens it outright, for Reduce Motion
+    /// and for a day that has settled.
+    private func field(level: Double, at date: Date, sweep: Double,
+                       still: Bool = false) -> WaveField {
+        let t = max(0, appearedAt.map { date.timeIntervalSince($0) } ?? 0)
+        let decay = exp(-t / 3.0)
+        let sustain: Double = fraction < 1 ? 5 : 0
+        return WaveField(
+            level: level,
+            amplitude: still ? 0 : sustain + (11 - sustain) * decay * (0.3 + 0.7 * sweep),
+            phase: seedPhase + 1.5 * t + (3.3 - 1.5) * 3.0 * (1 - decay),
+            asym: still ? 0 : 0.55 * exp(-t / 2.5),
+            freq: seedFreq, asymPhase: seedAsymPhase,
+            detail2: seedDetail2, detail3: seedDetail3)
+    }
+
+    /// The fill plus its edge light: a soft band of light gathered under the
+    /// waterline, and a crisp rim line stroked exactly along the edge — a
+    /// specular highlight, not a soft blur.
     /// Explicit ZStack: a bare view tuple inside TimelineView stacks
     /// vertically instead of overlapping.
-    private func water(level: Double, amplitude: CGFloat, phase: Double,
-                       asym: Double = 0) -> some View {
-        let field = WaveField(level: level, amplitude: amplitude, phase: phase, asym: asym,
-                              freq: seedFreq, asymPhase: seedAsymPhase,
-                              detail2: seedDetail2, detail3: seedDetail3)
+    private func water(in size: CGSize, field: WaveField) -> some View {
+        // Hand the swimmer the wave we're about to draw. A plain box write, no
+        // publishing — it invalidates nothing, and the float re-reads it on its
+        // own per-frame clock.
+        wave?.record(field, in: size)
         let shape = WaterShape(field: field)
         return ZStack(alignment: .topLeading) {
             shape.fill(waterGradient)
-            if level > 0.02 {
-                let edge = min(1, level)
-                shape.fill(LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: glowColor.opacity(0), location: max(0, edge - 0.05)),
-                        .init(color: glowColor.opacity(0.14), location: max(0.001, edge - 0.014)),
-                        .init(color: glowColor.opacity(0.50), location: max(0.002, edge)),
-                    ]),
-                    startPoint: .leading, endPoint: .trailing))
+            if field.level > 0.02 {
+                // Light gathered under the waterline. It follows the wave — a
+                // straight gradient band read as a ruled line against a curved
+                // edge — but on its own slower, shallower wave, the way light in
+                // water never quite traces the surface.
+                let band = WaterEdgeShape(field: field.parallel)
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(waterEdgeLight.enumerated()), id: \.offset) { _, layer in
+                        band
+                            .stroke(glowColor.opacity(layer.opacity),
+                                    style: StrokeStyle(lineWidth: waterEdgeLightWidth,
+                                                       lineCap: .round))
+                            .offset(x: layer.inset)
+                    }
+                }
+                // One blur over the stack, not one per bar: it only has to take
+                // the edge off bars that already overlap.
+                .blur(radius: 2)
+                .mask(shape)
                 WaterEdgeShape(field: field)
                     .stroke(glowColor.opacity(0.9),
                             style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
@@ -955,6 +999,60 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     }
 }
 
+/// Floats a swimmer on the hero's water. Everything he does comes from the wave
+/// the hero just drew (via `WaveModel`): the ripple under him carries him along
+/// with it, lifts him as it swells, and rocks him with its slope — so he moves
+/// with the water instead of on an idle animation of his own.
+///
+/// Apply it *inside* an `.overlay` on the hero, so the geometry it reads is the
+/// card's own — a greedy reader as a layout sibling would fight the hero's
+/// content sizing.
+public struct WaveFloat: ViewModifier {
+    /// The hero's wave, recorded per frame. Nil until it has drawn once.
+    var wave: WaveModel?
+    /// Where he floats, from the card's top-leading corner. Negative y straddles
+    /// the top edge, which is where he sits on the waterline.
+    var at: CGPoint
+
+    /// The wave clock stops with the window — SwiftUI keeps closed windows
+    /// alive, and an unpaused display link burns CPU forever.
+    @State private var windowVisible = true
+
+    public func body(content: Content) -> some View {
+        Group {
+            if Motion.reduce || !windowVisible {
+                // Held where the wave last left him: read once, no clock.
+                ride(content, on: wave?.ride(at: at.y))
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
+                    ride(content, on: wave?.ride(at: at.y))
+                }
+            }
+        }
+        .trackWindowVisibility { windowVisible = $0 }
+    }
+
+    private func ride(_ content: Content,
+                      on sample: (drift: Double, slope: Double)?) -> some View {
+        // A crest is deeper water: it pushes him toward the far wall and lifts
+        // him as it passes. He leans with the surface too, but the waterline is
+        // far steeper per point than a float should tilt — a fraction of it,
+        // capped.
+        let drift = sample?.drift ?? 0
+        let lean = min(0.09, max(-0.09, -(sample?.slope ?? 0) * 0.30))
+        return content
+            .rotationEffect(.radians(lean))
+            .offset(x: at.x + CGFloat(drift * 0.5), y: at.y - CGFloat(drift * 0.35))
+    }
+}
+
+extension View {
+    /// See `WaveFloat`.
+    public func waveFloat(on wave: WaveModel?, at: CGPoint) -> some View {
+        modifier(WaveFloat(wave: wave, at: at))
+    }
+}
+
 extension LiquidHero {
     /// Draw the water in `tint`'s hue (orange/red for over-limit days). Pass nil
     /// to keep the accent. Chained so callers don't thread it through the init.
@@ -971,20 +1069,20 @@ extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
-         bottomInset: CGFloat = 0) {
+         bottomInset: CGFloat = 0, wave: WaveModel? = nil) {
         self.init(worked: worked, target: target, breakTotal: breakTotal,
                   compact: compact, greeting: greeting, cornerRadius: cornerRadius,
                   customFraction: customFraction, customBig: customBig,
                   customLine2: customLine2, customLine3: customLine3,
-                  bottomInset: bottomInset,
+                  bottomInset: bottomInset, wave: wave,
                   top: { EmptyView() }, bottom: { EmptyView() })
     }
 }
 
 /// Bob in a lifebuoy: the ring wraps his waist — body behind the ring's
-/// bottom arc, face in front of its top. Motion is Core-Animation driven
-/// (repeat-forever sway and dip), so it is interpolated by the compositor
-/// instead of sampled per frame; blinks run on a sparse async loop. Pauses
+/// bottom arc, face in front of its top. He has no float animation of his own:
+/// `.waveFloat(…)` rides him on the wave the hero is actually drawing, so he
+/// moves with the water under him. Blinks run on a sparse async loop, paused
 /// when the window isn't really visible.
 public struct BuoyBob: View {
     public init(sleeping: Bool = false, onBreak: Bool = false, size: CGFloat = 72) {
@@ -997,33 +1095,17 @@ public struct BuoyBob: View {
     var onBreak = false
     var size: CGFloat = 72
     @State private var windowVisible = true
-    @State private var swayAngle: Double = 0
-    @State private var dipOffset: CGFloat = 0
     @State private var blink: CGFloat = 0
-    // Fresh float character on every appearance, like the wave's seeds —
-    // bounded so he never swings wider or dips deeper than before.
-    @State private var swayAmp = Double.random(in: 2.0...3.2)
-    @State private var swayDur = Double.random(in: 2.0...2.8)
-    @State private var dipAmp = CGFloat.random(in: 0.024...0.035)
-    @State private var dipDur = Double.random(in: 1.45...2.1)
 
     public var body: some View {
         content(blink: sleeping ? 1 : blink)
-            .rotationEffect(.degrees(swayAngle))
-            // Scaled to Bob's size — a fixed ±2.5pt was too much travel for
-            // the popover's small swimmer.
-            .offset(y: dipOffset)
             // Gated like every other clock: the z's 12fps TimelineView must
             // not keep ticking inside a retained-but-closed window.
             .overlay(alignment: .topTrailing) {
                 if sleeping && windowVisible && !Motion.reduce { DriftingZs() }
             }
             .frame(width: size, height: size)
-            .trackWindowVisibility { visible in
-                windowVisible = visible
-                applyFloat()
-            }
-            .onAppear { applyFloat() }
+            .trackWindowVisibility { windowVisible = $0 }
             .task(id: windowVisible && !sleeping && !Motion.reduce) {
                 guard windowVisible, !sleeping, !Motion.reduce else { return }
                 while !Task.isCancelled {
@@ -1034,29 +1116,6 @@ public struct BuoyBob: View {
                     withAnimation(.easeOut(duration: 0.12)) { blink = 0 }
                 }
             }
-    }
-
-    private func applyFloat() {
-        var t = Transaction()
-        t.disablesAnimations = true
-        if windowVisible && !Motion.reduce {
-            // Jump to one extreme unanimated, then ping-pong to the other —
-            // the animated value never rests at an extreme when paused,
-            // which used to leave him frozen with a permanent left tilt.
-            withTransaction(t) { swayAngle = -swayAmp; dipOffset = -size * dipAmp }
-            withAnimation(.easeInOut(duration: swayDur).repeatForever(autoreverses: true)) {
-                swayAngle = swayAmp
-            }
-            withAnimation(.easeInOut(duration: dipDur).repeatForever(autoreverses: true)) {
-                dipOffset = size * dipAmp
-            }
-        } else {
-            // A repeatForever animator is NOT cancelled by a disablesAnimations
-            // write — it keeps ticking the attribute graph (and re-laying-out
-            // the retained window) forever. Replacing it with a finite
-            // animation is the only reliable way to stop it.
-            withAnimation(.linear(duration: 0.01)) { swayAngle = 0; dipOffset = 0 }
-        }
     }
 
     private func content(blink: CGFloat) -> some View {
@@ -1235,66 +1294,36 @@ struct DriftingZs: View {
     }
 }
 
-/// The waterline as a function: three sine components with incommensurate
-/// wavelengths and speeds sum into an organic, never-quite-repeating edge
-/// (a single sine reads as a rubber band). `asym` adds the lopsided slosh
-/// harmonic during the arrival; amplitude 0 collapses to a straight line.
-private struct WaveField {
-    var level: Double       // 0…1 of the width
-    var amplitude: CGFloat  // points
-    var phase: Double
-    var asym: Double = 0
-    /// Seeded per appearance for variety.
-    var freq: Double = 2.2
-    var asymPhase: Double = 1.2
-    var detail2 = 0.0
-    var detail3 = 0.0
-
-    func x(_ y: CGFloat, in rect: CGRect) -> CGFloat {
-        let u = Double(y / rect.height)
-        let theta = u * .pi * freq + phase
-        var w = sin(theta)
-        w += 0.55 * sin(u * .pi * freq * 1.83 + phase * 1.31 + detail2)
-        w += 0.30 * sin(u * .pi * freq * 3.10 + phase * 0.57 + detail3)
-        w *= 0.54  // renormalize the component sum to ~unit amplitude
-        w += asym * sin(2 * theta + asymPhase)
-        let edge = rect.width * min(1, level)
-        return min(rect.width, edge + amplitude * CGFloat(w))
-    }
-}
-
+/// The submerged body of water. The waterline itself lives with the rest of the
+/// wave maths in `WaterWave.swift`, so the swimmer floating on it and the unit
+/// tests read the same surface the hero draws.
 private struct WaterShape: Shape {
     var field: WaveField
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        guard field.level > 0.001, rect.height > 0 else { return p }
+        let line = field.polyline(in: rect)
+        guard field.level > 0.001, let first = line.first else { return p }
         p.move(to: .zero)
-        p.addLine(to: CGPoint(x: field.x(0, in: rect), y: 0))
-        var y: CGFloat = 0
-        while y < rect.height {
-            y = min(y + 3, rect.height)
-            p.addLine(to: CGPoint(x: field.x(y, in: rect), y: y))
-        }
+        p.addLine(to: first)
+        for pt in line.dropFirst() { p.addLine(to: pt) }
         p.addLine(to: CGPoint(x: 0, y: rect.height))
         p.closeSubpath()
         return p
     }
 }
 
-/// Just the waterline polyline, for stroking the crisp rim highlight.
+/// Just the waterline polyline, for stroking the crisp rim highlight and the
+/// soft band of light that follows it into the water.
 private struct WaterEdgeShape: Shape {
     var field: WaveField
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        guard field.level > 0.001, rect.height > 0 else { return p }
-        p.move(to: CGPoint(x: field.x(0, in: rect), y: 0))
-        var y: CGFloat = 0
-        while y < rect.height {
-            y = min(y + 3, rect.height)
-            p.addLine(to: CGPoint(x: field.x(y, in: rect), y: y))
-        }
+        let line = field.polyline(in: rect)
+        guard field.level > 0.001, let first = line.first else { return p }
+        p.move(to: first)
+        for pt in line.dropFirst() { p.addLine(to: pt) }
         return p
     }
 }

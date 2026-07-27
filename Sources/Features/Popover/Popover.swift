@@ -8,6 +8,8 @@ struct PopoverRootView: View {
     @ObservedObject var updater = Updater.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.colorScheme) private var scheme
+    /// The hero's live wave, so Bob rides the water it draws.
+    @State private var wave = WaveModel()
 
     private func kindColor(_ kind: AttendanceEntry.Kind) -> Color {
         kind == .breakTime ? .breakAccent(scheme) : .workAccent(scheme)
@@ -346,9 +348,20 @@ struct PopoverRootView: View {
         let dryAwake = v.fraction < 0.15 && state.clockState != .clockedOut
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                       compact: true, bottomInset: 20)
+                       compact: true, bottomInset: 20, wave: wave)
                 .statusTint(state.heroLimitTint)
                 .frame(height: 112)
+                // Swimming once the water is ~15% deep, riding the hero's own
+                // wave. A hair higher than the edge so his low point clears the
+                // text below.
+                .overlay(alignment: .topLeading) {
+                    if v.fraction >= 0.15 {
+                        BuoyBob(sleeping: state.clockState == .clockedOut,
+                                onBreak: v.onBreak, size: 44)
+                            .waveFloat(on: wave, at: CGPoint(x: 14, y: -23))
+                            .transition(.bobReplace)
+                    }
+                }
                 .padding(.top, dryAwake ? 28 : 21)
                 .overlay(alignment: .bottomTrailing) {
                     // Clocked out on dry land: asleep bottom-right.
@@ -359,16 +372,8 @@ struct PopoverRootView: View {
                             .transition(.bobReplace)
                     }
                 }
-            // Swimming once the water is ~15% deep — otherwise (awake)
-            // standing on the deck, watching the pool fill below.
-            if v.fraction >= 0.15 {
-                BuoyBob(sleeping: state.clockState == .clockedOut,
-                        onBreak: v.onBreak, size: 44)
-                    .padding(.leading, 14)
-                    // A hair higher so his float's low point clears the text.
-                    .offset(y: -2)
-                    .transition(.bobReplace)
-            } else if dryAwake {
+            // Otherwise (awake) he stands on the deck, watching the pool fill.
+            if dryAwake {
                 // Hanging behind the card, paws on the lip, head peeking over.
                 PeekingBob(size: 46, onBreak: v.onBreak)
                     .padding(.leading, 16)

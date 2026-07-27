@@ -8,6 +8,8 @@ struct TodayScreen: View {
     @ObservedObject var state: BobState
     @State private var editingEntry: EntryEdit?
     @State private var addingEntry = false
+    /// The hero's live wave, so Bob rides the water it draws.
+    @State private var wave = WaveModel()
 
     /// A fresh day: signed in, nothing punched yet, still clocked out. The
     /// empty water tank reads as "nothing here", so swap it for a welcome.
@@ -119,17 +121,16 @@ struct TodayScreen: View {
         // Tall enough that the text block clears the dock straddling the
         // bottom edge; bottomInset reserves the covered strip inside the hero.
         LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                   compact: true, cornerRadius: 18, bottomInset: 30)
+                   compact: true, cornerRadius: 18, bottomInset: 30, wave: wave)
             .statusTint(state.heroLimitTint)
             .frame(height: 215)
             .overlay(alignment: .topLeading) {
                 // Swimming once the water is ~15% deep, straddling the top
-                // edge like the Mac popover.
+                // edge like the Mac popover, riding the hero's own wave.
                 if v.fraction >= 0.15 {
                     BuoyBob(sleeping: state.clockState == .clockedOut,
                             onBreak: v.onBreak, size: 72)
-                        .padding(.leading, 18)
-                        .offset(y: 10)
+                        .waveFloat(on: wave, at: CGPoint(x: 18, y: 10))
                 }
             }
             .overlay(alignment: .top) {
