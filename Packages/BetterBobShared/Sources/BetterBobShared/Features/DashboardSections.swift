@@ -687,7 +687,7 @@ public struct CalendarHeatmap: View {
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase).kerning(0.5)
             attentionRow(color: .bobMagenta, icon: "clock.badge.exclamationmark",
-                         title: "Unclosed", days: state.unclosedDays)
+                         title: "Unclosed", days: state.unclosedDays, showCloseFix: true)
             attentionRow(color: .bobRed, icon: "exclamationmark.triangle.fill",
                          title: "Over daily max", days: state.overMaxDays)
             attentionRow(color: .bobOrange, icon: "cup.and.saucer.fill",
@@ -704,7 +704,8 @@ public struct CalendarHeatmap: View {
     // color language the grid cells use.
     @ViewBuilder
     private func attentionRow(color: Color, icon: String, title: String,
-                              days: [String], showReasonFix: Bool = false) -> some View {
+                              days: [String], showReasonFix: Bool = false,
+                              showCloseFix: Bool = false) -> some View {
         if !days.isEmpty {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: icon)
@@ -745,6 +746,23 @@ public struct CalendarHeatmap: View {
                     }
                 }
                 Spacer(minLength: 8)
+                if showCloseFix {
+                    // One click closes the open entry(ies) at the smart-guessed
+                    // check-out. Show the time when it's a single day.
+                    let label = (days.count == 1 && state.forgottenClockOut != nil)
+                        ? "Close at \(Fmt.clock(state.forgottenClockOut!.suggestedEnd))"
+                        : "Close all"
+                    Button { state.closeAllUnclosed() } label: {
+                        Label(label, systemImage: "wand.and.stars")
+                            .font(.bobUI(11, weight: .semibold))
+                            .foregroundStyle(Color.bobMagenta)
+                            .padding(.horizontal, 10).frame(height: 28)
+                            .background(Capsule().fill(Color.bobMagenta.opacity(0.16)))
+                            .overlay(Capsule().strokeBorder(Color.bobMagenta.opacity(0.4), lineWidth: 0.8))
+                    }
+                    .buttonStyle(.plain).fixedSize().disabled(state.busy)
+                    .help("Close the forgotten clock-out at the best-guess check-out time")
+                }
                 if showReasonFix, !state.reasonOptions.isEmpty {
                     Menu {
                         ForEach(state.reasonOptions, id: \.self) { opt in

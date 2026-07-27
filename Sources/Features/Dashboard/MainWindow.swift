@@ -114,20 +114,20 @@ struct MainWindow: View {
     }
 
     private func row(_ t: MainTab) -> some View {
-        Label {
-            HStack {
-                Text(t.title)
-                Spacer()
-                if t == .activity, !state.activity.isEmpty {
-                    Text("\(state.activity.count)")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } icon: {
-            Image(systemName: t.icon)
+        // Native sidebar badge (neutral system pill, like Mail's unread count) —
+        // consistent for both the Activity tally and the month attention count.
+        // A count of 0 renders nothing.
+        Label(t.title, systemImage: t.icon)
+            .badge(badgeCount(t))
+            .tag(t)
+    }
+
+    private func badgeCount(_ t: MainTab) -> Int {
+        switch t {
+        case .activity: return state.activity.count
+        case .cycle: return state.attentionDayCount
+        default: return 0
         }
-        .tag(t)
     }
 
     /// A fresh, clocked-out day on the Today tab — the welcome fills the whole

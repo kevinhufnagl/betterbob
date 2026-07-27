@@ -494,6 +494,9 @@ public struct TodayTimeline: View {
                     .padding(.horizontal, 2)
                 }
 
+                // A forgotten clock-out on a past day is a real data problem —
+                // surface it here on Today, not only in the month tab.
+                if let fc = state.forgottenClockOut { unclosedBanner(fc).transition(.bobBanner) }
                 if case .onBreak = state.clockState { breakBanner(ctxDate).transition(.bobBanner) }
                 if state.overMaxNonBreak { missingBreakBanner.transition(.bobBanner) }
                 if !state.overMaxNonBreak, let short = state.breakGuidelineShortfall {
@@ -508,6 +511,35 @@ public struct TodayTimeline: View {
         .animation(Motion.standard, value: state.breakGuidelineShortfall)
         .animation(Motion.standard, value: state.overDailyMax)
         .animation(Motion.standard, value: state.entries)
+        .animation(Motion.standard, value: state.unclosedDays)
+    }
+
+    /// Forgot-to-clock-out CTA on Today: closes the open entry at the smart
+    /// check-out guess on one click (matches the popover banner + month fix).
+    private func unclosedBanner(_ fc: (date: Date, dateKey: String, suggestedEnd: Date)) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "clock.badge.exclamationmark")
+                .font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.bobMagenta)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Forgot to clock out \(fc.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("That entry is still open — close it at your usual check-out. You can fine-tune the time after.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { state.closeForgottenClockOut() } label: {
+                Label("Close at \(Fmt.clock(fc.suggestedEnd))", systemImage: "wand.and.stars")
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Capsule().fill(Color.bobMagenta.opacity(0.18)))
+                    .overlay(Capsule().strokeBorder(Color.bobMagenta.opacity(0.45), lineWidth: 0.8))
+                    .foregroundStyle(Color.bobMagenta)
+            }.buttonStyle(.plain).disabled(state.busy)
+        }
+        .padding(14)
+        .background(Color.bobMagenta.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.bobMagenta.opacity(0.30), lineWidth: 0.8))
     }
 
     /// Shown while on a break — makes clear whether Bob will clock you back in.

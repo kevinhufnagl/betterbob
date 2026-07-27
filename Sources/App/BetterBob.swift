@@ -159,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNU
         let host = NSHostingController(rootView: PopoverRootView(state: BobState.shared))
         host.sizingOptions = [.preferredContentSize]
         popover.contentViewController = host
+        BobState.shared.setPopoverActive(true)
         Task { await BobState.shared.reconcile() }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -191,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNU
     // animations keep running in the background.
     func popoverDidClose(_ notification: Notification) {
         popover.contentViewController = nil
+        BobState.shared.setPopoverActive(false)
     }
 
     private func updateStatusItem() {

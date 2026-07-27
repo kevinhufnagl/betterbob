@@ -5,7 +5,8 @@ import AppKit
 import Combine
 
 /// The app's one source of truth, refreshed from HiBob (the *real* source of
-/// truth) every minute, on wake, and after every action. Decisions are
+/// truth) on a state-dependent cadence (see `pollInterval`), on wake, when a
+/// window or the popover opens, and after every action. Decisions are
 /// delegated to AttendanceLogic; this class polls, executes, and publishes.
 @MainActor
 public final class BobState: ObservableObject {
@@ -58,6 +59,10 @@ public final class BobState: ObservableObject {
     /// time off, per-poll cycle summary) unless something is actually
     /// displaying them — that's the bulk of the idle request traffic.
     private(set) var dashboardActive = false
+    /// True while the menu-bar popover is on screen. Unlike `dashboardActive`
+    /// this doesn't unlock the heavy fetches (the popover shows none of them) —
+    /// it only tightens the poll cadence while the user is looking.
+    private(set) var popoverActive = false
     /// When the cycle summary was last fetched, to rate-limit it in the
     /// background (it only feeds notifications + the midnight fallback there).
     private var lastCycleSummaryAt: Date?
@@ -127,13 +132,51 @@ public final class BobState: ObservableObject {
         }
         #endif
 
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { await self?.reconcile() }
-        }
+        syncPollTimer()
 
         if usedSSO {
             Task { await connect() }
         }
+    }
+
+    // MARK: - Poll cadence
+
+    /// How often the background poll runs. Polling exists to notice punches
+    /// made *elsewhere* (HiBob web, the phone) — everything the app itself does
+    /// reconciles immediately, the menu-bar clock ticks locally, and auto-break
+    /// transitions ride a precise one-shot `eventTimer`. So the cadence tracks
+    /// how much a stale view would actually cost:
+    ///
+    /// - UI on screen: every minute, the view has to be live.
+    /// - Idle but on the clock: every 5 minutes — a clock-in made on the web
+    ///   still needs to be picked up reasonably promptly for auto-break.
+    /// - Idle and clocked out: every 30 minutes. Nothing is running; an evening
+    ///   or weekend Mac shouldn't sit there making a request a minute.
+    private var pollInterval: TimeInterval {
+        if dashboardActive || popoverActive { return 60 }
+        switch clockState {
+        case .working, .onBreak: return 5 * 60
+        case .clockedOut: return 30 * 60
+        }
+    }
+
+    /// The interval `pollTimer` was scheduled with, so a reconcile that doesn't
+    /// change the cadence leaves the running timer alone (rescheduling every
+    /// poll would reset its phase and, if the state flapped, could starve it).
+    private var scheduledPollInterval: TimeInterval?
+
+    /// Re-arm the poll timer if the cadence `pollInterval` asks for has changed.
+    private func syncPollTimer() {
+        let want = pollInterval
+        guard want != scheduledPollInterval else { return }
+        scheduledPollInterval = want
+        pollTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: want, repeats: true) { [weak self] _ in
+            Task { await self?.reconcile() }
+        }
+        // Let the system coalesce the long idle wake-ups with other work.
+        timer.tolerance = want / 10
+        pollTimer = timer
     }
 
     /// True once the user has signed in through the embedded browser; the app
@@ -582,8 +625,23 @@ public final class BobState: ObservableObject {
     // issues apply to any day, today included.
 
     public var unclosedDays: [String] {
-        monthDays.filter { $0.dateKey < DayFmt.today() && hasOpenEntry($0.entries) }
-            .map(\.dateKey).sorted()
+        let n = now
+        return monthDays.filter {
+            $0.dateKey < DayFmt.today() && hasOpenEntry($0.entries)
+                // Hide a day we just closed until a fresh refetch reflects it —
+                // a stale in-flight reload otherwise flickers the CTA back.
+                && !(closedRecently[$0.dateKey].map { n.timeIntervalSince($0) < closeGrace } ?? false)
+        }.map(\.dateKey).sorted()
+    }
+
+    /// The most recent past day with a forgotten clock-out (open work entry),
+    /// with the smart-guessed end — drives the "you forgot to clock out" CTA.
+    public var forgottenClockOut: (date: Date, dateKey: String, suggestedEnd: Date)? {
+        guard let key = unclosedDays.last,
+              let day = monthDays.first(where: { $0.dateKey == key }),
+              let open = day.entries.first(where: { $0.kind == .work && $0.end == nil })
+        else { return nil }
+        return (day.date, key, suggestedEndForOpenEntry(open))
     }
     public var overMaxDays: [String] {
         monthDays.filter { isOverDailyMax($0.entries) }.map(\.dateKey).sorted()
@@ -601,6 +659,11 @@ public final class BobState: ObservableObject {
     public var hasAttentionItems: Bool {
         !unclosedDays.isEmpty || !overMaxDays.isEmpty
             || !breakIssueDays.isEmpty || !missingReasonDays.isEmpty
+    }
+
+    /// Distinct days needing attention — the count badged on the month tab.
+    public var attentionDayCount: Int {
+        Set(unclosedDays + overMaxDays + breakIssueDays + missingReasonDays).count
     }
 
     /// Set `option` on every reasonless work entry across the loaded month,
@@ -644,6 +707,41 @@ public final class BobState: ObservableObject {
                 into: dayEntries, threshold: Prefs.shared.threshold,
                 breakLength: Prefs.shared.breakLength, now: now) else { return }
         saveDay(rebuilt, on: date)
+    }
+
+    /// Days just closed via the CTA, and when — so a stale month refetch during
+    /// the write can't briefly re-report them as unclosed and flicker the
+    /// banner back. Expires on its own (see `unclosedDays`), so a write that
+    /// genuinely failed to close resurfaces after the grace window.
+    private var closedRecently: [String: Date] = [:]
+    private let closeGrace: TimeInterval = 120
+
+    /// One-click fix for a forgotten clock-out: close the day's open work entry
+    /// at the smart-guessed end (usual check-out habit → target → now). The
+    /// user can still fine-tune the time afterward in the day detail.
+    public func closeOpenEntry(in dayEntries: [AttendanceEntry], on date: Date) {
+        guard let idx = dayEntries.firstIndex(where: { $0.kind == .work && $0.end == nil })
+        else { return }
+        var rebuilt = dayEntries
+        rebuilt[idx].end = suggestedEndForOpenEntry(rebuilt[idx])
+        closedRecently[DayFmt.iso.string(from: date)] = now
+        closedRecently = closedRecently.filter { now.timeIntervalSince($0.value) < closeGrace }
+        saveDay(rebuilt, on: date)
+    }
+
+    /// Close the open work entry on every past unclosed day, each at its own guess.
+    public func closeAllUnclosed() {
+        for key in unclosedDays {
+            guard let day = monthDays.first(where: { $0.dateKey == key }) else { continue }
+            closeOpenEntry(in: day.entries, on: day.date)
+        }
+    }
+
+    /// Close just the most recent forgotten clock-out (the CTA's target day).
+    public func closeForgottenClockOut() {
+        guard let fc = forgottenClockOut,
+              let day = monthDays.first(where: { $0.dateKey == fc.dateKey }) else { return }
+        closeOpenEntry(in: day.entries, on: day.date)
     }
 
     /// HiBob's "Break not taken or doesn't meet guidelines" for a day: worked
@@ -759,7 +857,17 @@ public final class BobState: ObservableObject {
     public func setDashboardActive(_ active: Bool) {
         guard active != dashboardActive else { return }
         dashboardActive = active
+        syncPollTimer()
         if active { Task { await reconcile() } }
+    }
+
+    /// Called by the menu-bar popover as it shows/hides. The popover already
+    /// kicks its own reconcile on open; this just tightens the poll cadence for
+    /// as long as it's on screen.
+    public func setPopoverActive(_ active: Bool) {
+        guard active != popoverActive else { return }
+        popoverActive = active
+        syncPollTimer()
     }
 
     // MARK: - Time off
@@ -900,10 +1008,12 @@ public final class BobState: ObservableObject {
                 cycleSummary = s
                 lastCycleSummaryAt = now
             }
-            // The month grid is a heavy fetch + parse. Load it every poll only
-            // when the dashboard is open; otherwise leave it to CyclePane's own
-            // loader and the targeted fallback just below.
-            if dashboardActive { await loadMonthDays() }
+            // The month grid is a heavy fetch + parse. Refresh it every poll
+            // only when the dashboard is open — but load it ONCE regardless
+            // (when still empty) so the attention digest (forgotten clock-outs,
+            // the month-tab count, the Today/popover banner) is populated from
+            // the first reconcile, not only after the month tab is first opened.
+            if dashboardActive || monthDays.isEmpty { await loadMonthDays() }
 
             // Resolve today's entries ONCE and assign only when they actually
             // change, so a refresh never blanks the timeline. Prefer clockStatus;
@@ -963,6 +1073,8 @@ public final class BobState: ObservableObject {
 
         recomputeDerived()
         armEventTimer()
+        // Clocking in or out moves the idle cadence between 5 and 30 minutes.
+        syncPollTimer()
         // The day is fully settled now (entries + clock state consistent).
         if signedIn { ready = true }
     }

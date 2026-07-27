@@ -43,6 +43,7 @@ struct PopoverRootView: View {
                         } else {
                             ActionDock(state: state, now: context.date)
                         }
+                        if let fc = state.forgottenClockOut { unclosedWarning(fc) }
                         if !state.queue.isEmpty {
                             Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")
                                 .font(.system(size: 10)).foregroundStyle(.secondary)
@@ -246,6 +247,42 @@ struct PopoverRootView: View {
         .background(Color.bobOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Color.bobOrange.opacity(0.28), lineWidth: 0.7))
+        .transition(.bobBanner)
+    }
+
+    /// Forgot-to-clock-out CTA: names the day and closes the open entry at the
+    /// smart-guessed check-out on one tap.
+    private func unclosedWarning(_ fc: (date: Date, dateKey: String, suggestedEnd: Date)) -> some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.badge.exclamationmark").font(.system(size: 10))
+                Text("Forgot to clock out \(fc.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
+                    .font(.system(size: 11, weight: .semibold))
+                Spacer()
+            }
+            .foregroundStyle(Color.bobMagenta)
+            Button {
+                state.closeForgottenClockOut()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "wand.and.stars").font(.system(size: 11, weight: .bold))
+                    Text("Close at \(Fmt.clock(fc.suggestedEnd))")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(Color.bobMagenta)
+                .frame(maxWidth: .infinity).frame(height: 30)
+                .background(Capsule().fill(Color.bobMagenta.opacity(0.14)))
+                .overlay(Capsule().strokeBorder(Color.bobMagenta.opacity(0.4), lineWidth: 0.7))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(state.busy)
+            .fastTooltip("Close the forgotten clock-out at the best-guess check-out time.")
+        }
+        .padding(9)
+        .background(Color.bobMagenta.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.bobMagenta.opacity(0.28), lineWidth: 0.7))
         .transition(.bobBanner)
     }
 
