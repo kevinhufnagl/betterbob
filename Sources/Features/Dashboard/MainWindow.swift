@@ -53,12 +53,16 @@ struct MainWindow: View {
         .onChange(of: state.signedIn) { _, signedIn in
             if signedIn, tab == .settings { tab = .today }
         }
-        // Only pull the heavy dashboard data (month grid, activity, time off)
-        // while this window is actually on screen — see BobState.reconcile.
-        .trackWindowVisibility {
-            windowVisible = $0
-            state.setDashboardActive($0)
-        }
+        // Shell teardown: keep the tree rendered when merely covered by another
+        // app (occlusionCounts: false) so switching back is instant — only a
+        // close or miniaturize blanks it. The animated views inside still pause
+        // themselves on occlusion via their own (occlusion-counting) trackers,
+        // so a covered window doesn't spin its clocks; and a *closed* window,
+        // where per-view gating is leaky, still gets the full teardown here.
+        .trackWindowVisibility(occlusionCounts: false) { windowVisible = $0 }
+        // Data loading follows true on-screen visibility: don't pull the heavy
+        // dashboard data (month grid, activity, time off) while fully covered.
+        .trackWindowVisibility { state.setDashboardActive($0) }
     }
 
     private var shell: some View {

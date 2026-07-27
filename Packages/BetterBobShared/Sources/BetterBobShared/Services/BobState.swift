@@ -750,6 +750,8 @@ public final class BobState: ObservableObject {
             lastCycleSummaryAt = now
         }
         await loadMonthDays()
+        // The month grid marks time-off days, so it needs the requests loaded.
+        await loadTimeOff()
     }
 
     /// Called by the dashboard window as it shows/hides. Turning active kicks a
@@ -767,6 +769,25 @@ public final class BobState: ObservableObject {
         if let b = try? await client.fetchTimeOffBalances(employeeID: id) { timeOffBalances = b }
         if let r = try? await client.fetchTimeOffRequests(employeeID: id) { timeOffRequests = r }
         if let p = try? await client.fetchTimeOffPolicyTypes(employeeID: id) { timeOffPolicyTypes = p }
+    }
+
+    /// dateKey ("yyyy-MM-dd") → time-off policy name, for every day covered by a
+    /// time-off request that isn't rejected/cancelled. The month grid marks
+    /// these so a zero-worked day off reads as time off, not skipped work.
+    /// Half-days aren't in the API model, so a partial day marks as a full one.
+    public var timeOffByDay: [String: String] {
+        var map: [String: String] = [:]
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = .current
+        let off: Set<String> = ["rejected", "cancelled", "canceled", "declined", "deleted"]
+        for r in timeOffRequests where !off.contains(r.status.lowercased()) {
+            guard var d = DayFmt.date(r.startDate), let end = DayFmt.date(r.endDate) else { continue }
+            while d <= end {
+                map[DayFmt.iso.string(from: d)] = r.typeName
+                guard let next = cal.date(byAdding: .day, value: 1, to: d) else { break }
+                d = next
+            }
+        }
+        return map
     }
 
     /// Body shared by calculate and submit.

@@ -10,17 +10,25 @@ import AppKit
 
 struct WindowVisibility: NSViewRepresentable {
     var onChange: (Bool) -> Void
+    /// When true (default), a fully-occluded window reports invisible — right
+    /// for pausing animation clocks and heavy data loads. When false, only
+    /// miniaturize/close report invisible, so a window merely covered by
+    /// another app stays "visible": used for the shell teardown, so switching
+    /// back is instant instead of rebuilding the whole tree.
+    var occlusionCounts = true
 
-    func makeNSView(context: Context) -> Tracker { Tracker(onChange: onChange) }
+    func makeNSView(context: Context) -> Tracker { Tracker(onChange: onChange, occlusionCounts: occlusionCounts) }
     func updateNSView(_ nsView: Tracker, context: Context) { nsView.onChange = onChange }
 
     final class Tracker: NSView {
         var onChange: (Bool) -> Void
+        let occlusionCounts: Bool
         private var observers: [NSObjectProtocol] = []
         private var lastReported: Bool?
 
-        init(onChange: @escaping (Bool) -> Void) {
+        init(onChange: @escaping (Bool) -> Void, occlusionCounts: Bool) {
             self.onChange = onChange
+            self.occlusionCounts = occlusionCounts
             super.init(frame: .zero)
         }
         required init?(coder: NSCoder) { fatalError() }
@@ -57,7 +65,7 @@ struct WindowVisibility: NSViewRepresentable {
 
         private func report() {
             let visible = window.map {
-                $0.occlusionState.contains(.visible) && !$0.isMiniaturized
+                (occlusionCounts ? $0.occlusionState.contains(.visible) : true) && !$0.isMiniaturized
             } ?? false
             push(visible)
         }
@@ -75,15 +83,20 @@ struct WindowVisibility: NSViewRepresentable {
 extension View {
     /// Calls `onChange` whenever the hosting window's real visibility flips —
     /// attach to views driving animation clocks and pause them when false.
-    func trackWindowVisibility(_ onChange: @escaping (Bool) -> Void) -> some View {
-        background(WindowVisibility(onChange: onChange))
+    /// `occlusionCounts: false` reports invisible only on miniaturize/close (a
+    /// window merely covered by another app still reads visible), so hosts that
+    /// tear down their whole tree stay rendered through an app switch.
+    func trackWindowVisibility(occlusionCounts: Bool = true,
+                               _ onChange: @escaping (Bool) -> Void) -> some View {
+        background(WindowVisibility(onChange: onChange, occlusionCounts: occlusionCounts))
     }
 }
 #else
 // iOS backgrounds/suspends the whole scene, so TimelineView clocks stop on
 // their own; visibility only needs to track view appearance.
 extension View {
-    func trackWindowVisibility(_ onChange: @escaping (Bool) -> Void) -> some View {
+    func trackWindowVisibility(occlusionCounts: Bool = true,
+                               _ onChange: @escaping (Bool) -> Void) -> some View {
         self.onAppear { onChange(true) }
             .onDisappear { onChange(false) }
     }

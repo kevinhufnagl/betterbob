@@ -646,16 +646,23 @@ public struct CalendarHeatmap: View {
     private let cols = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
     private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+    /// Calm indigo for days off — distinct from the green work accent and every
+    /// warm flag color, so a marked day reads as "away," not a problem.
+    private var offAccent: Color {
+        Color(hue: 0.69, saturation: 0.30, brightness: scheme == .dark ? 0.78 : 0.58)
+    }
+
     public var body: some View {
         Card(title: "Daily hours", symbol: "calendar") {
             if let days = state.cycleSummary?.days, !days.isEmpty {
+                let offDays = state.timeOffByDay
                 VStack(spacing: 8) {
                     LazyVGrid(columns: cols, spacing: 6) {
                         ForEach(weekdays, id: \.self) { wd in
                             Text(wd).font(.bobUI(10, weight: .semibold)).foregroundStyle(.secondary)
                         }
                         ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 46) }
-                        ForEach(days, id: \.date) { day in cell(day) }
+                        ForEach(days, id: \.date) { day in cell(day, offLabel: offDays[day.date]) }
                     }
                     legend
                     if state.hasAttentionItems {
@@ -774,11 +781,15 @@ public struct CalendarHeatmap: View {
         return (Calendar(identifier: .gregorian).component(.weekday, from: first) + 5) % 7
     }
 
-    private func cell(_ day: DayHours) -> some View {
+    private func cell(_ day: DayHours, offLabel: String? = nil) -> some View {
         let isToday = day.date == DayFmt.today()
         let hasTarget = (day.target ?? 0) > 0
         let worked = day.worked > 0
         let hov = hovered == day.date
+        // Marking only applies to zero-worked days, so a real worked day still
+        // shows its hours. Time off wins; else a no-target day is non-working.
+        let timeOff = worked ? nil : offLabel
+        let nonWorking = !worked && timeOff == nil && !hasTarget
         // A day with an uninterrupted run past the max is flagged orange right
         // here, so the break issue is visible without opening the cell — the
         // wand inside fixes it. The whole cell just swaps its green accent for
@@ -821,30 +832,45 @@ public struct CalendarHeatmap: View {
             let scaled = 0.5 + deviation / 0.42
             return flagged ? max(min(1, scaled), 0.5) : min(1, max(0.06, scaled))
         }()
-        let fill = worked ? accent.opacity(0.06 + 0.22 * strength + (hov ? 0.12 : 0))
-                          : Color.primary.opacity(hov ? 0.09 : (hasTarget ? 0.04 : 0.015))
-        let border = worked ? accent.opacity(0.22 + 0.50 * strength + (hov ? 0.28 : 0))
-                     : isToday ? Color.primary.opacity(0.55)
-                     : hov ? Color.primary.opacity(0.2)
-                     : Color.clear
+        let fill: Color = {
+            if worked { return accent.opacity(0.06 + 0.22 * strength + (hov ? 0.12 : 0)) }
+            if timeOff != nil { return offAccent.opacity(0.16 + (hov ? 0.10 : 0)) }
+            if nonWorking { return offAccent.opacity(0.055 + (hov ? 0.05 : 0)) }
+            return Color.primary.opacity(hov ? 0.09 : 0.04)   // a genuine skipped workday
+        }()
+        let border: Color = {
+            if worked { return accent.opacity(0.22 + 0.50 * strength + (hov ? 0.28 : 0)) }
+            if isToday { return Color.primary.opacity(0.55) }
+            if timeOff != nil { return offAccent.opacity(0.38 + (hov ? 0.22 : 0)) }
+            if nonWorking { return offAccent.opacity(0.16 + (hov ? 0.14 : 0)) }
+            return hov ? Color.primary.opacity(0.2) : Color.clear
+        }()
         // Built as a plain string — a 4-way inline concat trips the type-checker.
-        var helpText = "\(day.date): \(hoursText(day.worked))"
-        if hasTarget { helpText += " / \(hoursText(day.target!)) target" }
-        if let deviation, worked, abs(deviation) > 0.04 {
-            let delta = day.worked - (day.target ?? 0)
-            helpText += delta > 0 ? " · \(hoursText(delta)) over" : " · \(hoursText(-delta)) under"
+        var helpText: String
+        if let timeOff {
+            helpText = "\(day.date): \(timeOff) — time off"
+        } else if nonWorking {
+            helpText = "\(day.date): non-working day"
+        } else {
+            helpText = "\(day.date): \(hoursText(day.worked))"
+            if hasTarget { helpText += " / \(hoursText(day.target!)) target" }
+            if let deviation, worked, abs(deviation) > 0.04 {
+                let delta = day.worked - (day.target ?? 0)
+                helpText += delta > 0 ? " · \(hoursText(delta)) over" : " · \(hoursText(-delta)) under"
+            }
+            if unclosed { helpText += " · unclosed — an entry never got an end" }
+            if breakIssue { helpText += " · break issue — needs a break" }
+            if overMax { helpText += " · over the daily max" }
+            if missingReason { helpText += " · a work entry has no reason set" }
         }
-        if unclosed { helpText += " · unclosed — an entry never got an end" }
-        if breakIssue { helpText += " · break issue — needs a break" }
-        if overMax { helpText += " · over the daily max" }
-        if missingReason { helpText += " · a work entry has no reason set" }
         return RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(fill)
             .frame(height: 46)
             .overlay(alignment: .topLeading) {
                 Text(dayNum(day.date))
                     .font(.bobUI(11, weight: worked || isToday ? .bold : .medium))
-                    .foregroundStyle(worked || isToday ? accent : .secondary)
+                    .foregroundStyle(worked || isToday ? accent
+                                     : timeOff != nil ? offAccent : .secondary)
                     .padding(6)
             }
             .overlay(alignment: .bottomTrailing) {
@@ -855,6 +881,12 @@ public struct CalendarHeatmap: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                         .foregroundStyle(accent).padding(5)
+                } else if let timeOff {
+                    // Name the day off so a zero-hours day doesn't read as skipped.
+                    Text(timeOff).font(.bobUI(8, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .foregroundStyle(offAccent).padding(5)
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -883,6 +915,8 @@ public struct CalendarHeatmap: View {
             legendItem(Color.workAccent(scheme).opacity(0.12), "Under")
             legendItem(Color.workAccent(scheme).opacity(0.4), "On target")
             legendItem(Color.workAccent(scheme).opacity(0.85), "Over")
+            legendItem(offAccent.opacity(0.6), "Time off")
+            legendItem(offAccent.opacity(0.18), "Non-working")
             legendItem(Color.bobViolet.opacity(0.6), "No reason")
             legendItem(Color.bobOrange.opacity(0.5), "Break issue")
             legendItem(Color.bobRed.opacity(0.5), "Over daily max")
