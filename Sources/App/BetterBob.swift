@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNU
     private var popover: NSPopover!
     private var titleTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    /// Set while launch is settling the initial window state, so the automatic
+    /// policy sync doesn't briefly elevate the default window we're closing.
+    private var suppressAutoElevate = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         BobState.shared.start()
@@ -73,12 +76,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNU
 
         if UserDefaults.standard.bool(forKey: "signedInViaSSO") {
             // Normal start (incl. launch-at-login): menu bar only. The main
-            // window scene opens by default — close it again.
+            // window scene opens by default — close it again. Suppress the
+            // auto policy-sync until that close lands, so the soon-to-close
+            // default window doesn't flash a Dock icon on launch.
             NSApp.setActivationPolicy(.accessory)
+            suppressAutoElevate = true
             DispatchQueue.main.async {
                 NSApp.windows
                     .filter { $0.identifier?.rawValue.hasPrefix("main") == true }
                     .forEach { $0.close() }
+                self.suppressAutoElevate = false
+                self.syncActivation()
             }
         } else if !OnboardingController.completed {
             // First run: guided welcome window instead of the raw main window.
@@ -94,11 +102,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNU
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
         }
+
+        installWindowObservers()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        NSApp.setActivationPolicy(.accessory)
+        syncActivation()
         return false
+    }
+
+    // MARK: - Activation policy (Dock icon + cmd+tab)
+
+    /// LSUIElement means no Dock icon / no cmd+tab by default; the app only
+    /// becomes a regular, switchable app WHILE a real window is on screen.
+    /// Driving that off actual window presence — rather than each open path
+    /// remembering to flip it — makes the dashboard land in cmd+tab no matter
+    /// how it opened (popover, Window menu, cmd+`, macOS state restoration),
+    /// fixing the "window shows but isn't in cmd+tab" case on some Macs.
+    private func installWindowObservers() {
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.willCloseNotification] {
+            NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                // Defer so NSApp.windows reflects the just-opened/closed window.
+                DispatchQueue.main.async { self?.syncActivation() }
+            }
+        }
+    }
+
+    /// Regular while any ordinary window is open (visible OR minimized — so you
+    /// can still cmd+tab back to a minimized window), accessory otherwise. The
+    /// accessory→regular flip is followed by a deferred re-activate, the only
+    /// reliable way to get the Command-Tab switcher to pick it up across macOS
+    /// versions.
+    private func syncActivation() {
+        guard !suppressAutoElevate else { return }
+        let hasWindow = NSApp.windows.contains {
+            ($0.isVisible || $0.isMiniaturized) && $0.canBecomeMain && !($0 is NSPanel)
+        }
+        let want: NSApplication.ActivationPolicy = hasWindow ? .regular : .accessory
+        guard NSApp.activationPolicy() != want else { return }
+        NSApp.setActivationPolicy(want)
+        if want == .regular {
+            DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+        }
     }
 
     @objc private func togglePopover(_ sender: Any?) {
