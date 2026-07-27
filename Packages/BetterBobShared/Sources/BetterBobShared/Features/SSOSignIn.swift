@@ -81,6 +81,12 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
     /// Stall tracking: the last step token and when it first appeared.
     private var lastStep: String?
     private var lastStepSince: Date?
+    /// True once the run has moved past the identifier stage. Okta's FastPass
+    /// probe — the fieldless page whose "Back to sign in" link the driver
+    /// clicks to escape — only ever appears before that, so afterwards any
+    /// fieldless page is something else (a push wait, a KMSI prompt) and must
+    /// not be clicked away: that restarts the flow and fires a second push.
+    private var pastIdentifier = false
     /// A specific reason the last assisted run failed (e.g. the chosen factor
     /// isn't enrolled), so the caller can show it instead of a generic message.
     public private(set) var lastFailureReason: String?
@@ -247,6 +253,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         webView = nil
         enteredCode = nil
         codeStepSince = nil
+        pastIdentifier = false
         deadline = nil
         BobState.shared.awaitingOTP = false
         BobState.shared.pushPending = false
@@ -303,6 +310,11 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             if step != self.lastStep {
                                 self.lastStep = step
                                 self.lastStepSince = Date()
+                            }
+                            // Anything past the identifier form means the
+                            // FastPass probe is behind us — see pastIdentifier.
+                            if ["password", "select", "code", "push"].contains(step) {
+                                self.pastIdentifier = true
                             }
                             // A stalled drive names the page it's stuck on —
                             // that detail is the whole diagnosis when a
@@ -407,6 +419,15 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         let email = BobState.shared.accountEmail
             ?? UserDefaults.standard.string(forKey: "lastAccountEmail") ?? ""
         guard !(pw.isEmpty && otp.isEmpty && email.isEmpty) else { return nil }
+        return Self.autofillScript(email: email, password: pw, otp: otp, factor: factor,
+                                   click: click, allowBack: !pastIdentifier)
+    }
+
+    /// The page driver itself, as a pure function of its inputs so its step
+    /// classification can be unit-tested against a stub DOM (see Tests).
+    nonisolated static func autofillScript(email: String, password pw: String, otp: String,
+                                           factor: SignInFactor, click: Bool,
+                                           allowBack: Bool) -> String {
         func lit(_ s: String) -> String {
             (try? String(data: JSONEncoder().encode(s), encoding: .utf8)) ?? "\"\""
         }
@@ -414,6 +435,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         return """
         (function(){
           var factor = \(lit(factorToken));
+          var allowBack = \(allowBack ? "true" : "false");
           // Returns: 0 nothing, 1 filled just now, 2 already had a value.
           function fill(el, val){
             if(!el || !val) return 0;
@@ -468,9 +490,20 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           else if (bodyText.indexOf('security method') >= 0 || bodyText.indexOf('verify it') >= 0
                    || bodyText.indexOf('authenticator') >= 0) step = 'select';
           else step = 'loading';
-          // Push factor: once we've selected it and there's no field left, we're
-          // on the "we sent a push, approve on your phone" screen — waiting.
-          if (factor === 'ovp' && window.__bbFactorPicked && !present && !onHibob) step = 'push';
+          // Push factor, nothing left to fill: are we on the "we sent a push,
+          // approve on your phone" screen? Read that off the page rather than
+          // off __bbFactorPicked alone — Okta skips the chooser entirely when
+          // push is the only enrolled method, and a full page load drops the
+          // flag anyway. A push wait mistaken for the FastPass probe below
+          // gets "Back to sign in" clicked ~5s in, which restarts the whole
+          // flow and sends a second push. Never over a chooser, though: the
+          // newer widgets show a second, method-level one, and calling that
+          // 'push' would strand the flow with nothing left to advance it.
+          var chooserish = bodyText.indexOf('security method') >= 0
+              || bodyText.indexOf('authenticator') >= 0;
+          var pushSent = /push notification sent|sent a push|we sent you a push|open okta verify|didn'?t receive a push/.test(bodyText);
+          if (factor === 'ovp' && !present && !onHibob && !chooserish
+              && (pushSent || window.__bbFactorPicked)) step = 'push';
           // Compact page hint carried on every return — surfaced in the
           // status line when a step stalls, naming the exact stuck page.
           var hintBtns = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]'))
@@ -555,7 +588,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // to the normal identifier form, so click it once after ~5s stuck.
           if (step === 'loading' && !present) {
             window.__bbStuckTicks = (window.__bbStuckTicks || 0) + 1;
-            if (window.__bbStuckTicks >= 4 && !window.__bbBackClicked) {
+            if (window.__bbStuckTicks >= 4 && !window.__bbBackClicked && allowBack) {
               var back = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
                 return shown(x) && /back to sign ?in|zur(ü|ue)ck zur anmeldung/.test((x.textContent || x.value || '').trim().toLowerCase());
               });

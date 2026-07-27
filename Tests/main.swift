@@ -1,6 +1,7 @@
 // Unit tests — exercises the pure attendance math and HiBob JSON parsing
 // the engine depends on. Run via Scripts/test.sh.
 import Foundation
+import JavaScriptCore
 
 var failures = 0
 
@@ -1027,6 +1028,152 @@ expect(TOTP.base32Secret(from: "otpauth://totp/Okta:me@co.com?secret=\(totpSecre
 expect(TOTP.base32Secret(from: "  \(totpSecret)  ") == totpSecret, "bare secret is just trimmed")
 expect(TOTP.code(secretBase32: "otpauth://totp/x?secret=\(totpSecret)", at: Date(timeIntervalSince1970: 59)) == "287082",
        "code computes straight from an otpauth:// URL")
+
+// MARK: - The hero's water
+
+print("WaveField")
+
+let card = CGRect(x: 0, y: 0, width: 300, height: 150)
+let still = WaveField(level: 0.5, amplitude: 0, phase: 0)
+expect(still.polyline(in: card).allSatisfy { abs($0.x - 150) < 0.001 },
+       "amplitude 0 → a dead straight waterline")
+expect(still.polyline(in: card).first?.y == 0
+        && still.polyline(in: card).last?.y == card.height,
+       "the waterline spans the full height, both ends included")
+let brimming = WaveField(level: 1, amplitude: 14, phase: 0.7)
+expect(brimming.polyline(in: card).allSatisfy { $0.x <= 300.001 },
+       "a brimming tank's wave can't push past the far wall")
+let choppy = WaveField(level: 0.5, amplitude: 9, phase: 0.4,
+                       freq: 2.2, asymPhase: 1.2, detail2: 1.1, detail3: 2.4)
+// What a float feels is the wave itself: a crest is deeper water, so it carries
+// the float toward the far wall.
+expect(abs(choppy.ride(at: 0.3, height: 150).drift - choppy.wave(at: 0.3)) < 0.001,
+       "a float's drift is the wave's own displacement")
+expect(still.ride(at: 0.3, height: 150).slope == 0, "a still surface leans nothing")
+// The light band under the waterline runs on its own wave — shallower, slower
+// and out of step, so it never reads as a traced outline.
+expect(choppy.parallel.amplitude < choppy.amplitude
+        && choppy.parallel.freq < choppy.freq
+        && choppy.parallel.phase != choppy.phase,
+       "the edge light's wave parallels the surface without copying it")
+
+// MARK: - Assisted sign-in page driver
+//
+// The driver is JavaScript evaluated inside the hidden web view, so it is
+// tested the same way: run it against a stub DOM in JavaScriptCore and check
+// which step it reports and which buttons it presses. Elements declare the
+// CSS selectors they answer to rather than being matched for real — enough
+// to pin the step classification, which is where the flow goes wrong.
+
+print("SSO page driver")
+
+/// One stub element: `sel` are the selector fragments it matches.
+struct StubEl {
+    var sel: [String]
+    var text: String = ""
+    var value: String = ""
+}
+
+/// Run `ticks` iterations of the driver over a stub page (the driver counts
+/// ticks in page globals) and return the last step token plus every label it
+/// clicked along the way.
+func runDriver(_ els: [StubEl], body: String, host: String = "team-blue.okta.com",
+               factor: SignInFactor, allowBack: Bool = true,
+               picked: Bool = false, ticks: Int = 6) -> (step: String, clicks: [String]) {
+    let ctx = JSContext()!
+    ctx.exceptionHandler = { _, err in
+        print("  JS exception: \(err?.toString() ?? "?")")
+    }
+    let elementsJSON = String(data: try! JSONEncoder().encode(
+        els.map { ["sel": $0.sel.joined(separator: "\u{1}"), "text": $0.text, "value": $0.value] }
+    ), encoding: .utf8)!
+    ctx.evaluateScript("""
+    var clicks = [];
+    var location = { hostname: \(String(data: try! JSONEncoder().encode(host), encoding: .utf8)!),
+                     pathname: '/signin' };
+    function mkEl(spec) {
+      var el = {
+        sel: spec.sel.split('\\u0001'),
+        textContent: spec.text, value: spec.value,
+        disabled: false, offsetParent: {},
+        click: function(){ clicks.push((this.textContent || this.value || '').trim()); },
+        focus: function(){}, dispatchEvent: function(){ return true; },
+        closest: function(){ return null; }, parentElement: null
+      };
+      return el;
+    }
+    var els = \(elementsJSON).map(mkEl);
+    function matches(el, selector) {
+      return selector.split(',').some(function(part){
+        return el.sel.indexOf(part.trim()) >= 0;
+      });
+    }
+    var document = {
+      body: { innerText: \(String(data: try! JSONEncoder().encode(body), encoding: .utf8)!) },
+      querySelector: function(s){
+        var hit = els.filter(function(e){ return matches(e, s); });
+        return hit.length ? hit[0] : null;
+      },
+      querySelectorAll: function(s){
+        return els.filter(function(e){ return matches(e, s); });
+      }
+    };
+    var window = { HTMLInputElement: { prototype: {} } };
+    function Event(){}; function KeyboardEvent(){};
+    \(picked ? "window.__bbFactorPicked = true;" : "")
+    """)
+    let script = SSOSignInController.autofillScript(
+        email: "kevin@team.blue", password: "hunter2", otp: "",
+        factor: factor, click: true, allowBack: allowBack)
+    var step = ""
+    for _ in 0..<ticks {
+        step = ctx.evaluateScript(script)?.toString()?.components(separatedBy: "||").first ?? ""
+    }
+    let clicks = ctx.objectForKeyedSubscript("clicks").toArray() as? [String] ?? []
+    return (step, clicks)
+}
+
+// Okta's push-wait screen: no fields, and the copy says the push went out.
+// It reaches this screen without the driver ever clicking a chooser row when
+// push is the account's only enrolled method.
+let pushWait = runDriver([
+    StubEl(sel: ["button", "[role=button]"], text: "Resend push notification"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Verify with something else"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to sign in"),
+], body: "Push notification sent. Open Okta Verify on your iPhone and tap Yes, it's me.",
+   factor: .oktaVerifyPush)
+expect(pushWait.step == "push",
+       "a push-sent screen reads as 'push' even without a chooser click")
+expect(!pushWait.clicks.contains("Back to sign in"),
+       "the driver never clicks Back to sign in while a push is out")
+expect(pushWait.clicks.isEmpty,
+       "the driver presses nothing at all on the push-wait screen")
+
+// The chooser must keep classifying as 'select' even once a factor has been
+// picked once — newer Okta widgets show a second method screen, and calling
+// that 'push' would strand the flow with nothing left to click it forward.
+let chooser = runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Get a push notification"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Enter a code"),
+], body: "Verify it's you with a security method. Select from the following options.",
+   factor: .oktaVerifyPush, picked: true)
+expect(chooser.step == "select", "the method chooser stays 'select' after an earlier pick")
+expect(chooser.clicks.contains("Get a push notification"),
+       "the chooser's push row gets picked")
+
+// The genuine FastPass probe — fieldless, before any identifier is submitted —
+// still gets escaped via its own Back link, which is the only way out of it.
+let fastPass = runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to sign in"),
+], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush)
+expect(fastPass.step == "loading", "the FastPass probe is still just 'loading'")
+expect(fastPass.clicks.contains("Back to sign in"),
+       "the driver escapes the FastPass probe once it stalls")
+expect(runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to sign in"),
+], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush,
+   allowBack: false).clicks.isEmpty,
+       "past the identifier stage the Back link is left alone")
 
 if failures == 0 {
     print("All tests passed.")
