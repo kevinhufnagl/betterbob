@@ -1175,9 +1175,17 @@ let bouncedBody = "Verify it's you with a security method. Select from the follo
 expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 4)
         .clicks.count == 1,
        "a freshly picked row isn't picked again while the click is still landing")
-expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 12)
+expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 20)
         .clicks.count == 2,
-       "a chooser still sitting there ~10s later gets its row picked again")
+       "a chooser still sitting there ~20s later gets its row picked again")
+// While it sits, the driver says it's waiting on the authenticator rather than
+// still choosing one — a FastPass prompt has no page of its own to show.
+expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 4)
+        .raw.contains("waiting"),
+       "a picked row that's still on screen reports waiting, not choosing")
+expect(!runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 1)
+        .raw.contains("waiting"),
+       "the tick that does the picking doesn't claim to be waiting yet")
 expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 60)
         .clicks.count == 3,
        "re-picks are capped — a chooser that never advances can't spray pushes")

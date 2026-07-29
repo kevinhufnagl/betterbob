@@ -321,10 +321,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             // successful verification lands here, and calling
                             // that "Choosing your authenticator" is a lie.
                             let notAChooser = step == "select" && parts.contains("norows")
+                            // Row picked, chooser still up: waiting on the
+                            // authenticator itself (a FastPass fingerprint
+                            // prompt, a push being approved).
+                            let awaitingDevice = step == "select" && parts.contains("waiting")
                             let hint = parts.dropFirst()
                                 .filter {
                                     !$0.hasPrefix("rows:") && $0 != "fastpass"
-                                        && $0 != "nopick" && $0 != "norows"
+                                        && $0 != "nopick" && $0 != "norows" && $0 != "waiting"
                                 }
                                 .joined(separator: " — ")
                             if step != self.lastStep {
@@ -341,9 +345,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             // teammate's flow differs from the known one.
                             let stalled = Date().timeIntervalSince(self.lastStepSince ?? Date()) > 18
                                 && !BobState.shared.awaitingOTP && !BobState.shared.pushPending
+                                && !awaitingDevice
                             let label: String
                             if probing && step == "loading" {
                                 label = "Waiting for Okta Verify on this Mac…"
+                            } else if awaitingDevice {
+                                label = SignInFactorGroup.oktaVerifyInstalled
+                                    ? "Waiting for Okta Verify on this Mac…"
+                                    : "Waiting for your authenticator…"
                             } else if notAChooser {
                                 label = "Signing you in…"
                             } else {
@@ -383,7 +392,10 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                     BobState.shared.missingSignInMethod =
                                         MissingSignInMethod(factor: self.factor, offered: offered)
                                 }
-                                if step == "select", !notAChooser, stuckFor > 30 {
+                                // 75s: enough for both re-picks (~20s apart) plus
+                                // a human noticing a fingerprint prompt. The
+                                // no-row banner above doesn't wait for this.
+                                if step == "select", !notAChooser, stuckFor > 75 {
                                     let listed = offered.isEmpty ? "" : " Okta offered: \(offered)."
                                     self.lastFailureReason = noRow
                                         ? "Okta didn't offer \(self.factor.shortLabel) on this sign-in.\(listed) Pick one of the methods it did offer."
@@ -612,7 +624,11 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // another push, and never while the page says one is already out.
           if (step === 'select') {
             window.__bbSelectTicks = (window.__bbSelectTicks || 0) + 1;
-            if (window.__bbSelectTicks >= 8 && window.__bbFactorSig && !pushSent) {
+            // ~20s, not ~10: on a FastPass sign-in the chooser stays up while
+            // Okta Verify prompts for a fingerprint, and re-clicking the row
+            // out from under a live prompt is the same mistake as clicking the
+            // probe's Back link was.
+            if (window.__bbSelectTicks >= 16 && window.__bbFactorSig && !pushSent) {
               window.__bbSelectTicks = 0;
               window.__bbRepicks = (window.__bbRepicks || 0) + 1;
               if (window.__bbRepicks <= 2) { window.__bbFactorSig = null; }
@@ -770,6 +786,13 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             // all ('norows'), which must not be reported as one.
             if (!b) pageHint += offered.length ? '||nopick' : '||norows';
             var pick = b ? ((b.textContent || b.value || '').trim() + '@' + location.pathname) : '';
+            // The row is picked and we're still on the chooser: Okta is waiting
+            // on the authenticator, not on us. A FastPass verification has no
+            // push-wait page of its own — the Okta Verify app prompts while this
+            // page stays put — so without this the status line claims we're
+            // still choosing a method, and the chooser's own fail-fast starts
+            // counting against a user who is mid Touch ID prompt.
+            if (b && window.__bbFactorSig === pick) pageHint += '||waiting';
             if (b && window.__bbFactorSig !== pick) {
               window.__bbFactorSig = pick;
               window.__bbFactorPicked = true;
