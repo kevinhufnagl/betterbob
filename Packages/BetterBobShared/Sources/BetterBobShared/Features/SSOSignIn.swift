@@ -316,8 +316,16 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             let probing = parts.contains("fastpass")
                             // The chooser had no row for the requested method.
                             let noRow = parts.contains("nopick")
+                            // …or the page isn't a chooser at all, despite its
+                            // copy reading like one: Okta's hand-off after a
+                            // successful verification lands here, and calling
+                            // that "Choosing your authenticator" is a lie.
+                            let notAChooser = step == "select" && parts.contains("norows")
                             let hint = parts.dropFirst()
-                                .filter { !$0.hasPrefix("rows:") && $0 != "fastpass" && $0 != "nopick" }
+                                .filter {
+                                    !$0.hasPrefix("rows:") && $0 != "fastpass"
+                                        && $0 != "nopick" && $0 != "norows"
+                                }
                                 .joined(separator: " — ")
                             if step != self.lastStep {
                                 self.lastStep = step
@@ -333,9 +341,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             // teammate's flow differs from the known one.
                             let stalled = Date().timeIntervalSince(self.lastStepSince ?? Date()) > 18
                                 && !BobState.shared.awaitingOTP && !BobState.shared.pushPending
-                            let label = probing && step == "loading"
-                                ? "Waiting for Okta Verify on this Mac…"
-                                : self.friendlyStatus(step)
+                            let label: String
+                            if probing && step == "loading" {
+                                label = "Waiting for Okta Verify on this Mac…"
+                            } else if notAChooser {
+                                label = "Signing you in…"
+                            } else {
+                                label = self.friendlyStatus(step)
+                            }
                             BobState.shared.autoLoginStatus = stalled && !hint.isEmpty
                                 ? label + " — stuck at \(hint)"
                                 : label
@@ -370,7 +383,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                     BobState.shared.missingSignInMethod =
                                         MissingSignInMethod(factor: self.factor, offered: offered)
                                 }
-                                if step == "select", stuckFor > 30 {
+                                if step == "select", !notAChooser, stuckFor > 30 {
                                     let listed = offered.isEmpty ? "" : " Okta offered: \(offered)."
                                     self.lastFailureReason = noRow
                                         ? "Okta didn't offer \(self.factor.shortLabel) on this sign-in.\(listed) Pick one of the methods it did offer."
@@ -378,10 +391,11 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                     self.finish(false); return
                                 }
                                 // Same for a page that never resolves: the
-                                // FastPass probe with no escape link, or a
-                                // spinner that stays. The deadline would take
-                                // another few silent minutes over it.
-                                if step == "loading", stuckFor > 90 {
+                                // FastPass probe with no escape link, a spinner
+                                // that stays, or a hand-off that never hands
+                                // off. The deadline would take another few
+                                // silent minutes over it.
+                                if step == "loading" || notAChooser, stuckFor > 90 {
                                     self.lastFailureReason =
                                         "Okta's sign-in page stopped responding\(hint.isEmpty ? "" : " at \(hint)"). Try signing in manually once."
                                     self.finish(false); return
@@ -734,16 +748,27 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               var own = (x.textContent || x.value || '').trim().replace(/\\s+/g,' ');
               // Secondary links: escapes and re-sends, never a method row.
               if (/resend|something else|another way|different method|back to sign|back to log/i.test(own)) return;
-              if (own) offered.push(own.slice(0, 28));
-              var r = rank(boxText(x));
+              var c = boxText(x);
+              // Only rows that NAME an authenticator count as chooser rows. The
+              // 'select' step above is a loose read of the page copy, so pages
+              // that merely mention an authenticator — the hand-off after a
+              // successful verification, say — land here with buttons like
+              // "Yes" or "Continue"; counting those would make such a page look
+              // like a chooser the user is stuck on.
+              if (/okta verify|google authenticator|authenticator app|push notification|enter a code|security key|biometric/.test(c)) {
+                if (own) offered.push(own.slice(0, 28));
+              }
+              var r = rank(c);
               if (r > bestRank) { bestRank = r; b = x; }
             });
             // Name what Okta actually offered, so a chooser that has no row for
             // the requested factor says so instead of just sitting there.
             if (offered.length) pageHint += '||rows:' + offered.slice(0, 6).join(' / ');
-            // No row for the requested factor at all: the one failure the user
-            // can act on immediately, by choosing a method Okta does offer.
-            if (!b) pageHint += '||nopick';
+            // Nothing to click. Two very different pages: a real chooser that
+            // lists methods but not the requested one (the user can act on that
+            // — 'nopick' raises the banner), or a page that isn't a chooser at
+            // all ('norows'), which must not be reported as one.
+            if (!b) pageHint += offered.length ? '||nopick' : '||norows';
             var pick = b ? ((b.textContent || b.value || '').trim() + '@' + location.pathname) : '';
             if (b && window.__bbFactorSig !== pick) {
               window.__bbFactorSig = pick;

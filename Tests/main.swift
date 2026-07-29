@@ -1240,6 +1240,19 @@ expect(noRowForPush.raw.contains("nopick"),
 expect(!byName.raw.contains("nopick"),
        "a chooser that does have the row reports no such thing")
 
+// Okta's hand-off after a successful verification: fieldless, its copy still
+// mentions the authenticator, but the only button is a "Yes"-ish one. It reads
+// as 'select' — and must NOT be reported as a chooser, or the status line calls
+// a successful sign-in "Choosing your authenticator" and the banner fires on it.
+let handoff = runDriver([
+    StubEl(sel: ["button", "[role=button]"], text: "Yes, keep me signed in"),
+], body: "Verify it's you. Your authenticator confirmed the sign-in. One moment…",
+   factor: .oktaVerifyPush, ticks: 8)
+expect(handoff.raw.contains("norows") && !handoff.raw.contains("nopick"),
+       "a page with no method rows is reported as no chooser, not a failed pick")
+expect(!handoff.raw.contains("rows:"),
+       "and it offers no method rows to name")
+
 // A chooser that merely MENTIONS Okta's device flow is still a chooser. Naming
 // FastPass as a step token instead of a marker stranded exactly this page: the
 // row branch never ran, so nothing was ever clicked.
