@@ -310,8 +310,12 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             // kept out of the status line, used in the failure.
                             let offered = parts.first { $0.hasPrefix("rows:") }
                                 .map { String($0.dropFirst("rows:".count)) } ?? ""
+                            // Okta Verify on this Mac is being asked to vouch for
+                            // you (FastPass) — a display detail only, so it never
+                            // changes which step the page is.
+                            let probing = parts.contains("fastpass")
                             let hint = parts.dropFirst()
-                                .filter { !$0.hasPrefix("rows:") }
+                                .filter { !$0.hasPrefix("rows:") && $0 != "fastpass" }
                                 .joined(separator: " — ")
                             if step != self.lastStep {
                                 self.lastStep = step
@@ -327,9 +331,12 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             // teammate's flow differs from the known one.
                             let stalled = Date().timeIntervalSince(self.lastStepSince ?? Date()) > 18
                                 && !BobState.shared.awaitingOTP && !BobState.shared.pushPending
-                            BobState.shared.autoLoginStatus = stalled && !hint.isEmpty
-                                ? self.friendlyStatus(step) + " — stuck at \(hint)"
+                            let label = probing && step == "loading"
+                                ? "Waiting for Okta Verify on this Mac…"
                                 : self.friendlyStatus(step)
+                            BobState.shared.autoLoginStatus = stalled && !hint.isEmpty
+                                ? label + " — stuck at \(hint)"
+                                : label
                             if self.drive == .assisted {
                                 if self.factor.isPush {
                                     BobState.shared.pushPending = (step == "push")
@@ -362,7 +369,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                 // FastPass probe with no escape link, or a
                                 // spinner that stays. The deadline would take
                                 // another few silent minutes over it.
-                                if step == "loading" || step == "fastpass", stuckFor > 90 {
+                                if step == "loading", stuckFor > 90 {
                                     self.lastFailureReason =
                                         "Okta's sign-in page stopped responding\(hint.isEmpty ? "" : " at \(hint)"). Try signing in manually once."
                                     self.finish(false); return
@@ -415,9 +422,6 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         case "email":    return "Entering your email…"
         case "password": return "Entering your password…"
         case "select":   return "Choosing your authenticator…"
-        // Okta Verify on this Mac is being asked to vouch for you — that's the
-        // Touch ID prompt the app raises. Named so it doesn't read as a hang.
-        case "fastpass": return "Waiting for Okta Verify on this Mac…"
         // The user types the code into the inline field — there is no seed.
         case "code":     return "Enter the code from your authenticator app"
         case "push":     return "Approve the sign-in in Okta Verify…"
@@ -531,17 +535,13 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           var pushSent = /push notification sent|sent a push|we sent you a push|open okta verify|didn'?t receive a push/.test(bodyText);
           if (factor === 'ovp' && !present && !onHibob && !chooserish
               && (pushSent || window.__bbFactorPicked)) step = 'push';
-          // Okta's own device flow (FastPass / "signing in with Okta Verify")
-          // gets its own token. With Okta Verify installed on this Mac that
-          // probe is LIVE — the app raises a Touch ID prompt and the user needs
-          // a moment to notice it and touch the sensor — so it earns a friendly
-          // status line and a much longer leash before the escape link below.
-          // Checked ahead of the chooser copy: the probe page can carry the
-          // word "authenticator" and would otherwise read as 'select'.
-          if (!present && !onHibob && !pushSent
-              && /okta fastpass|signing in with okta|verifying your identity/.test(bodyText)) {
-            step = 'fastpass';
-          }
+          // Okta's own device flow (FastPass, driven by the Okta Verify app on
+          // this Mac — a different thing from a push to your phone) is reported
+          // as a MARKER, never as a step: it only relabels the status line, so a
+          // page that says "FastPass" somewhere can still be classified as the
+          // chooser and get its rows clicked. Making it a step stranded runs
+          // whose chooser mentioned it.
+          var probing = !present && !onHibob && !pushSent && /okta fastpass/.test(bodyText);
           // Compact page hint carried on every return — surfaced in the
           // status line when a step stalls, naming the exact stuck page.
           var hintBtns = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]'))
@@ -552,7 +552,8 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           var heading = document.querySelector('h1, h2, .o-form-title, [data-se=o-form-explain], .okta-form-title');
           var headingText = heading ? heading.textContent.trim().replace(/\\s+/g,' ').slice(0, 40) : '';
           var pageHint = '||' + location.hostname + (headingText ? ' · ' + headingText : '')
-              + (hintBtns ? '||' + hintBtns : '');
+              + (hintBtns ? '||' + hintBtns : '')
+              + (probing ? '||fastpass' : '');
           var justFilled = false, ready = false;
           // Never fill HiBob's own password/code fields — the account is
           // Okta-managed; a fresh device's gateway shows the native form next
@@ -648,7 +649,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // it the app is raising a Touch ID prompt and clicking away at 5s
           // cancels the very sign-in the user is in the middle of approving —
           // which is what stranded this flow. Hence probeTicks.
-          if ((step === 'loading' || step === 'fastpass') && !present) {
+          if (step === 'loading' && !present) {
             window.__bbStuckTicks = (window.__bbStuckTicks || 0) + 1;
             if (window.__bbStuckTicks >= probeTicks && !window.__bbBackClicked && allowBack) {
               var back = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
@@ -691,8 +692,14 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             // which on Okta's widget is often the WHOLE page, so on any other
             // screen these matchers would grade unrelated buttons.
             var btns = [].slice.call(document.querySelectorAll('a, button, input[type=submit], [role=button]'));
+            // Row-scoped text only: never the enclosing form. Okta's widget
+            // wraps the whole page in one, so a form-wide fallback made every
+            // row read as if it mentioned every method — which is how a Google
+            // run could see 'push' in its own row's text and skip it.
             function boxText(x){
-              return ((x.closest('.authenticator-row, .authenticator-button, li, form') || x.parentElement || x).textContent || '').toLowerCase();
+              var own = (x.textContent || x.value || '');
+              var row = x.closest ? x.closest('.authenticator-row, .authenticator-button, li') : null;
+              return ((row ? row.textContent : '') + ' ' + own).toLowerCase();
             }
             // Rank rows rather than demanding an exact phrase. The first chooser
             // lists authenticators by NAME only — "Okta Verify", "Google
@@ -704,7 +711,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               var code = c.indexOf('enter a code') >= 0;
               var push = c.indexOf('push') >= 0 || c.indexOf('notification') >= 0;
               var ov = c.indexOf('okta verify') >= 0;
-              if (factor === 'ga') return (c.indexOf('google authenticator') >= 0 && !push) ? 3 : 0;
+              if (factor === 'ga') return c.indexOf('google authenticator') >= 0 ? 3 : 0;
               if (factor === 'ovc') return (code && !push) ? 3 : ((ov && !push) ? 2 : (ov ? 1 : 0));
               // Push: an explicit push row first, then a bare "Okta Verify" one.
               return (push && !code) ? 3 : ((ov && !code) ? 2 : (ov ? 1 : 0));

@@ -1234,13 +1234,27 @@ expect(runDriver([
 ], body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 20).clicks.isEmpty,
        "a chooser without an Okta Verify row is left untouched on a push run")
 
+// A chooser that merely MENTIONS Okta's device flow is still a chooser. Naming
+// FastPass as a step token instead of a marker stranded exactly this page: the
+// row branch never ran, so nothing was ever clicked.
+let fastPassChooser = runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Use a push notification"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Google Authenticator"),
+], body: "Verify it's you with a security method. Okta FastPass. Select from the following options.",
+   factor: .googleAuthenticator, ticks: 3)
+expect(fastPassChooser.step == "select",
+       "a chooser naming FastPass still classifies as the chooser")
+expect(fastPassChooser.clicks == ["Google Authenticator"],
+       "and its Google row still gets picked")
+
 // The FastPass probe — fieldless, naming Okta's own device flow. Without Okta
 // Verify installed nothing can ever resolve it, so it's escaped via its own
 // Back link (which some tenants label "Back to login").
 let fastPass = runDriver([
     StubEl(sel: ["a", "button", "[role=button]"], text: "Back to login"),
 ], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush)
-expect(fastPass.step == "fastpass", "the FastPass probe is named, not just 'loading'")
+expect(fastPass.step == "loading" && fastPass.raw.contains("fastpass"),
+       "the probe stays a 'loading' step, with FastPass reported as a marker")
 expect(fastPass.clicks.contains("Back to login"),
        "the driver escapes the FastPass probe once it stalls")
 expect(runDriver([

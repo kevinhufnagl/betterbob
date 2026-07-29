@@ -338,11 +338,9 @@ public struct SignInFactorGroup: View {
         #endif
     }()
 
-    /// Push leads, but all three are always offered — when Okta's chooser won't
-    /// take the push row, a typed code is the way through.
-    private var orderedFactors: [SignInFactor] {
-        [.oktaVerifyPush, .googleAuthenticator, .oktaVerifyCode]
-    }
+    /// The typed-code methods, offered under the push button. Always both: when
+    /// Okta's chooser won't take the push row, a code is the way through.
+    private var codeFactors: [SignInFactor] { [.googleAuthenticator, .oktaVerifyCode] }
 
     /// A full-width, clearly-tappable row used when there's a single method.
     private func soloButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
@@ -367,18 +365,29 @@ public struct SignInFactorGroup: View {
                         state.startAutoSignIn(factor: .googleAuthenticator)
                     }
                 } else {
-                    HStack(spacing: 0) {
-                        ForEach(Array(orderedFactors.enumerated()), id: \.element.id) { i, factor in
-                            if i > 0 { Divider().frame(height: 34) }
-                            Button { state.startAutoSignIn(factor: factor) } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: factor.icon).font(.system(size: 13, weight: .semibold))
-                                    Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
+                    VStack(spacing: 0) {
+                        // Okta Verify leads on its own full-width row. Three
+                        // methods across the popover's width squeezed its label
+                        // down to an unreadable stub, which read as the Okta
+                        // Verify option having disappeared.
+                        soloButton(icon: SignInFactor.oktaVerifyPush.icon,
+                                   title: "Sign in with Okta Verify push") {
+                            state.startAutoSignIn(factor: .oktaVerifyPush)
+                        }
+                        Divider()
+                        HStack(spacing: 0) {
+                            ForEach(Array(codeFactors.enumerated()), id: \.element.id) { i, factor in
+                                if i > 0 { Divider().frame(height: 30) }
+                                Button { state.startAutoSignIn(factor: factor) } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: factor.icon).font(.system(size: 11, weight: .semibold))
+                                        Text(factor.shortLabel).font(.system(size: 10, weight: .medium))
+                                    }
+                                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                    .contentShape(Rectangle())
                                 }
-                                .frame(maxWidth: .infinity).padding(.vertical, 8)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -390,7 +399,9 @@ public struct SignInFactorGroup: View {
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
             if !state.fullyAutomatic {
-                Text("Each method depends on Okta offering it at sign-in — if one won't go through, try another.")
+                Text(Self.oktaVerifyInstalled
+                     ? "The Okta Verify app on this Mac may ask for your fingerprint first — that's Okta's own sign-in, let it finish. Otherwise pick a method; if one won't go through, try another."
+                     : "Each method depends on Okta offering it at sign-in — if one won't go through, try another.")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
