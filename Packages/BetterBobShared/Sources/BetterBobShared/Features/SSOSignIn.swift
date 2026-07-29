@@ -306,7 +306,13 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                         if driven, let raw = result as? String {
                             let parts = raw.components(separatedBy: "||")
                             let step = parts[0]
-                            let hint = parts.dropFirst().joined(separator: " — ")
+                            // The chooser also reports the rows it offered —
+                            // kept out of the status line, used in the failure.
+                            let offered = parts.first { $0.hasPrefix("rows:") }
+                                .map { String($0.dropFirst("rows:".count)) } ?? ""
+                            let hint = parts.dropFirst()
+                                .filter { !$0.hasPrefix("rows:") }
+                                .joined(separator: " — ")
                             if step != self.lastStep {
                                 self.lastStep = step
                                 self.lastStepSince = Date()
@@ -337,21 +343,28 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                 self.trackCodeStep(step)
 
                                 // The chooser only lists the factors the account
-                                // actually has enrolled. When the requested one
-                                // isn't there its row never clicks and 'select'
-                                // just sits — fail fast with a clear message
-                                // instead of spinning to the 5-minute deadline.
-                                // Push gets a longer leash: its row does click,
-                                // and the driver re-picks it twice ~10s apart
-                                // when Okta bounces back here. Once those are
-                                // spent the chooser is a dead end too — say so
-                                // instead of spinning out the deadline in
-                                // silence, which reads as a hang.
-                                let onSelect = Date().timeIntervalSince(self.lastStepSince ?? Date())
-                                if step == "select", onSelect > (self.factor.isPush ? 45 : 10) {
-                                    self.lastFailureReason = self.factor.isPush
-                                        ? "Okta kept coming back to its authenticator chooser — the Okta Verify prompt never completed. Approve it as soon as it appears, or sign in manually once to get this device enrolled."
-                                        : "Couldn't reach \(self.factor.shortLabel) — Okta only offered Okta Verify. Try Okta Verify push."
+                                // has enrolled, so the requested one may have no
+                                // row at all to click. The driver re-picks an
+                                // unmoved chooser twice
+                                // ~10s apart; once those are spent it really is
+                                // a dead end. Say which methods Okta listed —
+                                // the user can switch to one of them — instead
+                                // of spinning out the deadline in silence, which
+                                // reads as a hang.
+                                let stuckFor = Date().timeIntervalSince(self.lastStepSince ?? Date())
+                                if step == "select", stuckFor > 30 {
+                                    let listed = offered.isEmpty ? "" : " Okta offered: \(offered)."
+                                    self.lastFailureReason =
+                                        "Couldn't get past Okta's authenticator chooser with \(self.factor.shortLabel).\(listed) Try one of the other methods next to the sign-in button."
+                                    self.finish(false); return
+                                }
+                                // Same for a page that never resolves: the
+                                // FastPass probe with no escape link, or a
+                                // spinner that stays. The deadline would take
+                                // another few silent minutes over it.
+                                if step == "loading" || step == "fastpass", stuckFor > 90 {
+                                    self.lastFailureReason =
+                                        "Okta's sign-in page stopped responding\(hint.isEmpty ? "" : " at \(hint)"). Try signing in manually once."
                                     self.finish(false); return
                                 }
                             }
@@ -402,6 +415,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         case "email":    return "Entering your email…"
         case "password": return "Entering your password…"
         case "select":   return "Choosing your authenticator…"
+        // Okta Verify on this Mac is being asked to vouch for you — that's the
+        // Touch ID prompt the app raises. Named so it doesn't read as a hang.
+        case "fastpass": return "Waiting for Okta Verify on this Mac…"
         // The user types the code into the inline field — there is no seed.
         case "code":     return "Enter the code from your authenticator app"
         case "push":     return "Approve the sign-in in Okta Verify…"
@@ -426,15 +442,18 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         let email = BobState.shared.accountEmail
             ?? UserDefaults.standard.string(forKey: "lastAccountEmail") ?? ""
         guard !(pw.isEmpty && otp.isEmpty && email.isEmpty) else { return nil }
+        // A live Okta Verify on this Mac makes the FastPass probe worth waiting
+        // out (~34s) instead of escaping it at ~5s mid Touch ID prompt.
         return Self.autofillScript(email: email, password: pw, otp: otp, factor: factor,
-                                   click: click, allowBack: !pastIdentifier)
+                                   click: click, allowBack: !pastIdentifier,
+                                   probeTicks: SignInFactorGroup.oktaVerifyInstalled ? 28 : 4)
     }
 
     /// The page driver itself, as a pure function of its inputs so its step
     /// classification can be unit-tested against a stub DOM (see Tests).
     nonisolated static func autofillScript(email: String, password pw: String, otp: String,
                                            factor: SignInFactor, click: Bool,
-                                           allowBack: Bool) -> String {
+                                           allowBack: Bool, probeTicks: Int = 4) -> String {
         func lit(_ s: String) -> String {
             (try? String(data: JSONEncoder().encode(s), encoding: .utf8)) ?? "\"\""
         }
@@ -443,6 +462,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
         (function(){
           var factor = \(lit(factorToken));
           var allowBack = \(allowBack ? "true" : "false");
+          var probeTicks = \(probeTicks);
           // Returns: 0 nothing, 1 filled just now, 2 already had a value.
           function fill(el, val){
             if(!el || !val) return 0;
@@ -511,6 +531,17 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           var pushSent = /push notification sent|sent a push|we sent you a push|open okta verify|didn'?t receive a push/.test(bodyText);
           if (factor === 'ovp' && !present && !onHibob && !chooserish
               && (pushSent || window.__bbFactorPicked)) step = 'push';
+          // Okta's own device flow (FastPass / "signing in with Okta Verify")
+          // gets its own token. With Okta Verify installed on this Mac that
+          // probe is LIVE — the app raises a Touch ID prompt and the user needs
+          // a moment to notice it and touch the sensor — so it earns a friendly
+          // status line and a much longer leash before the escape link below.
+          // Checked ahead of the chooser copy: the probe page can carry the
+          // word "authenticator" and would otherwise read as 'select'.
+          if (!present && !onHibob && !pushSent
+              && /okta fastpass|signing in with okta|verifying your identity/.test(bodyText)) {
+            step = 'fastpass';
+          }
           // Compact page hint carried on every return — surfaced in the
           // status line when a step stalls, naming the exact stuck page.
           var hintBtns = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]'))
@@ -609,15 +640,19 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             }
             if (stay) { window.__bbStayClicked = true; stay.click(); return step + pageHint; }
           }
-          // Okta FastPass interstitial: a fieldless page probing the local
-          // Okta Verify app — in a hidden web view that probe never resolves
-          // (it can't show its prompts). Its own "Back to sign in" link drops
-          // to the normal identifier form, so click it once after ~5s stuck.
-          if (step === 'loading' && !present) {
+          // Okta FastPass interstitial: a fieldless page probing the local Okta
+          // Verify app. Its own "Back to sign in" link drops to the normal
+          // identifier form, so click it once the page has clearly stalled.
+          // How long that takes depends on whether Okta Verify is installed:
+          // without it the probe can never resolve and ~5s is plenty, but with
+          // it the app is raising a Touch ID prompt and clicking away at 5s
+          // cancels the very sign-in the user is in the middle of approving —
+          // which is what stranded this flow. Hence probeTicks.
+          if ((step === 'loading' || step === 'fastpass') && !present) {
             window.__bbStuckTicks = (window.__bbStuckTicks || 0) + 1;
-            if (window.__bbStuckTicks >= 4 && !window.__bbBackClicked && allowBack) {
+            if (window.__bbStuckTicks >= probeTicks && !window.__bbBackClicked && allowBack) {
               var back = [].slice.call(document.querySelectorAll('a, button, [role=button]')).find(function(x){
-                return shown(x) && /back to sign ?in|zur(ü|ue)ck zur anmeldung/.test((x.textContent || x.value || '').trim().toLowerCase());
+                return shown(x) && /back to sign ?in|back to log ?in|zur(ü|ue)ck zur anmeldung/.test((x.textContent || x.value || '').trim().toLowerCase());
               });
               if (back) { window.__bbBackClicked = true; back.click(); }
             }
@@ -647,31 +682,46 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
               });
               if (alt) { window.__bbAltOnce = true; alt.click(); }
             }
-          } else if (step !== 'push') {
+          } else if (step === 'select') {
             // Okta "choose a security method" step → pick the requested factor's
             // row (never Security Key / biometric). Newer widgets show this
             // TWICE — the authenticator, then a code-vs-push method screen — so
-            // the guard is per distinct choice, not once per flow. Never runs
-            // on the push-wait screen, whose form text ("push notification
-            // sent") would otherwise match every button in it.
+            // the guard is per distinct choice, not once per flow. Strictly the
+            // chooser step: boxText below falls back to the enclosing form,
+            // which on Okta's widget is often the WHOLE page, so on any other
+            // screen these matchers would grade unrelated buttons.
             var btns = [].slice.call(document.querySelectorAll('a, button, input[type=submit], [role=button]'));
             function boxText(x){
               return ((x.closest('.authenticator-row, .authenticator-button, li, form') || x.parentElement || x).textContent || '').toLowerCase();
             }
-            var b = btns.find(function(x){
-              if (!shown(x)) return false;
-              var own = (x.textContent || x.value || '').toLowerCase();
-              if (/resend|something else|another way|different method|back to sign/.test(own)) return false;
-              var c = boxText(x);
-              if (c.indexOf('security key') >= 0 || c.indexOf('biometric') >= 0) return false;
-              if (factor === 'ga') return c.indexOf('google authenticator') >= 0 && c.indexOf('push') < 0;
-              if (factor === 'ovc') return c.indexOf('okta verify') >= 0 && c.indexOf('enter a code') >= 0;
-              // Push: the first screen's row says "Okta Verify … push"; the
-              // method screen's row may just say "Get a push notification".
-              if (factor === 'ovp') return (c.indexOf('push') >= 0 || c.indexOf('notification') >= 0)
-                  && c.indexOf('enter a code') < 0;
-              return false;
+            // Rank rows rather than demanding an exact phrase. The first chooser
+            // lists authenticators by NAME only — "Okta Verify", "Google
+            // Authenticator" — and only a second screen names push vs code, so
+            // a push run must be willing to click a row that says nothing about
+            // pushes. Higher wins; 0 means "not this factor's row".
+            function rank(c){
+              if (c.indexOf('security key') >= 0 || c.indexOf('biometric') >= 0) return 0;
+              var code = c.indexOf('enter a code') >= 0;
+              var push = c.indexOf('push') >= 0 || c.indexOf('notification') >= 0;
+              var ov = c.indexOf('okta verify') >= 0;
+              if (factor === 'ga') return (c.indexOf('google authenticator') >= 0 && !push) ? 3 : 0;
+              if (factor === 'ovc') return (code && !push) ? 3 : ((ov && !push) ? 2 : (ov ? 1 : 0));
+              // Push: an explicit push row first, then a bare "Okta Verify" one.
+              return (push && !code) ? 3 : ((ov && !code) ? 2 : (ov ? 1 : 0));
+            }
+            var b = null, bestRank = 0, offered = [];
+            btns.forEach(function(x){
+              if (!shown(x)) return;
+              var own = (x.textContent || x.value || '').trim().replace(/\\s+/g,' ');
+              // Secondary links: escapes and re-sends, never a method row.
+              if (/resend|something else|another way|different method|back to sign|back to log/i.test(own)) return;
+              if (own) offered.push(own.slice(0, 28));
+              var r = rank(boxText(x));
+              if (r > bestRank) { bestRank = r; b = x; }
             });
+            // Name what Okta actually offered, so a chooser that has no row for
+            // the requested factor says so instead of just sitting there.
+            if (offered.length) pageHint += '||rows:' + offered.slice(0, 6).join(' / ');
             var pick = b ? ((b.textContent || b.value || '').trim() + '@' + location.pathname) : '';
             if (b && window.__bbFactorSig !== pick) {
               window.__bbFactorSig = pick;

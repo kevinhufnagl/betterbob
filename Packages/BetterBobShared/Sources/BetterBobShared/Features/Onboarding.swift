@@ -95,13 +95,9 @@ public struct OnboardingView: View {
                 header
                 autoCard
                 // The Advanced path stores an authenticator secret for
-                // hands-free Google Authenticator sign-in — which also can't
-                // work once Okta Verify routes this Mac through its device
-                // flow. Hide it there too.
-                if !SignInFactorGroup.oktaVerifyInstalled {
-                    advancedToggle
-                    if advancedOpen { advancedCard }
-                }
+                // hands-free Google Authenticator sign-in.
+                advancedToggle
+                if advancedOpen { advancedCard }
                 Text("Your details are stored only in your Mac's login Keychain and used only against HiBob's login form — never sent anywhere else.")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -140,23 +136,15 @@ public struct OnboardingView: View {
 
     // MARK: Automatic sign-in (recommended, first)
 
-    /// This Mac signs in with Okta Verify (its SSO extension is installed), so
-    /// no code is ever typed — copy that mentions a code must adapt.
-    private var oktaOnly: Bool { SignInFactorGroup.oktaVerifyInstalled }
-
     private var autoCard: some View {
         OnboardingCard(
             symbol: "wand.and.rays", tint: .accentColor,
             title: "Sign in with your password", badge: nil,
-            tag: oktaOnly ? "" : "One code",
-            blurb: oktaOnly
-                ? "Save your HiBob password. When the session expires Bob fills it in and you approve the sign-in in Okta Verify."
-                : "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
+            tag: "One code",
+            blurb: "Save your HiBob password. When the session expires Bob fills it in and you just type the current authenticator code — no code re-typing on every screen."
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Label(oktaOnly
-                      ? "Works with your password plus Okta Verify on this Mac."
-                      : "Works with a password plus any second factor — a typed authenticator code or an Okta Verify push.",
+                Label("Works with a password plus any second factor — a typed authenticator code or an Okta Verify push.",
                       systemImage: "info.circle")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -183,12 +171,8 @@ public struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             summaryRow("envelope.fill", email.isEmpty ? "No email set" : email)
             summaryRow("key.fill", "Password ••••••••")
-            // The code line is only accurate when a code is actually typed —
-            // omit it when Okta Verify handles sign-in on this Mac.
-            if !SignInFactorGroup.oktaVerifyInstalled {
-                summaryRow("keyboard", hasSecret ? "Codes come from your stored secret"
-                                                 : "You type the code at sign-in")
-            }
+            summaryRow("keyboard", hasSecret ? "Codes come from your stored secret"
+                                             : "You type the code at sign-in")
             if !state.autoLoginInProgress {
                 VStack(spacing: 8) {
                     // Signing in again only makes sense while signed out.
@@ -337,9 +321,7 @@ public struct OnboardingView: View {
             field("Password") {
                 SecureField("HiBob / Okta password", text: $password).textFieldStyle(.roundedBorder)
             }
-            Label(oktaOnly
-                  ? "Bob saves your password, fills your email + password automatically, and stops at the authenticator step so you approve the sign-in in Okta Verify."
-                  : "Bob saves your password, then you pick how to sign in. He fills your email + password automatically and stops at the authenticator step so you type the current code (or approve a push). Your code is never stored.",
+            Label("Bob saves your password, then you pick how to sign in. He fills your email + password automatically and stops at the authenticator step so you type the current code (or approve a push). Your code is never stored.",
                   systemImage: "keyboard")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

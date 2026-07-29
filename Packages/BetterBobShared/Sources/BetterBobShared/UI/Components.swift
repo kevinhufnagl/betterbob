@@ -319,12 +319,13 @@ public struct SignInFactorGroup: View {
 
     public init(state: BobState) { self.state = state }
 
-    /// Whether the Okta Verify desktop app is installed. When it is, macOS
-    /// routes our WebKit sign-in through Okta's device (SSO-extension/FastPass)
-    /// flow, whose chooser only offers Okta Verify — the code methods (Google
-    /// Authenticator, Okta Verify code) are dropped server-side and can't be
-    /// reached. So there's no point offering them; show only push. Computed
-    /// once — the install state won't change mid-session.
+    /// Whether the Okta Verify desktop app is installed. Used only to decide how
+    /// long the sign-in driver waits out Okta's FastPass probe (the app raises a
+    /// Touch ID prompt that needs a moment), NOT to restrict the methods on
+    /// offer: Okta's chooser keeps listing the code authenticators on machines
+    /// that have Okta Verify, and push is the method most likely to strand a
+    /// first sign-in on a new device. Computed once — the install state won't
+    /// change mid-session.
     public static let oktaVerifyInstalled: Bool = {
         #if os(macOS)
         if FileManager.default.fileExists(atPath: "/Applications/Okta Verify.app") { return true }
@@ -337,12 +338,10 @@ public struct SignInFactorGroup: View {
         #endif
     }()
 
-    /// Push leads. With Okta Verify installed, it's the only method the
-    /// embedded flow can reach, so the code fallbacks are dropped entirely.
+    /// Push leads, but all three are always offered — when Okta's chooser won't
+    /// take the push row, a typed code is the way through.
     private var orderedFactors: [SignInFactor] {
-        Self.oktaVerifyInstalled
-            ? [.oktaVerifyPush]
-            : [.oktaVerifyPush, .googleAuthenticator, .oktaVerifyCode]
+        [.oktaVerifyPush, .googleAuthenticator, .oktaVerifyCode]
     }
 
     /// A full-width, clearly-tappable row used when there's a single method.
@@ -366,12 +365,6 @@ public struct SignInFactorGroup: View {
                     // Authenticator flow — nothing to choose, one button does it.
                     soloButton(icon: "wand.and.rays", title: "Log in automatically") {
                         state.startAutoSignIn(factor: .googleAuthenticator)
-                    }
-                } else if orderedFactors.count == 1, let only = orderedFactors.first {
-                    // Just one usable method (Okta Verify installed): a single,
-                    // clearly-a-button row rather than a lone segment.
-                    soloButton(icon: only.icon, title: "Sign in with Okta Verify") {
-                        state.startAutoSignIn(factor: only)
                     }
                 } else {
                     HStack(spacing: 0) {
@@ -397,9 +390,7 @@ public struct SignInFactorGroup: View {
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
             if !state.fullyAutomatic {
-                Text(Self.oktaVerifyInstalled
-                     ? "Okta Verify is installed, so this Mac signs in with it. Approve the push on your device."
-                     : "Okta Verify push is the most reliable. The code methods depend on Okta offering them at sign-in.")
+                Text("Each method depends on Okta offering it at sign-in — if one won't go through, try another.")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

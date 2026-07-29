@@ -1078,8 +1078,8 @@ struct StubEl {
 /// ticks in page globals) and return the last step token plus every label it
 /// clicked along the way.
 func runDriver(_ els: [StubEl], body: String, host: String = "team-blue.okta.com",
-               factor: SignInFactor, allowBack: Bool = true,
-               picked: Bool = false, ticks: Int = 6) -> (step: String, clicks: [String]) {
+               factor: SignInFactor, allowBack: Bool = true, probeTicks: Int = 4,
+               picked: Bool = false, ticks: Int = 6) -> (step: String, clicks: [String], raw: String) {
     let ctx = JSContext()!
     ctx.exceptionHandler = { _, err in
         print("  JS exception: \(err?.toString() ?? "?")")
@@ -1124,13 +1124,13 @@ func runDriver(_ els: [StubEl], body: String, host: String = "team-blue.okta.com
     """)
     let script = SSOSignInController.autofillScript(
         email: "kevin@team.blue", password: "hunter2", otp: "",
-        factor: factor, click: true, allowBack: allowBack)
-    var step = ""
+        factor: factor, click: true, allowBack: allowBack, probeTicks: probeTicks)
+    var raw = ""
     for _ in 0..<ticks {
-        step = ctx.evaluateScript(script)?.toString()?.components(separatedBy: "||").first ?? ""
+        raw = ctx.evaluateScript(script)?.toString() ?? ""
     }
     let clicks = ctx.objectForKeyedSubscript("clicks").toArray() as? [String] ?? []
-    return (step, clicks)
+    return (raw.components(separatedBy: "||").first ?? "", clicks, raw)
 }
 
 // Okta's push-wait screen: no fields, and the copy says the push went out.
@@ -1188,19 +1188,78 @@ expect(runDriver(bouncedRows,
                  factor: .oktaVerifyPush, ticks: 20).clicks.count == 1,
        "a chooser page that also says a push went out is left alone")
 
-// The genuine FastPass probe — fieldless, before any identifier is submitted —
-// still gets escaped via its own Back link, which is the only way out of it.
+// Okta Identity Engine's first chooser lists authenticators by NAME — only a
+// second screen names push vs code — so a push run has to be willing to click a
+// row that says nothing about pushes. This is the page the first sign-in on a
+// Mac with Okta Verify installed dies on.
+let nameOnlyRows = [
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to login"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Okta Verify"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Google Authenticator"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Security Key or Biometric"),
+]
+let nameOnlyBody = "Verify it's you with a security method. Select from the following options."
+let byName = runDriver(nameOnlyRows, body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 3)
+expect(byName.clicks == ["Okta Verify"],
+       "a push run picks the bare 'Okta Verify' row on a name-only chooser")
+expect(byName.raw.contains("rows:") && byName.raw.contains("Google Authenticator"),
+       "the chooser reports the rows Okta offered, so a dead end can name them")
+// Reported among the offered rows (it is, after all, what Okta listed) but
+// never clickable — biometric rows can't be driven from a hidden web view.
+expect(runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Security Key or Biometric"),
+], body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 20).clicks.isEmpty,
+       "a security-key row is never clicked")
+expect(runDriver(nameOnlyRows, body: nameOnlyBody, factor: .googleAuthenticator, ticks: 3)
+        .clicks == ["Google Authenticator"],
+       "a Google Authenticator run picks its own row from the same chooser")
+expect(runDriver(nameOnlyRows, body: nameOnlyBody, factor: .oktaVerifyCode, ticks: 3)
+        .clicks == ["Okta Verify"],
+       "an Okta Verify code run goes through the same row, then the method screen")
+// The method screen: no authenticator name on the rows, just the two ways.
+let methodRows = [
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Get a push notification"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Enter a code"),
+]
+expect(runDriver(methodRows, body: nameOnlyBody, factor: .oktaVerifyCode, ticks: 3)
+        .clicks == ["Enter a code"],
+       "the code run takes 'Enter a code' on the method screen")
+expect(runDriver(methodRows, body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 3)
+        .clicks == ["Get a push notification"],
+       "the push run takes the push row on the method screen")
+// A chooser with no row for the requested factor must click nothing at all —
+// picking a method the user didn't ask for would strand them worse.
+expect(runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Google Authenticator"),
+], body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 20).clicks.isEmpty,
+       "a chooser without an Okta Verify row is left untouched on a push run")
+
+// The FastPass probe — fieldless, naming Okta's own device flow. Without Okta
+// Verify installed nothing can ever resolve it, so it's escaped via its own
+// Back link (which some tenants label "Back to login").
 let fastPass = runDriver([
-    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to sign in"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to login"),
 ], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush)
-expect(fastPass.step == "loading", "the FastPass probe is still just 'loading'")
-expect(fastPass.clicks.contains("Back to sign in"),
+expect(fastPass.step == "fastpass", "the FastPass probe is named, not just 'loading'")
+expect(fastPass.clicks.contains("Back to login"),
        "the driver escapes the FastPass probe once it stalls")
 expect(runDriver([
-    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to sign in"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to login"),
 ], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush,
    allowBack: false).clicks.isEmpty,
        "past the identifier stage the Back link is left alone")
+// With Okta Verify installed the probe is live — it raises a Touch ID prompt —
+// so the escape waits it out instead of cancelling the approval in progress.
+expect(runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to login"),
+], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush,
+   probeTicks: 28, ticks: 20).clicks.isEmpty,
+       "a live FastPass probe isn't clicked away while Okta Verify is prompting")
+expect(runDriver([
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Back to login"),
+], body: "Signing in with Okta FastPass", factor: .oktaVerifyPush,
+   probeTicks: 28, ticks: 30).clicks == ["Back to login"],
+       "…but a probe that never resolves is still escaped, once")
 
 if failures == 0 {
     print("All tests passed.")
