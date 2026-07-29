@@ -1228,11 +1228,17 @@ expect(runDriver(methodRows, body: nameOnlyBody, factor: .oktaVerifyPush, ticks:
         .clicks == ["Get a push notification"],
        "the push run takes the push row on the method screen")
 // A chooser with no row for the requested factor must click nothing at all —
-// picking a method the user didn't ask for would strand them worse.
-expect(runDriver([
+// picking a method the user didn't ask for would strand them worse — and must
+// say so, which is what raises the banner instead of a line of fine print.
+let noRowForPush = runDriver([
     StubEl(sel: ["a", "button", "[role=button]"], text: "Google Authenticator"),
-], body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 20).clicks.isEmpty,
+], body: nameOnlyBody, factor: .oktaVerifyPush, ticks: 20)
+expect(noRowForPush.clicks.isEmpty,
        "a chooser without an Okta Verify row is left untouched on a push run")
+expect(noRowForPush.raw.contains("nopick"),
+       "and reports that the requested method had no row")
+expect(!byName.raw.contains("nopick"),
+       "a chooser that does have the row reports no such thing")
 
 // A chooser that merely MENTIONS Okta's device flow is still a chooser. Naming
 // FastPass as a step token instead of a marker stranded exactly this page: the

@@ -314,8 +314,10 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             // you (FastPass) — a display detail only, so it never
                             // changes which step the page is.
                             let probing = parts.contains("fastpass")
+                            // The chooser had no row for the requested method.
+                            let noRow = parts.contains("nopick")
                             let hint = parts.dropFirst()
-                                .filter { !$0.hasPrefix("rows:") && $0 != "fastpass" }
+                                .filter { !$0.hasPrefix("rows:") && $0 != "fastpass" && $0 != "nopick" }
                                 .joined(separator: " — ")
                             if step != self.lastStep {
                                 self.lastStep = step
@@ -359,10 +361,20 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                 // of spinning out the deadline in silence, which
                                 // reads as a hang.
                                 let stuckFor = Date().timeIntervalSince(self.lastStepSince ?? Date())
+                                // No row for this method: say so in a banner as
+                                // soon as the chooser has settled, while the run
+                                // is still up. The user's move is to pick a
+                                // method Okta does list, and waiting out the
+                                // fail-fast to tell them wastes half a minute.
+                                if step == "select", noRow, stuckFor > 6 {
+                                    BobState.shared.missingSignInMethod =
+                                        MissingSignInMethod(factor: self.factor, offered: offered)
+                                }
                                 if step == "select", stuckFor > 30 {
                                     let listed = offered.isEmpty ? "" : " Okta offered: \(offered)."
-                                    self.lastFailureReason =
-                                        "Couldn't get past Okta's authenticator chooser with \(self.factor.shortLabel).\(listed) Try one of the other methods next to the sign-in button."
+                                    self.lastFailureReason = noRow
+                                        ? "Okta didn't offer \(self.factor.shortLabel) on this sign-in.\(listed) Pick one of the methods it did offer."
+                                        : "Couldn't get past Okta's authenticator chooser with \(self.factor.shortLabel).\(listed) Try one of the other methods next to the sign-in button."
                                     self.finish(false); return
                                 }
                                 // Same for a page that never resolves: the
@@ -729,6 +741,9 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             // Name what Okta actually offered, so a chooser that has no row for
             // the requested factor says so instead of just sitting there.
             if (offered.length) pageHint += '||rows:' + offered.slice(0, 6).join(' / ');
+            // No row for the requested factor at all: the one failure the user
+            // can act on immediately, by choosing a method Okta does offer.
+            if (!b) pageHint += '||nopick';
             var pick = b ? ((b.textContent || b.value || '').trim() + '@' + location.pathname) : '';
             if (b && window.__bbFactorSig !== pick) {
               window.__bbFactorSig = pick;

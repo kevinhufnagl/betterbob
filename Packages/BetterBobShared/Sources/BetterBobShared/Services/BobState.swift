@@ -85,6 +85,12 @@ public final class BobState: ObservableObject {
     @Published public var otpSubmitting = false
     /// Set when a submitted code was rejected, so the inline field can say so.
     @Published public var otpError: String?
+    /// Set when Okta's chooser turned out to have no row for the method the user
+    /// picked. Its own state rather than an error string because the sign-in UI
+    /// shows it as a banner above the method buttons — the fix is to choose a
+    /// different method, which is too important to leave in the status line's
+    /// fine print. Cleared when a new sign-in starts.
+    @Published public var missingSignInMethod: MissingSignInMethod?
     private var lastPunchAt: Date? {
         get {
             let t = UserDefaults.standard.double(forKey: "lastPunchAt")
@@ -210,6 +216,7 @@ public final class BobState: ObservableObject {
         signInFactor = factor
         autoLoginStatus = "Opening HiBob…"
         lastError = nil
+        missingSignInMethod = nil
         SSOSignInController.shared.presentAssisted(factor: factor) { [weak self] success in
             guard let self else { return }
             self.autoLoginInProgress = false
@@ -218,6 +225,7 @@ public final class BobState: ObservableObject {
             self.signInFactor = nil
             self.autoLoginStatus = ""
             if success {
+                self.missingSignInMethod = nil
                 Task { await self.completeSSOSignIn() }
             } else {
                 let reason = SSOSignInController.shared.lastFailureReason

@@ -311,6 +311,51 @@ extension ClockState {
     }
 }
 
+/// Okta's chooser had no row for the method the user picked, plus the methods it
+/// did list. Carried as state so the sign-in UI can say it in a banner.
+public struct MissingSignInMethod: Equatable {
+    public let factor: SignInFactor
+    /// The chooser's own row labels, "Google Authenticator / Security Key" —
+    /// empty when the page listed nothing recognisable.
+    public let offered: String
+
+    public init(factor: SignInFactor, offered: String) {
+        self.factor = factor
+        self.offered = offered
+    }
+}
+
+/// The banner for that case. Its own view because it's the one sign-in failure
+/// with an obvious next step — pick a method Okta actually offers — and it sits
+/// directly above the buttons that do it.
+public struct SignInMethodBanner: View {
+    let missing: MissingSignInMethod
+
+    public init(missing: MissingSignInMethod) { self.missing = missing }
+
+    public var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.bobOrange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Okta didn't offer \(missing.factor.shortLabel)")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(missing.offered.isEmpty
+                     ? "Its authenticator list had no row for that method. Try another one below."
+                     : "It offered: \(missing.offered). Pick one of those below.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.bobOrange.opacity(0.10),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.bobOrange.opacity(0.30), lineWidth: 0.8))
+    }
+}
+
 /// The three second-factor methods as one tied-together button group; each
 /// starts the automatic sign-in for that factor (one click, code field or push
 /// wait appears in place). Shared by the popover and the sign-in window.
@@ -357,6 +402,11 @@ public struct SignInFactorGroup: View {
 
     public var body: some View {
         VStack(spacing: 6) {
+            // Right above the buttons that resolve it — every screen that offers
+            // the methods gets the banner by construction.
+            if let missing = state.missingSignInMethod {
+                SignInMethodBanner(missing: missing).transition(.bobBanner)
+            }
             Group {
                 if state.fullyAutomatic {
                     // A stored authenticator secret only works with the Google
@@ -460,6 +510,12 @@ public struct AutoLoginInline: View {
                 Spacer(minLength: 0)
             }
 
+            // Shown mid-run: the chooser has already told us this method isn't
+            // on it, so don't make the user wait out the failure to hear it.
+            if let missing = state.missingSignInMethod {
+                SignInMethodBanner(missing: missing).transition(.bobBanner)
+            }
+
             if isPush {
                 // Push sign-in: no code field ever — just wait for phone approval.
                 HStack(spacing: 8) {
@@ -548,6 +604,7 @@ public struct AutoLoginInline: View {
         .animation(.easeInOut(duration: 0.15), value: state.autoLoginStatus)
         .animation(.easeInOut(duration: 0.15), value: state.otpError)
         .animation(.easeInOut(duration: 0.15), value: state.pushPending)
+        .animation(.easeInOut(duration: 0.15), value: state.missingSignInMethod)
         .onAppear { if !isPush && !handsFree { focused = true } }
     }
 
