@@ -341,10 +341,17 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                                 // isn't there its row never clicks and 'select'
                                 // just sits — fail fast with a clear message
                                 // instead of spinning to the 5-minute deadline.
-                                if step == "select", !self.factor.isPush,
-                                   Date().timeIntervalSince(self.lastStepSince ?? Date()) > 10 {
-                                    self.lastFailureReason =
-                                        "Couldn't reach \(self.factor.shortLabel) — Okta only offered Okta Verify. Try Okta Verify push."
+                                // Push gets a longer leash: its row does click,
+                                // and the driver re-picks it twice ~10s apart
+                                // when Okta bounces back here. Once those are
+                                // spent the chooser is a dead end too — say so
+                                // instead of spinning out the deadline in
+                                // silence, which reads as a hang.
+                                let onSelect = Date().timeIntervalSince(self.lastStepSince ?? Date())
+                                if step == "select", onSelect > (self.factor.isPush ? 45 : 10) {
+                                    self.lastFailureReason = self.factor.isPush
+                                        ? "Okta kept coming back to its authenticator chooser — the Okta Verify prompt never completed. Approve it as soon as it appears, or sign in manually once to get this device enrolled."
+                                        : "Couldn't reach \(self.factor.shortLabel) — Okta only offered Okta Verify. Try Okta Verify push."
                                     self.finish(false); return
                                 }
                             }
@@ -534,6 +541,26 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
             if (window.__bbSameTicks >= 6) { window.__bbSubmitted = null; window.__bbSameTicks = 0; }
           } else {
             window.__bbLastStep = step; window.__bbSameTicks = 0;
+          }
+          // The chooser needs the same self-heal, but its guard is per distinct
+          // row rather than per step, so the block above can't reach it. Still
+          // sitting on 'select' ~10s after a row was picked means either the
+          // click was lost or Okta came back to the chooser — a verification
+          // that never completed (an Okta Verify prompt wanting a fingerprint
+          // the hidden view can't finish, an expired push). That return lands
+          // in the SAME document, so the signature still matches and the row
+          // would never be clicked again: a dead end. Expire it — slower than
+          // the submit guard and only twice, because each re-pick can send
+          // another push, and never while the page says one is already out.
+          if (step === 'select') {
+            window.__bbSelectTicks = (window.__bbSelectTicks || 0) + 1;
+            if (window.__bbSelectTicks >= 8 && window.__bbFactorSig && !pushSent) {
+              window.__bbSelectTicks = 0;
+              window.__bbRepicks = (window.__bbRepicks || 0) + 1;
+              if (window.__bbRepicks <= 2) { window.__bbFactorSig = null; }
+            }
+          } else {
+            window.__bbSelectTicks = 0;
           }
           if (onHibob) {
             // HiBob's gateway: click "Continue with Okta" if it's there —

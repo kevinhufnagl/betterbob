@@ -242,7 +242,9 @@ struct TodayScreen: View {
     @ViewBuilder private var entriesSection: some View {
         if state.signedIn, !state.entries.isEmpty {
             GlassGroupedSection(header: "Entries") {
-                let sorted = state.entries.sorted { $0.start > $1.start }
+                // Chronological, newest at the bottom — same reading order as
+                // the day-detail list.
+                let sorted = state.entries.sorted { $0.start < $1.start }
                 ForEach(Array(sorted.enumerated()), id: \.element.id) { i, entry in
                     GlassRow(showDivider: i > 0) {
                         entryRow(entry)

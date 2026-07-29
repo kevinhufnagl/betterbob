@@ -1161,6 +1161,33 @@ expect(chooser.step == "select", "the method chooser stays 'select' after an ear
 expect(chooser.clicks.contains("Get a push notification"),
        "the chooser's push row gets picked")
 
+// Okta bouncing back to the chooser is the stuck case: a verification that
+// never completed — the Okta Verify app on this Mac popping a fingerprint
+// prompt the hidden web view can't finish — returns to the very page the row
+// was picked from, in the SAME document. The per-choice guard still holds that
+// row's signature, so nothing clicks it forward and the flow dies there. The
+// guard has to expire.
+let bouncedRows = [
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Select Okta Verify push"),
+    StubEl(sel: ["a", "button", "[role=button]"], text: "Select Google Authenticator"),
+]
+let bouncedBody = "Verify it's you with a security method. Select from the following options."
+expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 4)
+        .clicks.count == 1,
+       "a freshly picked row isn't picked again while the click is still landing")
+expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 12)
+        .clicks.count == 2,
+       "a chooser still sitting there ~10s later gets its row picked again")
+expect(runDriver(bouncedRows, body: bouncedBody, factor: .oktaVerifyPush, ticks: 60)
+        .clicks.count == 3,
+       "re-picks are capped — a chooser that never advances can't spray pushes")
+// Never re-pick while the page itself says a push is already out, though:
+// that's how the flow used to send a second one and kill the first.
+expect(runDriver(bouncedRows,
+                 body: bouncedBody + " Push notification sent. Open Okta Verify.",
+                 factor: .oktaVerifyPush, ticks: 20).clicks.count == 1,
+       "a chooser page that also says a push went out is left alone")
+
 // The genuine FastPass probe — fieldless, before any identifier is submitted —
 // still gets escaped via its own Back link, which is the only way out of it.
 let fastPass = runDriver([

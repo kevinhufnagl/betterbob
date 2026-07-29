@@ -16,8 +16,7 @@ struct EntriesTable: View {
         if !state.entries.isEmpty {
             Card {
                 DayEntriesList(state: state, entries: state.entries,
-                               date: Calendar.current.startOfDay(for: Date()),
-                               newestFirst: true)
+                               date: Calendar.current.startOfDay(for: Date()))
             }
         }
     }
@@ -28,12 +27,11 @@ struct DayEntriesList: View {
     @ObservedObject var state: BobState
     let entries: [AttendanceEntry]
     let date: Date
-    var newestFirst: Bool = false
 
     var body: some View {
-        // `entries` stays chronological (dayEntries integrity); only the display
-        // order flips. isLast tracks the chronologically last (open) entry.
-        let display = newestFirst ? Array(entries.reversed()) : entries
+        // Chronological, newest entry at the bottom. isLast tracks the
+        // chronologically last (open) entry.
+        let display = entries
         let lastChrono = entries.last
         VStack(spacing: 0) {
             ForEach(Array(display.enumerated()), id: \.offset) { i, e in
