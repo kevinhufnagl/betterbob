@@ -346,10 +346,19 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             let stalled = Date().timeIntervalSince(self.lastStepSince ?? Date()) > 18
                                 && !BobState.shared.awaitingOTP && !BobState.shared.pushPending
                                 && !awaitingDevice
+                            // "Choosing your authenticator" is only true for the
+                            // moment it takes to click a row. After that we are
+                            // waiting on the authenticator — and on a FastPass
+                            // sign-in that wait happens with the chooser still on
+                            // screen, so the page can't tell us. Time at the step
+                            // can, and it doesn't depend on reading Okta's
+                            // markup: past a few seconds, the click has happened
+                            // (or the banner is explaining why it hasn't).
+                            let atStepFor = Date().timeIntervalSince(self.lastStepSince ?? Date())
                             let label: String
                             if probing && step == "loading" {
                                 label = "Waiting for Okta Verify on this Mac…"
-                            } else if awaitingDevice {
+                            } else if step == "select", !noRow, awaitingDevice || atStepFor > 3 {
                                 label = SignInFactorGroup.oktaVerifyInstalled
                                     ? "Waiting for Okta Verify on this Mac…"
                                     : "Waiting for your authenticator…"
@@ -808,6 +817,23 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
 
     public nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in self.attemptCompletion() }
+    }
+
+    /// A new page is loading, so whatever step the last one reported is history.
+    /// Without this the previous label sticks through Okta's post-approval
+    /// redirect chain — the driver has no page to evaluate yet, so nothing
+    /// replaces it, and the chooser's line is the one users saw hanging around
+    /// after they'd already approved the sign-in.
+    public nonisolated func webView(_ webView: WKWebView,
+                                    didStartProvisionalNavigation navigation: WKNavigation!) {
+        Task { @MainActor in
+            guard self.drive != .manual else { return }
+            self.lastStep = nil
+            self.lastStepSince = nil
+            // Not while a human is mid-task: those states own the line.
+            guard !BobState.shared.awaitingOTP, !BobState.shared.pushPending else { return }
+            BobState.shared.autoLoginStatus = "Signing you in…"
+        }
     }
 
     /// Sync the web session into the API cookie store and finish if it's real.
