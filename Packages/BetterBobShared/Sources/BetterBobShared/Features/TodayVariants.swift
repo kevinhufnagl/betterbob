@@ -759,8 +759,9 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     /// via `.statusTint(_:)` so callers don't touch the init.
     var statusTint: Color?
 
-    /// A quiet fourth line under the day's own subline — where the week stands.
-    /// Set via `.weekLine(_:)`; nil hides it. See `weekHeroLine(_:now:)`.
+    /// Where the week stands, appended to the day's own subline after a dot.
+    /// Set via `.weekLine(_:)`; nil leaves the subline alone. See
+    /// `weekHeroLine(_:now:)`.
     var weekLine: String?
 
     /// The water's hue: the status tint when over a limit, else the accent.
@@ -864,17 +865,13 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
                     .foregroundStyle(ink.opacity(0.92))
                     .contentTransition(.numericText())
                     .animation(Motion.numeric, value: customLine2 ?? "\(percent)")
-                Text(customLine3 ?? subline)
+                // The day's line, with the week riding along on the end of it
+                // after a dot — quieter than the day, same row.
+                sublineText
                     .font(.system(size: compact ? 10 : 11))
                     .foregroundStyle(ink.opacity(0.66))
-                // The week, one notch quieter than the day it sits under.
-                if let weekLine {
-                    Text(weekLine)
-                        .font(.system(size: compact ? 10 : 11))
-                        .foregroundStyle(ink.opacity(0.52))
-                        .contentTransition(.numericText())
-                        .animation(Motion.numeric, value: weekLine)
-                }
+                    .contentTransition(.numericText())
+                    .animation(Motion.numeric, value: (customLine3 ?? subline) + (weekLine ?? ""))
             }
             bottom
         }
@@ -1020,6 +1017,18 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
         }
     }
 
+    /// The day's subline plus the week's tail, as one run of text. The tail is
+    /// styled a shade fainter than the rest so the row still reads day-first.
+    private var sublineText: Text {
+        let day = customLine3 ?? subline
+        guard let weekLine else { return Text(day) }
+        var line = AttributedString(day)
+        var tail = AttributedString(" · \(weekLine)")
+        tail.foregroundColor = ink.opacity(0.5)
+        line.append(tail)
+        return Text(line)
+    }
+
     private var subline: String {
         var parts: [String] = []
         if target > 0 {
@@ -1097,8 +1106,8 @@ extension LiquidHero {
         return copy
     }
 
-    /// Add the week's "12h 30m left this week" under the day's own line. Pass
-    /// nil (the default) for heroes that aren't about today.
+    /// Add the week's "12h 30m left this week" to the end of the day's own
+    /// line. Pass nil (the default) for heroes that aren't about today.
     public func weekLine(_ text: String?) -> LiquidHero {
         var copy = self
         copy.weekLine = text
