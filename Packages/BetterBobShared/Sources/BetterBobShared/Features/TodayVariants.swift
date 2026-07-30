@@ -37,6 +37,86 @@ public struct TodayVals {
     public var doneBy: Date? { working && remaining > 0 ? Date().addingTimeInterval(remaining) : nil }
 }
 
+// MARK: - Week left
+
+/// The week's answer to the hero's "2h 30m left": how much of this week's
+/// target is still to work, or how far past it you already are — with the
+/// week's fill as a slim bar. `compact` is the popover's tighter variant.
+///
+/// Renders nothing until the cycle summary has arrived (no target, nothing to
+/// be left of). A week that straddles two months only has rows for the current
+/// sheet, and says so in the caption rather than quietly under-counting.
+public struct WeekRemaining: View {
+    @ObservedObject var state: BobState
+    var now: Date
+    var compact: Bool
+
+    public init(state: BobState, now: Date, compact: Bool = false) {
+        self.state = state
+        self.now = now
+        self.compact = compact
+    }
+    @Environment(\.colorScheme) private var scheme
+
+    private func progress() -> AttendanceLogic.WeekProgress {
+        let today = TodayVals(state, now: now)
+        return AttendanceLogic.weekProgress(days: state.cycleSummary?.days ?? [],
+                                           workedToday: today.worked,
+                                           todayTarget: today.targetSecs,
+                                           now: now)
+    }
+
+    public var body: some View {
+        let week = progress()
+        if week.hasTarget {
+            // Met reads as the settled teal of a finished day; still-to-go
+            // stays on the accent that carries the water.
+            let tint = week.met ? Color.bobTeal : Color.primaryAccent(scheme)
+            VStack(alignment: .leading, spacing: compact ? 5 : 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Image(systemName: week.met ? "checkmark.circle.fill" : "calendar.badge.clock")
+                        .font(.bobUI(compact ? 10 : 12, weight: .semibold))
+                        .foregroundStyle(tint)
+                    Text(headline(week))
+                        .font(.bobUI(compact ? 11 : 13, weight: .semibold))
+                        .contentTransition(.numericText())
+                    Spacer(minLength: 6)
+                    Text("\(Int((week.worked / week.target * 100).rounded()))%")
+                        .font(.bobUI(compact ? 10 : 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
+                slimBar(week.fraction, tint: tint, height: compact ? 5 : 7)
+                Text(caption(week))
+                    .font(.bobUI(compact ? 10 : 11))
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+            }
+            .padding(compact ? 9 : 12)
+            .insetCard(cornerRadius: compact ? 10 : 12)
+            .animation(Motion.numeric, value: week)
+            .transition(.bobBanner)
+        }
+    }
+
+    private func headline(_ week: AttendanceLogic.WeekProgress) -> String {
+        guard week.met else { return "\(Fmt.hm(week.remaining)) left this week" }
+        // Under a minute over is just "met" — no one wants "+0m over".
+        return week.over >= 60 ? "Week's hours in — \(Fmt.hm(week.over)) over"
+                               : "Week's hours in"
+    }
+
+    private func caption(_ week: AttendanceLogic.WeekProgress) -> String {
+        var parts = ["\(Fmt.hm(week.worked)) of \(Fmt.hm(week.target)) this week"]
+        if !week.met, week.daysToGo > 0 {
+            parts.append("\(week.daysToGo) day\(week.daysToGo == 1 ? "" : "s") to go")
+        }
+        if week.partial { parts.append("this cycle only") }
+        if week.estimated, !week.met { parts.append("days ahead estimated") }
+        return parts.joined(separator: " · ")
+    }
+}
+
 @MainActor
 private func greetingText(_ state: BobState) -> String {
     let name = state.profile?.name.split(separator: " ").first.map(String.init)
@@ -487,6 +567,10 @@ public struct TodayTimeline: View {
                 .overlay(alignment: .bottom) {
                     ActionDock(state: state, now: ctxDate)
                 }
+
+                // Where the week stands, right under the day's own hero — the
+                // same question one scale up.
+                WeekRemaining(state: state, now: ctxDate)
 
                 // The day strip floats naked on the page — no card box — with
                 // the entry boundary times underneath. (An empty day shows

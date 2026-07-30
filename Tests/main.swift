@@ -900,6 +900,73 @@ expect(abs(fractions[1] - 1.25) < 0.01, "week: over-target day keeps its oversho
 expect(abs(fractions[3] - 0.5) < 0.01, "week: Thursday half")
 expect(fractions[2] == 0 && fractions[4] == 0, "week: unworked days empty")
 
+print("AttendanceLogic.weekProgress")
+
+// Same anchor: Thursday the 16th, so Mon–Wed are done and Friday is still ahead.
+let progressDays = [
+    DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),   // Monday
+    DayHours(date: "2026-07-13", worked: 0, target: 8, overtime: nil),   // duplicate, empty
+    DayHours(date: "2026-07-14", worked: 9, target: 8, overtime: nil),   // Tuesday
+    DayHours(date: "2026-07-15", worked: 7, target: 8, overtime: nil),   // Wednesday
+    DayHours(date: "2026-07-16", worked: 1, target: 8, overtime: nil),   // today, stale row
+    DayHours(date: "2026-07-17", worked: 0, target: 8, overtime: nil),   // Friday, to come
+    DayHours(date: "2026-07-18", worked: 0, target: nil, overtime: nil), // Saturday, no target
+    DayHours(date: "2026-07-12", worked: 8, target: 8, overtime: nil),   // last week
+]
+let wp = AttendanceLogic.weekProgress(days: progressDays, workedToday: 4 * 3600,
+                                      todayTarget: 8 * 3600, now: t(14))
+expect(abs(wp.target - 40 * 3600) < 1, "week: target sums this week's days only")
+expect(abs(wp.worked - 28 * 3600) < 1, "week: today's live total beats the sheet's stale row")
+expect(abs(wp.remaining - 12 * 3600) < 1, "week: remaining is target minus worked")
+expect(wp.daysToGo == 1, "week: one working day left after today")
+expect(!wp.met && wp.hasTarget && !wp.partial, "week: short of target, whole week covered")
+
+// On the Friday (t(38)), so the only days left are the weekend — nothing ahead
+// to fill, and three ten-hour days have already banked the week.
+let wpOver = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-13", worked: 10, target: 8, overtime: nil),
+           DayHours(date: "2026-07-14", worked: 10, target: 8, overtime: nil),
+           DayHours(date: "2026-07-15", worked: 10, target: 8, overtime: nil)],
+    workedToday: 2 * 3600, todayTarget: 4 * 3600, now: t(38))
+expect(wpOver.met, "week: past the target reads as met")
+expect(abs(wpOver.over - 4 * 3600) < 1, "week: overshoot named")
+expect(wpOver.remaining == 0, "week: nothing left once met")
+expect(abs(wpOver.fraction - 1) < 0.001, "week: bar caps at full")
+expect(wpOver.daysToGo == 0, "week: the weekend isn't a day to go")
+
+// A sheet that stops stating targets after today: weekdays ahead take the
+// week's typical day, so "left this week" still means something. The weekend
+// stays empty, and the whole thing is flagged as an estimate.
+let wpTruncated = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-14", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-15", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-16", worked: 0, target: nil, overtime: nil),
+           DayHours(date: "2026-07-17", worked: 0, target: nil, overtime: nil),
+           DayHours(date: "2026-07-18", worked: 0, target: nil, overtime: nil)],
+    workedToday: 2 * 3600, todayTarget: 8 * 3600, now: t(14))
+expect(wpTruncated.estimated, "week: silent days ahead are flagged as estimated")
+expect(abs(wpTruncated.target - 40 * 3600) < 1, "week: Friday filled with the typical day, Saturday not")
+expect(wpTruncated.daysToGo == 1, "week: only the filled weekday is a day to go")
+
+let wpDayOff = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-17", worked: 0, target: 0, overtime: nil)],
+    workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14))
+expect(!wpDayOff.estimated, "week: a stated zero ahead is a booked day off, not a gap")
+expect(wpDayOff.daysToGo == 0, "week: a day off isn't a day to go")
+expect(abs(wpDayOff.target - 16 * 3600) < 1, "week: the day off adds nothing to the target")
+
+let wpPartial = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-16", worked: 0, target: 8, overtime: nil)],
+    workedToday: 3 * 3600, todayTarget: 8 * 3600, now: t(14))
+expect(wpPartial.partial, "week: earlier days missing from the sheet flag a cycle boundary")
+expect(abs(wpPartial.worked - 3 * 3600) < 1, "week: a partial week counts what it has")
+
+expect(!AttendanceLogic.weekProgress(days: [], workedToday: 0, todayTarget: 0,
+                                     now: t(14)).hasTarget,
+       "week: no target without cycle data")
+
 print("AttendanceLogic.nextBackgroundRefresh")
 
 expect(AttendanceLogic.nextBackgroundRefresh(now: t(10), breakDue: nil) == t(10).addingTimeInterval(15 * 60),

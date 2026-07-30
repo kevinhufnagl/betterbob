@@ -45,6 +45,10 @@ struct PopoverRootView: View {
                         } else {
                             ActionDock(state: state, now: context.date)
                         }
+                        // The week's counterpart to the hero's "time left".
+                        if prefs.popoverShowWeek {
+                            WeekRemaining(state: state, now: context.date, compact: true)
+                        }
                         if let fc = state.forgottenClockOut { unclosedWarning(fc) }
                         if !state.queue.isEmpty {
                             Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")

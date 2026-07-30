@@ -157,6 +157,10 @@ public final class Prefs: ObservableObject {
     @Published public var popoverShowTimeline: Bool {
         didSet { UserDefaults.standard.set(popoverShowTimeline, forKey: "popoverShowTimeline") }
     }
+    /// The week's remaining-hours row under the header.
+    @Published public var popoverShowWeek: Bool {
+        didSet { UserDefaults.standard.set(popoverShowWeek, forKey: "popoverShowWeek") }
+    }
 
     /// Tint the menu-bar icon by clock state (green working / orange break).
     @Published public var colorMenuBarIcon: Bool {
@@ -246,6 +250,7 @@ public final class Prefs: ObservableObject {
         self.popoverShowWarnings = d.object(forKey: "popoverShowWarnings") as? Bool ?? true
         self.popoverShowEntries = d.object(forKey: "popoverShowEntries") as? Bool ?? true
         self.popoverShowTimeline = d.object(forKey: "popoverShowTimeline") as? Bool ?? false
+        self.popoverShowWeek = d.object(forKey: "popoverShowWeek") as? Bool ?? true
         self.liveActivityEnabled = d.object(forKey: "liveActivityEnabled") as? Bool ?? true
         self.liveActivityShowsTotal = d.object(forKey: "liveActivityShowsTotal") as? Bool ?? false
         self.wifiAutoReasonEnabled = d.object(forKey: "wifiAutoReasonEnabled") as? Bool ?? false

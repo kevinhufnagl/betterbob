@@ -507,6 +507,119 @@ public enum AttendanceLogic {
         return fractions
     }
 
+    // MARK: - Week progress
+
+    /// How the whole week stands against its target — the weekly counterpart to
+    /// the day's "time left".
+    public struct WeekProgress: Equatable {
+        /// Worked across the week so far, today's live total included.
+        public var worked: TimeInterval
+        /// The week's expected hours: the sum of its days' targets, days still
+        /// to come included.
+        public var target: TimeInterval
+        /// Working days left after today (ones with a target of their own).
+        public var daysToGo: Int
+        /// True when part of the week falls outside the fetched cycle — a week
+        /// that straddles two months only has rows for the current sheet, so
+        /// the totals cover this cycle only.
+        public var partial: Bool
+        /// True when a day still to come carried no target of its own and got
+        /// the week's typical working day instead — say so rather than quietly
+        /// under-counting what's left.
+        public var estimated: Bool
+
+        public init(worked: TimeInterval, target: TimeInterval,
+                    daysToGo: Int, partial: Bool, estimated: Bool = false) {
+            self.worked = worked; self.target = target
+            self.daysToGo = daysToGo; self.partial = partial
+            self.estimated = estimated
+        }
+
+        /// Still to work this week; zero once the target is met.
+        public var remaining: TimeInterval { max(0, target - worked) }
+        /// Worked beyond the week's target.
+        public var over: TimeInterval { max(0, worked - target) }
+        public var met: Bool { target > 0 && worked >= target }
+        /// Capped for the bar — the overshoot is named in text instead.
+        public var fraction: Double { target > 0 ? min(1, worked / target) : 0 }
+        /// Nothing worth showing without a target (no cycle data yet).
+        public var hasTarget: Bool { target > 0 }
+    }
+
+    /// The week (Mon–Sun) containing `now`, measured against its target.
+    /// `days` is the cycle summary series; today's row in it is ignored in
+    /// favour of the live `workedToday` / `todayTarget`, which the server's
+    /// copy lags behind. Duplicate rows merge by max, so a stray empty row
+    /// from HiBob can't erase a worked day — same rule as `weekFractions`.
+    ///
+    /// Days ahead count toward the target too — that's what makes "left this
+    /// week" mean anything on a Monday. Some tenants' series stops carrying
+    /// targets after today; a weekday whose target is *unknown* (no row, or a
+    /// row with no target) then takes the week's typical working day and the
+    /// result is flagged `estimated`. An explicit zero target (a booked day
+    /// off) is left at zero.
+    public static func weekProgress(days: [DayHours],
+                                    workedToday: TimeInterval,
+                                    todayTarget: TimeInterval,
+                                    now: Date,
+                                    calendar: Calendar = Calendar(identifier: .iso8601)) -> WeekProgress {
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else {
+            return WeekProgress(worked: workedToday, target: todayTarget,
+                                daysToGo: 0, partial: false)
+        }
+        var worked: [String: TimeInterval] = [:]
+        // Only days whose target the sheet actually states — a missing key is
+        // "unknown", which is what lets the fill below tell it from a real zero.
+        var target: [String: TimeInterval] = [:]
+        for day in days {
+            guard let date = DayFmt.date(day.date), week.contains(date) else { continue }
+            worked[day.date] = max(worked[day.date] ?? 0, day.worked * 3600)
+            if let stated = day.target {
+                target[day.date] = max(target[day.date] ?? 0, stated * 3600)
+            }
+        }
+        // Today comes from the live day, not the sheet.
+        let todayKey = DayFmt.iso.string(from: now)
+        worked[todayKey] = workedToday
+        target[todayKey] = max(todayTarget, target[todayKey] ?? 0)
+
+        // The week's typical working day, for filling days the sheet is silent
+        // about: the median of the stated weekday targets.
+        let stated = target.compactMap { key, secs -> TimeInterval? in
+            guard secs > 0, let date = DayFmt.date(key) else { return nil }
+            let weekday = calendar.component(.weekday, from: date)
+            return (2...6).contains(weekday) ? secs : nil    // Mon…Fri
+        }.sorted()
+        let typical: TimeInterval? = stated.isEmpty ? nil : stated[stated.count / 2]
+
+        // Walk the week's own dates: past days missing from the sheet mean the
+        // week straddles a cycle boundary; days ahead with a target (stated or
+        // filled) are the ones left to work.
+        var daysToGo = 0
+        var partial = false
+        var estimated = false
+        let todayStart = calendar.startOfDay(for: now)
+        var cursor = calendar.startOfDay(for: week.start)
+        while cursor < week.end {
+            let key = DayFmt.iso.string(from: cursor)
+            if cursor < todayStart {
+                if worked[key] == nil { partial = true }
+            } else if cursor > todayStart {
+                let weekday = calendar.component(.weekday, from: cursor)
+                if target[key] == nil, (2...6).contains(weekday), let typical {
+                    target[key] = typical
+                    estimated = true
+                }
+                if (target[key] ?? 0) > 0 { daysToGo += 1 }
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return WeekProgress(worked: worked.values.reduce(0, +),
+                            target: target.values.reduce(0, +),
+                            daysToGo: daysToGo, partial: partial, estimated: estimated)
+    }
+
     /// When the next background refresh should run: at the auto-break
     /// boundary when that's sooner than the regular cadence, but never
     /// sooner than a minute from now.

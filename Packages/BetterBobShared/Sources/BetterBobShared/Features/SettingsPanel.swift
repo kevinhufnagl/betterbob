@@ -313,6 +313,8 @@ public struct SettingsPanel: View {
         Group {
             Toggle("Show worked-time header", isOn: $prefs.popoverShowHeader)
                 .font(.system(size: 12))
+            Toggle("Show this week's remaining hours", isOn: $prefs.popoverShowWeek)
+                .font(.system(size: 12))
             Toggle("Show warnings (missing break, daily max)", isOn: $prefs.popoverShowWarnings)
                 .font(.system(size: 12))
             Toggle("Show today's entries", isOn: $prefs.popoverShowEntries)
