@@ -555,9 +555,11 @@ public enum AttendanceLogic {
     /// Days ahead count toward the target too — that's what makes "left this
     /// week" mean anything on a Monday. Some tenants' series stops carrying
     /// targets after today; a weekday whose target is *unknown* (no row, or a
-    /// row with no target) then takes the week's typical working day and the
-    /// result is flagged `estimated`. An explicit zero target (a booked day
-    /// off) is left at zero.
+    /// row with no target) then takes **that same weekday's** target from
+    /// elsewhere in the cycle — a 6.5h Friday stays 6.5h, not the week's 8h
+    /// average — and only falls back to the cycle's typical weekday when that
+    /// weekday has no precedent at all. Either way the result is flagged
+    /// `estimated`. An explicit zero target (a booked day off) is left at zero.
     public static func weekProgress(days: [DayHours],
                                     workedToday: TimeInterval,
                                     todayTarget: TimeInterval,
@@ -571,26 +573,40 @@ public enum AttendanceLogic {
         // Only days whose target the sheet actually states — a missing key is
         // "unknown", which is what lets the fill below tell it from a real zero.
         var target: [String: TimeInterval] = [:]
+        // Every stated weekday target in the whole cycle, keyed by weekday —
+        // the precedent a silent day ahead is filled from.
+        var byWeekday: [Int: [TimeInterval]] = [:]
         for day in days {
-            guard let date = DayFmt.date(day.date), week.contains(date) else { continue }
+            guard let date = DayFmt.date(day.date) else { continue }
+            if let stated = day.target, stated > 0 {
+                byWeekday[calendar.component(.weekday, from: date), default: []]
+                    .append(stated * 3600)
+            }
+            guard week.contains(date) else { continue }
             worked[day.date] = max(worked[day.date] ?? 0, day.worked * 3600)
             if let stated = day.target {
                 target[day.date] = max(target[day.date] ?? 0, stated * 3600)
             }
         }
-        // Today comes from the live day, not the sheet.
+        // Today's worked time comes from the live day, not the sheet; its
+        // target from the sheet when stated, else the day view's own number.
         let todayKey = DayFmt.iso.string(from: now)
         worked[todayKey] = workedToday
-        target[todayKey] = max(todayTarget, target[todayKey] ?? 0)
+        target[todayKey] = target[todayKey] ?? todayTarget
 
-        // The week's typical working day, for filling days the sheet is silent
-        // about: the median of the stated weekday targets.
-        let stated = target.compactMap { key, secs -> TimeInterval? in
-            guard secs > 0, let date = DayFmt.date(key) else { return nil }
-            let weekday = calendar.component(.weekday, from: date)
-            return (2...6).contains(weekday) ? secs : nil    // Mon…Fri
-        }.sorted()
-        let typical: TimeInterval? = stated.isEmpty ? nil : stated[stated.count / 2]
+        /// The typical length of `weekday` (1 = Sun … 7 = Sat): the median of
+        /// its own stated targets across the cycle — so a 6.5h Friday is filled
+        /// as 6.5h — falling back to the median across all weekdays for a
+        /// weekday with no precedent yet.
+        func typical(_ weekday: Int) -> TimeInterval? {
+            func median(_ values: [TimeInterval]) -> TimeInterval? {
+                guard !values.isEmpty else { return nil }
+                let sorted = values.sorted()
+                return sorted[sorted.count / 2]
+            }
+            if let own = median(byWeekday[weekday] ?? []) { return own }
+            return median((2...6).flatMap { byWeekday[$0] ?? [] })   // Mon…Fri
+        }
 
         // Walk the week's own dates: past days missing from the sheet mean the
         // week straddles a cycle boundary; days ahead with a target (stated or
@@ -602,12 +618,12 @@ public enum AttendanceLogic {
         var cursor = calendar.startOfDay(for: week.start)
         while cursor < week.end {
             let key = DayFmt.iso.string(from: cursor)
+            let weekday = calendar.component(.weekday, from: cursor)
             if cursor < todayStart {
                 if worked[key] == nil { partial = true }
             } else if cursor > todayStart {
-                let weekday = calendar.component(.weekday, from: cursor)
-                if target[key] == nil, (2...6).contains(weekday), let typical {
-                    target[key] = typical
+                if target[key] == nil, (2...6).contains(weekday), let fill = typical(weekday) {
+                    target[key] = fill
                     estimated = true
                 }
                 if (target[key] ?? 0) > 0 { daysToGo += 1 }

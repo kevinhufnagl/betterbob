@@ -45,10 +45,6 @@ struct PopoverRootView: View {
                         } else {
                             ActionDock(state: state, now: context.date)
                         }
-                        // The week's counterpart to the hero's "time left".
-                        if prefs.popoverShowWeek {
-                            WeekRemaining(state: state, now: context.date, compact: true)
-                        }
                         if let fc = state.forgottenClockOut { unclosedWarning(fc) }
                         if !state.queue.isEmpty {
                             Text("\(state.queue.count) queued · fires \(Fmt.clock(state.queue[0].fireAt))")
@@ -354,6 +350,7 @@ struct PopoverRootView: View {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                        compact: true, bottomInset: 20, wave: wave)
                 .statusTint(state.heroLimitTint)
+                .weekLine(weekHeroLine(state, now: now))
                 .frame(height: 112)
                 // Swimming once the water is ~15% deep, riding the hero's own
                 // wave. A hair higher than the edge so his low point clears the

@@ -949,6 +949,22 @@ expect(wpTruncated.estimated, "week: silent days ahead are flagged as estimated"
 expect(abs(wpTruncated.target - 40 * 3600) < 1, "week: Friday filled with the typical day, Saturday not")
 expect(wpTruncated.daysToGo == 1, "week: only the filled weekday is a day to go")
 
+// A short Friday: the sheet states no target for the coming one, but earlier
+// Fridays in the cycle do — the fill is that weekday's own 6.5h, not the
+// week's 8h average, so a 38.5h week reads as 38.5h.
+let wpShortFriday = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-03", worked: 6.5, target: 6.5, overtime: nil), // earlier Friday
+           DayHours(date: "2026-07-10", worked: 6.5, target: 6.5, overtime: nil), // earlier Friday
+           DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-14", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-15", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-16", worked: 0, target: 8, overtime: nil),
+           DayHours(date: "2026-07-17", worked: 0, target: nil, overtime: nil)],   // Friday, silent
+    workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14))
+expect(abs(wpShortFriday.target - 38.5 * 3600) < 1, "week: a silent Friday is filled from earlier Fridays")
+expect(abs(wpShortFriday.remaining - 10.5 * 3600) < 1, "week: 28h in, 10h 30m to go")
+expect(wpShortFriday.estimated, "week: still an estimate, even a well-informed one")
+
 let wpDayOff = AttendanceLogic.weekProgress(
     days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
            DayHours(date: "2026-07-17", worked: 0, target: 0, overtime: nil)],

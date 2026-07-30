@@ -123,6 +123,7 @@ struct TodayScreen: View {
         LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
                    compact: true, cornerRadius: 18, bottomInset: 30, wave: wave)
             .statusTint(state.heroLimitTint)
+            .weekLine(weekHeroLine(state, now: now))
             .frame(height: 215)
             .overlay(alignment: .topLeading) {
                 // Swimming once the water is ~15% deep, straddling the top
