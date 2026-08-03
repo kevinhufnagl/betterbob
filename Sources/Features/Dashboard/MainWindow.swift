@@ -2,12 +2,13 @@ import SwiftUI
 import AppKit
 
 enum MainTab: String, CaseIterable, Identifiable {
-    case today, cycle, timeOff, activity, settings
+    case today, cycle, timesheet, timeOff, activity, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .today: return "Today"
         case .cycle: return "This month"
+        case .timesheet: return "Last month"
         case .timeOff: return "Time off"
         case .activity: return "Activity"
         case .settings: return "Settings"
@@ -17,6 +18,7 @@ enum MainTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: return "clock.fill"
         case .cycle: return "calendar"
+        case .timesheet: return "doc.text"
         case .timeOff: return "beach.umbrella"
         case .activity: return "list.bullet.rectangle"
         case .settings: return "gearshape.fill"
@@ -70,7 +72,7 @@ struct MainWindow: View {
             NavigationSplitView {
                 List(selection: $tab) {
                     Section("BetterBob") {
-                        ForEach([MainTab.today, .cycle, .timeOff, .activity]) { row($0) }
+                        ForEach([MainTab.today, .cycle, .timesheet, .timeOff, .activity]) { row($0) }
                     }
                     Section("App") {
                         row(.settings)
@@ -99,7 +101,15 @@ struct MainWindow: View {
             .frame(minWidth: 940, minHeight: 620)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
-                    Button { Task { await state.reconcile() } } label: {
+                    Button {
+                        Task {
+                            await state.reconcile()
+                            // The finished sheet sits outside the regular
+                            // reconcile and caches for 10 min — an explicit
+                            // refresh should always refetch it.
+                            if tab == .timesheet { await state.loadLastMonth(force: true) }
+                        }
+                    } label: {
                         Image(systemName: "arrow.clockwise")
                     }.help("Refresh")
                 }
@@ -165,8 +175,9 @@ struct MainWindow: View {
                     .padding(.top, 40)
                 } else {
                     switch tab {
-                    case .cycle:    CyclePane(state: state, onOpenToday: { tab = .today })
-                    case .timeOff:  TimeOffPane(state: state)
+                    case .cycle:     CyclePane(state: state, onOpenToday: { tab = .today })
+                    case .timesheet: TimesheetPane(state: state)
+                    case .timeOff:   TimeOffPane(state: state)
                     case .activity: ActivityPane(state: state)
                     default:        TodayTimeline(state: state)
                     }

@@ -28,6 +28,14 @@ public final class BobState: ObservableObject {
     @Published public private(set) var timeOffPolicyTypes: [TimeOffPolicyType] = []
     @Published public private(set) var cancellingRequests: Set<String> = []
     @Published public private(set) var monthDays: [DayEntries] = []
+    /// Last month's finished sheet (the Last-month pane) — nil while none is
+    /// exposed, plus a flag so the pane can tell "not loaded yet" from
+    /// "loaded, nothing there".
+    @Published public private(set) var lastMonthCycle: CycleInfo?
+    @Published public private(set) var lastMonthSummary: CycleSummary?
+    @Published public private(set) var lastMonthDays: [DayEntries] = []
+    @Published public private(set) var lastMonthLoaded = false
+    private var lastMonthLoadedAt: Date?
     /// The employee's display name / role / site for the dashboard header.
     @Published public private(set) var profile: (name: String, role: String, site: String)?
 
@@ -294,6 +302,11 @@ public final class BobState: ObservableObject {
         accountEmail = nil
         employeeID = nil
         entries = []
+        lastMonthCycle = nil
+        lastMonthSummary = nil
+        lastMonthDays = []
+        lastMonthLoaded = false
+        lastMonthLoadedAt = nil
         recomputeDerived()
     }
 
@@ -509,6 +522,7 @@ public final class BobState: ObservableObject {
             }
             await reconcile()
             await loadMonthDays()
+            await refreshAfterWrite(toDayKey: DayFmt.iso.string(from: date))
         }
     }
 
@@ -632,42 +646,55 @@ public final class BobState: ObservableObject {
     // missing reason only flags a finished day, while over-max and break
     // issues apply to any day, today included.
 
-    public var unclosedDays: [String] {
+    // Each list is computed for a given grid (`in:`) so the Last-month pane
+    // gets the same digest over its own sheet; the argument-less properties
+    // keep serving the current cycle.
+
+    public func unclosedDays(in days: [DayEntries]) -> [String] {
         let n = now
-        return monthDays.filter {
+        return days.filter {
             $0.dateKey < DayFmt.today() && hasOpenEntry($0.entries)
                 // Hide a day we just closed until a fresh refetch reflects it —
                 // a stale in-flight reload otherwise flickers the CTA back.
                 && !(closedRecently[$0.dateKey].map { n.timeIntervalSince($0) < closeGrace } ?? false)
         }.map(\.dateKey).sorted()
     }
+    public var unclosedDays: [String] { unclosedDays(in: monthDays) }
 
     /// The most recent past day with a forgotten clock-out (open work entry),
     /// with the smart-guessed end — drives the "you forgot to clock out" CTA.
     public var forgottenClockOut: (date: Date, dateKey: String, suggestedEnd: Date)? {
-        guard let key = unclosedDays.last,
-              let day = monthDays.first(where: { $0.dateKey == key }),
+        forgottenClockOut(in: monthDays)
+    }
+    public func forgottenClockOut(in days: [DayEntries])
+        -> (date: Date, dateKey: String, suggestedEnd: Date)? {
+        guard let key = unclosedDays(in: days).last,
+              let day = days.first(where: { $0.dateKey == key }),
               let open = day.entries.first(where: { $0.kind == .work && $0.end == nil })
         else { return nil }
         return (day.date, key, suggestedEndForOpenEntry(open))
     }
-    public var overMaxDays: [String] {
-        monthDays.filter { isOverDailyMax($0.entries) }.map(\.dateKey).sorted()
+    public func overMaxDays(in days: [DayEntries]) -> [String] {
+        days.filter { isOverDailyMax($0.entries) }.map(\.dateKey).sorted()
     }
-    public var breakIssueDays: [String] {
-        monthDays.filter { hasOverLongStretch($0.entries) || breakShortfall($0.entries) != nil }
+    public var overMaxDays: [String] { overMaxDays(in: monthDays) }
+    public func breakIssueDays(in days: [DayEntries]) -> [String] {
+        days.filter { hasOverLongStretch($0.entries) || breakShortfall($0.entries) != nil }
             .map(\.dateKey).sorted()
     }
-    public var missingReasonDays: [String] {
-        monthDays.filter { $0.dateKey < DayFmt.today() && missingReason($0.entries) }
+    public var breakIssueDays: [String] { breakIssueDays(in: monthDays) }
+    public func missingReasonDays(in days: [DayEntries]) -> [String] {
+        days.filter { $0.dateKey < DayFmt.today() && missingReason($0.entries) }
             .map(\.dateKey).sorted()
     }
+    public var missingReasonDays: [String] { missingReasonDays(in: monthDays) }
 
-    /// Any day at all needs attention this cycle — drives showing the digest.
-    public var hasAttentionItems: Bool {
-        !unclosedDays.isEmpty || !overMaxDays.isEmpty
-            || !breakIssueDays.isEmpty || !missingReasonDays.isEmpty
+    /// Any day at all needs attention in the given grid — drives the digest.
+    public func hasAttentionItems(in days: [DayEntries]) -> Bool {
+        !unclosedDays(in: days).isEmpty || !overMaxDays(in: days).isEmpty
+            || !breakIssueDays(in: days).isEmpty || !missingReasonDays(in: days).isEmpty
     }
+    public var hasAttentionItems: Bool { hasAttentionItems(in: monthDays) }
 
     /// Distinct days needing attention — the count badged on the month tab.
     public var attentionDayCount: Int {
@@ -678,7 +705,10 @@ public final class BobState: ObservableObject {
     /// one day at a time. Entries that already carry a reason are untouched;
     /// days with nothing missing are skipped so we don't re-save them.
     public func applyReasonToMissing(_ option: ReasonOption) {
-        for day in monthDays where missingReason(day.entries) {
+        applyReasonToMissing(option, in: monthDays)
+    }
+    public func applyReasonToMissing(_ option: ReasonOption, in days: [DayEntries]) {
+        for day in days where missingReason(day.entries) {
             let updated = day.entries.map { e -> AttendanceEntry in
                 guard e.kind == .work, (e.reason ?? "").isEmpty else { return e }
                 var e = e; e.reason = option.name; return e
@@ -738,9 +768,10 @@ public final class BobState: ObservableObject {
     }
 
     /// Close the open work entry on every past unclosed day, each at its own guess.
-    public func closeAllUnclosed() {
-        for key in unclosedDays {
-            guard let day = monthDays.first(where: { $0.dateKey == key }) else { continue }
+    public func closeAllUnclosed() { closeAllUnclosed(in: monthDays) }
+    public func closeAllUnclosed(in days: [DayEntries]) {
+        for key in unclosedDays(in: days) {
+            guard let day = days.first(where: { $0.dateKey == key }) else { continue }
             closeOpenEntry(in: day.entries, on: day.date)
         }
     }
@@ -791,6 +822,9 @@ public final class BobState: ObservableObject {
         if let idx = monthDays.firstIndex(where: { $0.dateKey == key }) {
             monthDays[idx].entries = sorted
         }
+        if let idx = lastMonthDays.firstIndex(where: { $0.dateKey == key }) {
+            lastMonthDays[idx].entries = sorted
+        }
         if key == df.string(from: today) { self.entries = sorted }
 
         let payload = writePayload(for: sorted)
@@ -806,6 +840,7 @@ public final class BobState: ObservableObject {
             }
             await reconcile()
             await loadMonthDays()
+            await refreshAfterWrite(toDayKey: key)
         }
     }
 
@@ -816,6 +851,26 @@ public final class BobState: ObservableObject {
             monthDays = m
             recordDayHistory()
         }
+    }
+
+    /// A day's entries from whichever loaded sheet holds it — the current
+    /// month first, then last month's. Lets DayDetailSheet (and the heatmap
+    /// flags) work on both panes; dateKeys never collide across months.
+    public func dayEntries(_ dateKey: String) -> DayEntries? {
+        monthDays.first { $0.dateKey == dateKey }
+            ?? lastMonthDays.first { $0.dateKey == dateKey }
+    }
+
+    /// True when `dateKey` falls inside the loaded last-month sheet.
+    private func isLastMonthDay(_ dateKey: String) -> Bool {
+        guard let c = lastMonthCycle else { return false }
+        return dateKey >= c.start && dateKey <= c.end
+    }
+
+    /// After a write to a last-month day, the finished sheet's numbers moved —
+    /// refetch it (the current-month reload doesn't cover it).
+    private func refreshAfterWrite(toDayKey key: String) async {
+        if isLastMonthDay(key) { await loadLastMonth(force: true) }
     }
 
     /// Fold the freshly-loaded month into the durable `DayHistory`, so the
@@ -858,6 +913,53 @@ public final class BobState: ObservableObject {
         await loadMonthDays()
         // The month grid marks time-off days, so it needs the requests loaded.
         await loadTimeOff()
+    }
+
+    /// Last month's sheet, loaded on demand when the Last-month pane appears.
+    /// A finished sheet barely changes, so a session-level cache with a
+    /// 10-minute refresh matches the cycle data's cadence; `force` refetches
+    /// (used after edits to a past day or a future submit).
+    public func loadLastMonth(force: Bool = false) async {
+        guard let id = employeeID else { return }
+        if !force, let at = lastMonthLoadedAt, now.timeIntervalSince(at) < 600 { return }
+        do {
+            if let (c, s) = try await client.fetchLastClosedCycle(employeeID: id) {
+                lastMonthCycle = c
+                lastMonthSummary = s
+                lastMonthDays = (try? await client.fetchMonthDays(
+                    employeeID: id, cycleId: c.id, reasonOptions: reasonOptions)) ?? []
+            } else {
+                lastMonthCycle = nil
+                lastMonthSummary = nil
+                lastMonthDays = []
+            }
+            lastMonthLoadedAt = now
+            lastMonthLoaded = true
+            // The heatmap names days off from the time-off requests.
+            await loadTimeOff()
+        } catch {
+            // Keep whatever the pane already shows; surface the failure the
+            // same way the other panes do.
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// Submit last month's sheet for approval. One-way (no un-submit in
+    /// HiBob), so the UI confirms first; the forced reload flips the pane to
+    /// its pending-approval state from HiBob's own answer.
+    public func submitLastMonth() async {
+        guard let id = employeeID, let sheet = lastMonthCycle, sheet.awaitsSubmission
+        else { return }
+        busy = true
+        do {
+            try await client.submitTimesheet(employeeID: id, sheetId: sheet.id)
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+            Notifier.failure(error.localizedDescription)
+        }
+        busy = false
+        await loadLastMonth(force: true)
     }
 
     /// Called by the dashboard window as it shows/hides. Turning active kicks a

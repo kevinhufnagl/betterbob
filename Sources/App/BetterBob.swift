@@ -14,14 +14,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, UNU
     private var suppressAutoElevate = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        BobState.shared.start()
-        Updater.shared.start()
+        // Dev scaffold: `--capture-endpoints` opens the attendance page in the
+        // signed-in browser and records the API calls so routes can be pinned.
+        // A capture run is usually a second instance next to the installed app,
+        // so it must NOT start the polling engine / auto-break (which could
+        // write real attendance entries) or the updater.
+        let capturing = CommandLine.arguments.contains("--capture-endpoints")
+        if !capturing {
+            BobState.shared.start()
+            Updater.shared.start()
+        }
         UNUserNotificationCenter.current().delegate = self
 
-        // Throwaway dev scaffold: `--capture-endpoints` opens the attendance
-        // page in the signed-in browser and records the API calls so the
-        // routes can be hardcoded. Removed once endpoints are pinned.
-        if CommandLine.arguments.contains("--capture-endpoints") {
+        if capturing {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 EndpointCaptureController.shared.present()
             }

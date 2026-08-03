@@ -26,6 +26,12 @@ public enum BobAPI {
     public static func history(_ employeeID: String, date: String) -> String {
         "api/attendance/employees/\(employeeID)/timesheets/\(date)/history"
     }
+    /// Submit a finished sheet for approval (careful: "sheets", not
+    /// "timesheets"). PUT, empty body; the response carries the new
+    /// timesheetState ("Submitted" + submittedOn).
+    public static func submitTimesheet(_ employeeID: String, sheet: Int) -> String {
+        "api/attendance/employees/\(employeeID)/sheets/\(sheet)/submit"
+    }
     /// The timesheet grid report — per-day entries for the whole cycle.
     public static let viewsSearch = "api/company/views/search?idsOnly=false"
 
@@ -152,6 +158,19 @@ public final class BobClient {
         return (cycle, summary)
     }
 
+    /// The newest *finished* sheet ("last month"), if HiBob still exposes one
+    /// in the timesheets list — nil once the tenant stops serving it. Same
+    /// routes as the current cycle, just the past sheet's real id.
+    public func fetchLastClosedCycle(employeeID: String) async throws -> (CycleInfo, CycleSummary)? {
+        let tsData = try await get(BobAPI.timesheets(employeeID))
+        let past = BobParsing.lastClosedCycle(
+            BobParsing.cycles(fromTimesheetsJSON: tsData), today: dayString(Date()))
+        guard let past else { return nil }
+        let sumData = try await get(BobAPI.summary(employeeID, cycle: past.id))
+        guard let summary = BobParsing.summary(fromSummaryJSON: sumData) else { return nil }
+        return (past, summary)
+    }
+
     // MARK: - Time off
 
     public func fetchTimeOffBalances(employeeID: String) async throws -> [TimeOffBalance] {
@@ -231,6 +250,12 @@ public final class BobClient {
             "employeeId": employeeID,
             "returnFromBreak": action.returnFromBreak,
         ])
+    }
+
+    /// Submit the finished sheet to the manager for approval. One-way: HiBob
+    /// offers no un-submit, so callers confirm with the user first.
+    public func submitTimesheet(employeeID: String, sheetId: Int) async throws {
+        _ = try await send("PUT", BobAPI.submitTimesheet(employeeID, sheet: sheetId), body: nil)
     }
 
     /// Replace today's entry list — the write path for changing a reason or

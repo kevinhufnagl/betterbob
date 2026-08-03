@@ -369,12 +369,16 @@ let summaryJSON = data("""
       {"value":8,"valueDisplay":"8h 00m"},{"value":8,"valueDisplay":"8h 00m"},{"value":6.5,"valueDisplay":"6h 30m"}]},
     {"id":"hoursWorked","name":"Hours worked","data":[
       {"value":6.95,"valueDisplay":"6h 57m"},{"value":9.17,"valueDisplay":"9h 10m"},{"value":0,"valueDisplay":"0h 00m"}]},
-    {"id":"overtime","name":"Over/undertime","data":[{"value":0}]}
+    {"id":"timeOff","name":"Time off","data":[
+      {"value":0},{"value":0},{"value":6.5,"valueDisplay":"6h 30m"}]},
+    {"id":"overtime","name":"Over/undertime","data":[
+      {"value":-1.05,"valueDisplay":"1h 03m"},{"value":1.17,"valueDisplay":"1h 10m"}]}
   ]},
   "summary":{"overUnderTime":{"sign":"-","hoursDisplay":"0h 26m"},
+    "timeOffDisplay":"6h 30m",
     "potentialHours":{"payableTimePercentage":51},
     "payableHoursBreakdown":{"totalHoursDisplay":"87h 30m"}},
-  "breakViolationCounter":2}
+  "breakViolationCounter":2,"isSubmittable":true}
 """)
 let summary = BobParsing.summary(fromSummaryJSON: summaryJSON)
 expect(summary?.days.count == 3, "three days decoded")
@@ -386,10 +390,53 @@ expect(summary?.overUnderMinutes == -26, "over/undertime parsed as signed minute
 expect(summary?.payableTimePercent == 51, "payable-time percent found in nested summary")
 expect(summary?.totalHoursDisplay == "87h 30m", "total hours display found")
 expect(summary?.breakViolations == 2, "break violation counter found")
+expect(summary?.isSubmittable == true, "isSubmittable flag surfaced (gates the Submit button)")
+expect(summary?.days[2].timeOff == 6.5, "per-day time off decoded (a day off is not missing)")
+expect(summary?.timeOffMinutes == 390, "cycle time-off total from timeOffDisplay")
 
 expect(BobParsing.minutes(fromDisplay: "8h 05m") == 485, "Xh Ym → minutes")
 expect(BobParsing.minutes(fromDisplay: "0h 00m") == 0, "zero display → 0")
 expect(BobParsing.summary(fromSummaryJSON: data("{}")) == nil, "empty summary JSON → nil")
+
+// Past cycles (the "Last month" tab): the timesheets list carries every
+// visible sheet — the running cycle is id 0; a finished previous month keeps
+// its real id and its submission status. Shape from a live 2026-08 capture.
+let multiCycleJSON = data("""
+{"employeeTimesheets":[
+ {"id":0,"cycleStartDate":"2026-08-01","cycleEndDate":"2026-08-31",
+  "timesheetState":{"timeSheetStatus":"Open","lockAt":1790373600000,"locked":false}},
+ {"id":14068479,"cycleId":744445,"cycleStartDate":"2026-07-01","cycleEndDate":"2026-07-31",
+  "timesheetState":{"timeSheetStatus":"WaitingForSubmission","lockAt":1787695200000,"locked":false}}]}
+""")
+let cycles = BobParsing.cycles(fromTimesheetsJSON: multiCycleJSON)
+expect(cycles.count == 2, "both sheets decoded")
+expect(cycles[0].id == 0 && cycles[0].status == "Open", "running sheet first, status Open")
+expect(cycles[1].id == 14068479 && cycles[1].status == "WaitingForSubmission",
+       "past sheet keeps its id + submission status")
+expect(BobParsing.cycle(fromTimesheetsJSON: multiCycleJSON)?.id == 0,
+       "current-cycle helper still returns the first sheet")
+expect(BobParsing.lastClosedCycle(cycles, today: "2026-08-03")?.id == 14068479,
+       "last closed cycle = the July sheet once August runs")
+expect(BobParsing.lastClosedCycle(cycles, today: "2026-07-15") == nil,
+       "no closed cycle while its month is still running")
+expect(BobParsing.lastClosedCycle(BobParsing.cycles(fromTimesheetsJSON: timesheetsJSON),
+                                  today: "2026-07-15") == nil,
+       "single open sheet → no past cycle")
+expect(BobParsing.cycles(fromTimesheetsJSON: data("{}")).isEmpty, "empty JSON → no cycles")
+expect(cycles[1].awaitsSubmission, "WaitingForSubmission + unlocked → awaits submission")
+
+// After the sheet is submitted it stays in the list, pending approval —
+// shape from the live post-submit capture (2026-08-03).
+let submittedJSON = data("""
+{"employeeTimesheets":[
+ {"id":14068479,"cycleStartDate":"2026-07-01","cycleEndDate":"2026-07-31",
+  "timesheetState":{"timeSheetStatus":"Submitted","lockAt":1787695200000,"locked":false,
+   "submittedBy":"3778865480379401034","submittedOn":"2026-08-03T11:44:33.391252"}}]}
+""")
+let submitted = BobParsing.cycles(fromTimesheetsJSON: submittedJSON).first
+expect(submitted?.pendingApproval == true && submitted?.awaitsSubmission == false,
+       "Submitted sheet → pending approval, no longer submittable")
+expect(submitted?.submittedOn == "2026-08-03", "submittedOn trimmed to its day")
 
 // Activity history
 let historyJSON = data("""

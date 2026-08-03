@@ -73,8 +73,13 @@ dailyBreakdown.graphData[]                    series, matched by "id":
   id=hoursWorked      .data[].value           worked hours per day
   id=potentialHours   .target[].value         target hours per day
   id=overtime         .data[].value           signed over/under per day
-                      .data[].valueDisplay    exact "0h 34m" (sum = the web
-                                              UI's "running cycle balance")
+                      .data[].valueDisplay    exact, SIGNED: "-1h 03m"
+  id=timeOff          .data[].value           booked time off per day, hours
+cycleSummary.timeOffDisplay                   cycle time-off total ("6h 30m")
+
+`cycleSummary.overUnderTime` is the figure the web timesheet header shows —
+if it looks a minute off from an open browser tab, the tab is stale (an entry
+edit moves it), not the parsing.
 cycleSummary.hoursWorkedDisplay               cycle worked total ("107h 59m")
 cycleSummary.potentialHours.summaryDisplay    cycle potential ("176h 30m")
 cycleSummary.potentialHours.payableTimePercentage
@@ -84,3 +89,46 @@ breakViolationCounter
 
 Careful: `payableHoursBreakdown.totalHoursDisplay` is a *different* total
 (regular+overtime payable) — don't use it for "worked".
+
+## Captured: past cycles ("Last month" tab, 2026-08)
+
+`GET api/attendance/employees/{id}/timesheets` returns **every sheet HiBob
+still exposes**, not just the running cycle:
+
+```
+employeeTimesheets[]
+  id                              0 for the RUNNING cycle; a finished previous
+                                  month keeps its real sheet id (e.g. 14068479)
+  cycleStartDate / cycleEndDate   "yyyy-MM-dd"
+  timesheetState.timeSheetStatus  "Open" | "WaitingForSubmission" | …
+  timesheetState.locked           bool
+  timesheetState.lockAt           epoch ms
+```
+
+Everything else reuses the existing routes with the past sheet's id:
+
+- `GET …/timesheets/{pastId}/summary` — same shape as the current cycle,
+  plus a root-level `isSubmittable` bool (gates the Submit action).
+- `POST api/company/views/search` with `"timesheetId": {pastId}` — the same
+  grid report returns the past month's per-day rows (weekly `isSummary: true`
+  rows interleaved; day rows carry `dateKey`).
+- `POST …/attendance/entries?forDate=…` — verified to work retroactively on
+  a past-cycle day (same body as an active day).
+- `POST …/timesheets/{id}/details` `{"fields":["policyDetails"]}` — policy
+  config only (cycle type, break rules, overtime settings); not the grid.
+
+## Captured: timesheet submit (2026-08-03, live one-shot)
+
+`PUT api/attendance/employees/{id}/sheets/{sheetId}/submit` — careful, the
+segment is **`sheets`**, not `timesheets`. Empty body. Response:
+
+```
+{"isAutoApproved":false,
+ "timesheetState":{"timeSheetStatus":"Submitted","lockAt":…,"locked":false,
+                   "submittedBy":"…","submittedOn":"2026-08-03T11:44:33.391252"}}
+```
+
+After submitting, the sheet **stays** in the timesheets list with status
+"Submitted" (pending manager approval; the policy's `approvalType` was
+"manager"). Status lifecycle observed so far:
+`Open` → `WaitingForSubmission` → `Submitted`. There is no un-submit.

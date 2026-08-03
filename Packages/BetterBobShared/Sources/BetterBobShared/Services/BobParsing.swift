@@ -80,18 +80,38 @@ public enum BobParsing {
     // MARK: - Timesheet cycle (dashboard)
 
     /// The current (first) timesheet cycle from the timesheets list.
-    public static func cycle(fromTimesheetsJSON data: Data) -> CycleInfo? {
+    /// Every sheet in the timesheets list, in HiBob's order (the running
+    /// cycle first, id 0; a finished previous month follows with its real id).
+    public static func cycles(fromTimesheetsJSON data: Data) -> [CycleInfo] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sheets = root["employeeTimesheets"] as? [[String: Any]],
-              let first = sheets.first,
-              let id = intValue(first["id"]),
-              let start = first["cycleStartDate"] as? String,
-              let end = first["cycleEndDate"] as? String
-        else { return nil }
-        let lockMs = (first["timesheetState"] as? [String: Any])
-            .flatMap { intValue($0["lockAt"]) }
-        return CycleInfo(id: id, start: start, end: end,
-                         lockAt: lockMs.map { Date(timeIntervalSince1970: Double($0) / 1000) })
+              let sheets = root["employeeTimesheets"] as? [[String: Any]]
+        else { return [] }
+        return sheets.compactMap { sheet in
+            guard let id = intValue(sheet["id"]),
+                  let start = sheet["cycleStartDate"] as? String,
+                  let end = sheet["cycleEndDate"] as? String
+            else { return nil }
+            let state = sheet["timesheetState"] as? [String: Any]
+            let lockMs = state.flatMap { intValue($0["lockAt"]) }
+            return CycleInfo(id: id, start: start, end: end,
+                             lockAt: lockMs.map { Date(timeIntervalSince1970: Double($0) / 1000) },
+                             status: state?["timeSheetStatus"] as? String ?? "",
+                             locked: state?["locked"] as? Bool ?? false,
+                             // Local datetime string; the day part is all we show.
+                             submittedOn: (state?["submittedOn"] as? String).map { String($0.prefix(10)) })
+        }
+    }
+
+    public static func cycle(fromTimesheetsJSON data: Data) -> CycleInfo? {
+        cycles(fromTimesheetsJSON: data).first
+    }
+
+    /// The most recent cycle that has fully ended — the sheet the Last-month
+    /// tab shows. `today` is "yyyy-MM-dd"; ISO date strings order correctly
+    /// as plain strings, and comparing against `end` (not list position)
+    /// keeps this immune to HiBob reordering the list.
+    public static func lastClosedCycle(_ cycles: [CycleInfo], today: String) -> CycleInfo? {
+        cycles.filter { $0.end < today }.max { $0.end < $1.end }
     }
 
     /// Per-day worked/target plus cycle totals from the summary endpoint.
@@ -102,13 +122,17 @@ public enum BobParsing {
               let graph = breakdown["graphData"] as? [[String: Any]]
         else { return nil }
 
-        func series(_ id: String, _ key: String) -> [Double?] {
+        func points(_ id: String, _ key: String) -> [[String: Any]?] {
             guard let s = graph.first(where: { $0["id"] as? String == id }),
                   let points = s[key] as? [Any] else { return [] }
-            return points.map { ($0 as? [String: Any]).flatMap { doubleValue($0["value"]) } }
+            return points.map { $0 as? [String: Any] }
+        }
+        func series(_ id: String, _ key: String) -> [Double?] {
+            points(id, key).map { $0.flatMap { doubleValue($0["value"]) } }
         }
         let worked = series("hoursWorked", "data")
         let target = series("potentialHours", "target")
+        let timeOff = series("timeOff", "data")
 
         // The per-day over/undertime series — exact daily values for the
         // balance trend (worked−target re-derivation drifts by rounding).
@@ -119,8 +143,10 @@ public enum BobParsing {
             days.append(DayHours(date: date,
                                  worked: i < worked.count ? (worked[i] ?? 0) : 0,
                                  target: i < target.count ? target[i] : nil,
-                                 overtime: i < overtimes.count ? overtimes[i] : nil))
+                                 overtime: i < overtimes.count ? overtimes[i] : nil,
+                                 timeOff: i < timeOff.count ? timeOff[i] : nil))
         }
+
 
         // Cycle totals live in a nested summary object; find by key anywhere.
         let overUnder = findDict(root, key: "overUnderTime")
@@ -151,7 +177,9 @@ public enum BobParsing {
             // "totalHoursDisplay" probe hit the payable-hours breakdown.
             totalHoursDisplay: findString(root, key: "hoursWorkedDisplay")
                 ?? findString(root, key: "totalHoursDisplay") ?? "—",
-            breakViolations: findInt(root, key: "breakViolationCounter") ?? 0)
+            breakViolations: findInt(root, key: "breakViolationCounter") ?? 0,
+            isSubmittable: root["isSubmittable"] as? Bool ?? false,
+            timeOffMinutes: findString(root, key: "timeOffDisplay").map(minutes(fromDisplay:)) ?? 0)
     }
 
     /// Parse HiBob "Xh Ym" duration displays into minutes.

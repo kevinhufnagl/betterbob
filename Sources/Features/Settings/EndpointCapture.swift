@@ -100,7 +100,7 @@ final class EndpointCaptureController: NSObject, WKNavigationDelegate, WKScriptM
         let win = NSWindow(contentRect: web.frame,
                            styleMask: [.titled, .closable, .resizable],
                            backing: .buffered, defer: false)
-        win.title = "Capturing HiBob endpoints — click around the attendance page, then close"
+        win.title = "Capturing HiBob endpoints — open last month's timesheet, click around, then close"
         win.contentView = web
         win.isReleasedWhenClosed = false
         NotificationCenter.default.addObserver(
@@ -112,11 +112,6 @@ final class EndpointCaptureController: NSObject, WKNavigationDelegate, WKScriptM
         webView = web
 
         web.load(URLRequest(url: URL(string: "https://app.hibob.com/attendance/my-attendance")!))
-        // After the attendance page has fired its calls, visit the time-off
-        // page too so its balance endpoints get captured in the same run.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak web] in
-            web?.load(URLRequest(url: URL(string: "https://app.hibob.com/time-off/my-time-off")!))
-        }
         NSApp.setActivationPolicy(.regular)
         win.center()
         win.makeKeyAndOrderFront(nil)

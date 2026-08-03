@@ -27,6 +27,7 @@ struct DayEntriesList: View {
     @ObservedObject var state: BobState
     let entries: [AttendanceEntry]
     let date: Date
+    var readOnly = false
 
     var body: some View {
         // Chronological, newest entry at the bottom. isLast tracks the
@@ -37,7 +38,7 @@ struct DayEntriesList: View {
             ForEach(Array(display.enumerated()), id: \.offset) { i, e in
                 if i > 0 { Divider().opacity(0.15) }
                 EntryRowView(state: state, entry: e, dayEntries: entries, date: date,
-                             isLast: e == lastChrono)
+                             isLast: e == lastChrono, readOnly: readOnly)
                     .transition(.bobBanner)
             }
         }
@@ -51,6 +52,8 @@ struct EntryRowView: View {
     var dayEntries: [AttendanceEntry]
     var date: Date
     var isLast: Bool = false
+    /// A submitted sheet's entries: everything displays, nothing edits.
+    var readOnly = false
     @Environment(\.colorScheme) private var scheme
     @State private var editing = false
     @State private var timeHover = false
@@ -59,7 +62,7 @@ struct EntryRowView: View {
     var body: some View {
         let e = entry
         let tint = e.kind == .breakTime ? Color.breakAccent(scheme) : Color.workAccent(scheme)
-        let editable = e.id != nil
+        let editable = e.id != nil && !readOnly
         HStack(spacing: 12) {
             // The tinted label carries the work/break color cue on its own.
             Text(e.kind.label)
@@ -98,14 +101,30 @@ struct EntryRowView: View {
                                 date: date, isLast: isLast, isPresented: $editing)
             }
 
-            if e.kind == .work { ReasonPicker(state: state, entry: e, dayEntries: dayEntries, date: date) }
+            if e.kind == .work {
+                if readOnly {
+                    // Static reason pill — same look as the picker, no menu.
+                    if let reason = e.reason, !reason.isEmpty {
+                        Text(reason).font(.system(size: 11, weight: .semibold))
+                            .lineLimit(1).truncationMode(.tail)
+                            .foregroundStyle(Color.reasonAccent(scheme))
+                            .padding(.horizontal, 9).padding(.vertical, 3)
+                            .background(Capsule(style: .continuous)
+                                .fill(Color.reasonAccent(scheme).opacity(0.18)))
+                            .overlay(Capsule(style: .continuous)
+                                .strokeBorder(Color.reasonAccent(scheme).opacity(0.28), lineWidth: 0.8))
+                    }
+                } else {
+                    ReasonPicker(state: state, entry: e, dayEntries: dayEntries, date: date)
+                }
+            }
             Spacer()
             // Duration as its own quiet column instead of squeezed into the
             // time range.
             Text(Fmt.hm((e.end ?? Date()).timeIntervalSince(e.start)))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
-            if let eid = e.id {
+            if let eid = e.id, !readOnly {
                 if state.deletingEntries.contains(eid) {
                     ProgressView().controlSize(.small).frame(width: 16)
                         .transition(.opacity)
@@ -294,17 +313,21 @@ struct ReasonPicker: View {
 // MARK: - Day detail (edit a past day)
 
 public struct DayDetailSheet: View {
-    public init(state: BobState, dateKey: String) {
+    public init(state: BobState, dateKey: String, readOnly: Bool = false) {
         self.state = state
         self.dateKey = dateKey
+        self.readOnly = readOnly
     }
     @ObservedObject var state: BobState
     let dateKey: String
+    /// A submitted sheet's day: show everything, edit nothing.
+    let readOnly: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var adding = false
 
-    private var day: DayEntries? { state.monthDays.first { $0.dateKey == dateKey } }
+    // Cross-month lookup so the sheet edits last-month days too.
+    private var day: DayEntries? { state.dayEntries(dateKey) }
     private var dayDate: Date { day?.date ?? DayFmt.date(dateKey) ?? Date() }
     /// A day still in the future — nothing to log there.
     private var isFuture: Bool {
@@ -335,7 +358,7 @@ public struct DayDetailSheet: View {
                     }
                     .transition(.opacity)
                 }
-                if !isFuture {
+                if !isFuture && !readOnly {
                     Button { adding = true } label: {
                         Label("Add entry", systemImage: "plus")
                     }
@@ -344,23 +367,36 @@ public struct DayDetailSheet: View {
             }
             .animation(.easeInOut(duration: 0.15), value: state.busy)
 
-            if let day, state.hasOverLongStretch(day.entries) { wandBanner(day).transition(.bobBanner) }
-            if let day, !state.hasOverLongStretch(day.entries),
-               let short = state.breakShortfall(day.entries) {
-                shortBreakBanner(day, short).transition(.bobBanner)
+            // Fix banners only where fixing is still possible.
+            if !readOnly {
+                if let day, state.hasOverLongStretch(day.entries) { wandBanner(day).transition(.bobBanner) }
+                if let day, !state.hasOverLongStretch(day.entries),
+                   let short = state.breakShortfall(day.entries) {
+                    shortBreakBanner(day, short).transition(.bobBanner)
+                }
+                if let day, state.isOverDailyMax(day.entries) { overMaxBanner.transition(.bobBanner) }
             }
-            if let day, state.isOverDailyMax(day.entries) { overMaxBanner.transition(.bobBanner) }
 
             if let day, !day.entries.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    EditableDayStrip(entries: day.entries, now: Date(), height: 72) { updated in
-                        state.saveDay(updated, on: day.date)
+                if readOnly {
+                    // Display-only strip; "now" pins to the day's own end so a
+                    // past day isn't stretched to the current moment.
+                    DayStrip(entries: day.entries,
+                             now: day.entries.compactMap(\.end).max() ?? day.date,
+                             height: 72)
+                        .frame(height: 72)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        EditableDayStrip(entries: day.entries, now: Date(), height: 72) { updated in
+                            state.saveDay(updated, on: day.date)
+                        }
+                        Text("Drag a break to move it, or grab a boundary to resize — later entries shift along.")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
-                    Text("Drag a break to move it, or grab a boundary to resize — later entries shift along.")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 VStack(spacing: 0) {
-                    DayEntriesList(state: state, entries: day.entries, date: day.date)
+                    DayEntriesList(state: state, entries: day.entries, date: day.date,
+                                   readOnly: readOnly)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 4)
                 .background(Color.primary.opacity(0.04),
@@ -372,7 +408,9 @@ public struct DayDetailSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
             }
 
-            Text("Edit times or reasons, drag breaks, or delete entries — changes save to HiBob for this day.")
+            Text(readOnly
+                 ? "This sheet has been submitted, so its entries are read-only."
+                 : "Edit times or reasons, drag breaks, or delete entries — changes save to HiBob for this day.")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .padding(20)
@@ -627,17 +665,43 @@ public struct CyclePane: View {
 /// A proper month calendar: weekday columns, week rows, each day shaded by
 /// hours worked with the number shown and today ringed.
 public struct CalendarHeatmap: View {
-    public init(state: BobState, onOpenToday: @escaping () -> Void = {},
+    /// Which sheet the grid draws: the running cycle (default) or the
+    /// finished previous month on the Last-month pane.
+    public enum Source { case currentCycle, lastMonth }
+
+    public init(state: BobState, source: Source = .currentCycle,
+                onOpenToday: @escaping () -> Void = {},
                 onOpenDay: ((String) -> Void)? = nil) {
         self.state = state
+        self.source = source
         self.onOpenToday = onOpenToday
         self.onOpenDay = onOpenDay
     }
     @ObservedObject var state: BobState
+    var source: Source = .currentCycle
     var onOpenToday: () -> Void = {}
     /// When set, day cells hand the dateKey to the host instead of showing
     /// the built-in popover editor (the iOS screens present their own).
     var onOpenDay: ((String) -> Void)?
+
+    private var summaryDays: [DayHours]? {
+        switch source {
+        case .currentCycle: return state.cycleSummary?.days
+        case .lastMonth: return state.lastMonthSummary?.days
+        }
+    }
+
+    /// The per-day entry grid backing this sheet — attention lists and their
+    /// fix actions all run over it.
+    private var gridDays: [DayEntries] {
+        source == .currentCycle ? state.monthDays : state.lastMonthDays
+    }
+
+    /// A last-month sheet that's already submitted (or locked) can only be
+    /// looked at — day popovers open read-only and the fix digest hides.
+    private var sheetReadOnly: Bool {
+        source == .lastMonth && !(state.lastMonthCycle?.awaitsSubmission ?? false)
+    }
     @Environment(\.colorScheme) private var scheme
     @State private var hovered: String?
     @State private var selected: String?    // dateKey of the cell whose detail is open
@@ -652,7 +716,7 @@ public struct CalendarHeatmap: View {
 
     public var body: some View {
         Card(title: "Daily hours", symbol: "calendar") {
-            if let days = state.cycleSummary?.days, !days.isEmpty {
+            if let days = summaryDays, !days.isEmpty {
                 let offDays = state.timeOffByDay
                 VStack(spacing: 8) {
                     LazyVGrid(columns: cols, spacing: 6) {
@@ -660,10 +724,15 @@ public struct CalendarHeatmap: View {
                             Text(wd).font(.bobUI(10, weight: .semibold)).foregroundStyle(.secondary)
                         }
                         ForEach(0..<leadingBlanks(days), id: \.self) { _ in Color.clear.frame(height: 46) }
-                        ForEach(days, id: \.date) { day in cell(day, offLabel: offDays[day.date]) }
+                        ForEach(days, id: \.date) { day in
+                            // A booked day off may predate the loaded time-off
+                            // requests — the sheet's own series still marks it.
+                            cell(day, offLabel: offDays[day.date]
+                                 ?? ((day.timeOff ?? 0) > 0 ? "Time off" : nil))
+                        }
                     }
                     legend
-                    if state.hasAttentionItems {
+                    if !sheetReadOnly, state.hasAttentionItems(in: gridDays) {
                         Divider().opacity(0.12).padding(.vertical, 4)
                         needsAttentionCard
                     }
@@ -685,13 +754,13 @@ public struct CalendarHeatmap: View {
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase).kerning(0.5)
             attentionRow(color: .bobMagenta, icon: "clock.badge.exclamationmark",
-                         title: "Unclosed", days: state.unclosedDays, showCloseFix: true)
+                         title: "Unclosed", days: state.unclosedDays(in: gridDays), showCloseFix: true)
             attentionRow(color: .bobRed, icon: "exclamationmark.triangle.fill",
-                         title: "Over daily max", days: state.overMaxDays)
+                         title: "Over daily max", days: state.overMaxDays(in: gridDays))
             attentionRow(color: .bobOrange, icon: "cup.and.saucer.fill",
-                         title: "Break issue", days: state.breakIssueDays)
+                         title: "Break issue", days: state.breakIssueDays(in: gridDays))
             attentionRow(color: .bobViolet, icon: "tag.fill",
-                         title: "No reason", days: state.missingReasonDays,
+                         title: "No reason", days: state.missingReasonDays(in: gridDays),
                          showReasonFix: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -747,10 +816,11 @@ public struct CalendarHeatmap: View {
                 if showCloseFix {
                     // One click closes the open entry(ies) at the smart-guessed
                     // check-out. Show the time when it's a single day.
-                    let label = (days.count == 1 && state.forgottenClockOut != nil)
-                        ? "Close at \(Fmt.clock(state.forgottenClockOut!.suggestedEnd))"
+                    let forgotten = state.forgottenClockOut(in: gridDays)
+                    let label = (days.count == 1 && forgotten != nil)
+                        ? "Close at \(Fmt.clock(forgotten!.suggestedEnd))"
                         : "Close all"
-                    Button { state.closeAllUnclosed() } label: {
+                    Button { state.closeAllUnclosed(in: gridDays) } label: {
                         Label(label, systemImage: "wand.and.stars")
                             .font(.bobUI(11, weight: .semibold))
                             .foregroundStyle(Color.bobMagenta)
@@ -764,7 +834,7 @@ public struct CalendarHeatmap: View {
                 if showReasonFix, !state.reasonOptions.isEmpty {
                     Menu {
                         ForEach(state.reasonOptions, id: \.self) { opt in
-                            Button(opt.name) { state.applyReasonToMissing(opt) }
+                            Button(opt.name) { state.applyReasonToMissing(opt, in: gridDays) }
                         }
                     } label: {
                         Label("Set reason", systemImage: "wand.and.stars")
@@ -811,25 +881,22 @@ public struct CalendarHeatmap: View {
         // wand inside fixes it. The whole cell just swaps its green accent for
         // orange, so the same tint/border/text language carries over. A day
         // past the daily max is red — the harder limit wins over orange.
-        let breakIssue = state.monthDays
-            .first(where: { $0.dateKey == day.date })
+        let gridDay = state.dayEntries(day.date)
+        let breakIssue = gridDay
             .map { state.hasOverLongStretch($0.entries) || state.breakShortfall($0.entries) != nil }
             ?? false
-        let overMax = state.monthDays
-            .first(where: { $0.dateKey == day.date })
+        let overMax = gridDay
             .map { state.isOverDailyMax($0.entries) }
             ?? (day.worked * 3600 > Prefs.shared.maxDayLimit)
         // A past day left with an open-ended entry (forgotten check-out) —
         // magenta, the most urgent flag. Today's open entry is normal, so this
         // is gated on the day being in the past.
         let unclosed = day.date < DayFmt.today()
-            && (state.monthDays.first(where: { $0.dateKey == day.date })
-                .map { state.hasOpenEntry($0.entries) } ?? false)
+            && (gridDay.map { state.hasOpenEntry($0.entries) } ?? false)
         // A past day with any untagged work entry (no reason) — violet, the
         // mildest flag, so a real break/max issue still wins the cell color.
         let missingReason = day.date < DayFmt.today()
-            && (state.monthDays.first(where: { $0.dateKey == day.date })
-                .map { state.missingReason($0.entries) } ?? false)
+            && (gridDay.map { state.missingReason($0.entries) } ?? false)
         // One hue, intensity from the day's own expectation (not a workload
         // heatmap): the accent sits at a medium baseline on target and ramps
         // quickly — fainter when under, stronger when over. ±21% deviation
@@ -919,7 +986,7 @@ public struct CalendarHeatmap: View {
             .popover(isPresented: Binding(get: { selected == day.date },
                                           set: { if !$0 { selected = nil } }),
                      arrowEdge: .bottom) {
-                DayDetailSheet(state: state, dateKey: day.date)
+                DayDetailSheet(state: state, dateKey: day.date, readOnly: sheetReadOnly)
             }
             .help(helpText)
     }

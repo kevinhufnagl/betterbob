@@ -135,13 +135,25 @@ public enum AutoBreakAction: Equatable {
 
 // MARK: - Dashboard (timesheet cycle) models
 
-/// The current timesheet cycle window + its lock/submission deadline, from
-/// `GET /api/attendance/employees/{id}/timesheets`.
+/// One timesheet cycle window + its lock/submission deadline, from
+/// `GET /api/attendance/employees/{id}/timesheets`. The running cycle is
+/// id 0; a finished previous month keeps its real sheet id.
 public struct CycleInfo: Equatable {
     public var id: Int
     public var start: String   // "yyyy-MM-dd"
     public var end: String
     public var lockAt: Date?
+    /// HiBob's sheet state: "Open", "WaitingForSubmission", "Submitted", …
+    /// ("" if absent).
+    public var status: String = ""
+    public var locked: Bool = false
+    /// Submission day ("yyyy-MM-dd"), once the sheet has been submitted.
+    public var submittedOn: String? = nil
+
+    /// A finished sheet still awaiting the employee's submission.
+    public var awaitsSubmission: Bool { status == "WaitingForSubmission" && !locked }
+    /// Submitted and now sitting with the manager for approval.
+    public var pendingApproval: Bool { status == "Submitted" }
 }
 
 /// One day's worked vs target hours (decimal hours), from the summary's
@@ -153,6 +165,9 @@ public struct DayHours: Equatable, Hashable {
     /// HiBob's own signed over/undertime for the day, in hours — exact where
     /// worked−target drifts by rounding. Nil for unfinished days.
     public var overtime: Double?
+    /// Approved time off booked on this day, in hours (the summary's
+    /// `timeOff` series) — a day off is not a missing day.
+    public var timeOff: Double? = nil
 }
 
 /// A tiny, durable record of one worked day's shape — first check-in and last
@@ -194,6 +209,12 @@ public struct CycleSummary: Equatable {
     public var totalHoursDisplay: String
     /// Count of break-policy violations HiBob flagged this cycle.
     public var breakViolations: Int
+    /// Whether HiBob would accept a submission of this sheet right now —
+    /// gates the future Submit action on the Last-month tab.
+    public var isSubmittable: Bool = false
+    /// Approved time off inside the cycle, in minutes
+    /// (`cycleSummary.timeOffDisplay`) — counts toward the potential hours.
+    public var timeOffMinutes: Int = 0
 }
 
 /// One entry from the day's edit history (`.../timesheets/{date}/history`),
