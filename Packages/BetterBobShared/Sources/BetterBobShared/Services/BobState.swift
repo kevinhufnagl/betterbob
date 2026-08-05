@@ -219,7 +219,14 @@ public final class BobState: ObservableObject {
     /// few minutes, so driving to the code step only when the user is actually
     /// there keeps that transaction fresh when they submit the code.
     public func startAutoSignIn(factor: SignInFactor = .googleAuthenticator) {
-        guard canAutoSignIn, !autoLoginInProgress else { return }
+        guard !autoLoginInProgress else { return }
+        // Never fail silently: a dead button reads as a broken app. This
+        // fires when the password was forgotten or autofill switched off
+        // while the factor buttons were already on screen.
+        guard canAutoSignIn else {
+            lastError = "No saved password to sign in with — add your details first."
+            return
+        }
         autoLoginInProgress = true
         signInFactor = factor
         autoLoginStatus = "Opening HiBob…"

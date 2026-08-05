@@ -11,7 +11,7 @@ public struct WidgetSnapshot: Codable, Equatable {
 
     /// One block of today's timeline — enough for a widget to draw the
     /// day-strip miniature without knowing the full entry model.
-    public struct Segment: Codable, Equatable {
+    public struct Segment: Codable, Equatable, Hashable {
         public var start: Date
         public var end: Date?
         public var isBreak: Bool

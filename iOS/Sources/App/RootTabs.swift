@@ -9,6 +9,26 @@ struct RootTabs: View {
     @State private var tab: BobTab = .today
 
     var body: some View {
+        tabs
+            // A re-login can run while the tabs are up (expired session, or
+            // sign-in setup closed mid-run). Its progress card — the step
+            // line, the OTP field, the push wait — must stay visible
+            // somewhere, or the flow looks dead until the fallback browser
+            // sheet appears out of nowhere.
+            .overlay(alignment: .top) {
+                if state.autoLoginInProgress {
+                    AutoLoginInline(state: state, fillWidth: true)
+                        .glassSurface()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.85),
+                       value: state.autoLoginInProgress)
+    }
+
+    private var tabs: some View {
         TabView(selection: $tab) {
             NavigationStack { TodayScreen(state: state) }
                 .tabItem { Label("Today", systemImage: "clock.fill") }

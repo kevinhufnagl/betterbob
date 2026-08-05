@@ -10,7 +10,7 @@ settings:
     # Personal Team you pick in Signing & Capabilities on first open.
     DEVELOPMENT_TEAM: ""
     CURRENT_PROJECT_VERSION: 1
-    MARKETING_VERSION: "2.15"
+    MARKETING_VERSION: "2.16"
 packages:
   BetterBobShared:
     path: ../Packages/BetterBobShared
