@@ -10,7 +10,7 @@ settings:
     # Personal Team you pick in Signing & Capabilities on first open.
     DEVELOPMENT_TEAM: ""
     CURRENT_PROJECT_VERSION: 1
-    MARKETING_VERSION: "2.17"
+    MARKETING_VERSION: "2.18"
 packages:
   BetterBobShared:
     path: ../Packages/BetterBobShared
@@ -79,11 +79,37 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.watchkitapp
         INFOPLIST_FILE: Resources/Watch-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Resources/Watch.entitlements
         GENERATE_INFOPLIST_FILE: false
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Nothing here needs anything newer than WCSession + basic SwiftUI;
         # a floor of 26 would just hide the app from not-yet-updated watches.
+        WATCHOS_DEPLOYMENT_TARGET: "11.0"
+        SKIP_INSTALL: true
+    dependencies:
+      # Embedded, which is the only way a complication is offered on a watch
+      # face at all.
+      - target: BetterBobWatchWidgets
+        embed: true
+
+  # The watch-face complications. They read the WidgetSnapshot the watch app
+  # mirrors into the WATCH'S OWN app group (a watch shares none with the
+  # phone) — same type and JSON the phone pushes over WCSession.
+  BetterBobWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: Sources/WatchWidgets
+      - path: Sources/Watch/WatchBobFace.swift
+      - path: Sources/Watch/WatchStore.swift
+      - path: ../Packages/BetterBobShared/Sources/BetterBobShared/Models/WidgetSnapshot.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.watchkitapp.widgets
+        INFOPLIST_FILE: Resources/WatchWidgets-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Resources/WatchWidgets.entitlements
+        GENERATE_INFOPLIST_FILE: false
         WATCHOS_DEPLOYMENT_TARGET: "11.0"
         SKIP_INSTALL: true
 

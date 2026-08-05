@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import WidgetKit
 
 /// The watch's whole data layer: the phone pushes a WidgetSnapshot through
 /// the WCSession application context after every reconcile, and punches go
@@ -14,14 +15,10 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     @Published var punching = false
     @Published var lastError: String?
 
-    private static let cacheKey = "cachedSnapshot"
-
     func start() {
         // The last snapshot, so a fresh launch shows the day immediately
         // instead of a blank screen while the phone is asked.
-        if let data = UserDefaults.standard.data(forKey: Self.cacheKey) {
-            snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
-        }
+        snapshot = WatchStore.load()
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
@@ -66,7 +63,9 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
               let snap = try? JSONDecoder().decode(WidgetSnapshot.self, from: data) else { return }
         DispatchQueue.main.async {
             self.snapshot = snap
-            UserDefaults.standard.set(data, forKey: Self.cacheKey)
+            // Into the watch-side app group, where the complications read it.
+            WatchStore.save(data)
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 
