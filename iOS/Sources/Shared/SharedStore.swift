@@ -5,7 +5,7 @@ import WidgetKit
 /// Cross-process handoff: the app writes a WidgetSnapshot after every
 /// reconcile; the widget extension renders whatever is stored.
 enum SharedStore {
-    static let suite = "group.k3n.betterbob"
+    static let suite = "group.k3n.betterbob.app"
     private static let key = "widgetSnapshot"
 
     static func save(_ snapshot: WidgetSnapshot) {

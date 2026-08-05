@@ -59,7 +59,7 @@ native iOS 26 Liquid Glass app:
 - Background auto-break is best-effort (`BGAppRefreshTask` chained around
   auto-break due times) plus catch-up on foreground; widgets and the Live
   Activity read a `WidgetSnapshot` from the App Group
-  (`group.k3n.betterbob`).
+  (`group.k3n.betterbob.app`).
 
 ## Releasing
 

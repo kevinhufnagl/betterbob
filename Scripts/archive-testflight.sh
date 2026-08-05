@@ -17,7 +17,7 @@
 # number for the same commit, so an upload can be repeated after a failure without inventing one.
 #
 # Signing is automatic and `-allowProvisioningUpdates` mints the distribution profiles. The two
-# bundle ids (k3n.betterbob, .widgets) and the app group (group.k3n.betterbob) are registered
+# bundle ids (k3n.betterbob, .widgets) and the app group (group.k3n.betterbob.app) are registered
 # on the portal the first time this runs.
 #
 # Authentication for the upload is an App Store Connect API key (App Store Connect → Users and
