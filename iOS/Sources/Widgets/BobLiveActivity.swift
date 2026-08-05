@@ -179,8 +179,17 @@ private struct TimelineStrip: View {
             let worked = state.isOnBreak
                 ? state.workedBase
                 : state.workedBase + max(0, now.timeIntervalSince(state.stretchStart))
-            let remaining = max(0, state.target - worked) + state.pendingBreak
-            let projectedEnd = recordedEnd.addingTimeInterval(remaining)
+            // Target met: the bar is full and stays full — the scale pins to
+            // the moment the target was reached, and overtime falls off the
+            // clipped end instead of stretching the day to make room.
+            let projectedEnd: Date
+            if let met = WidgetSnapshot.targetMetAt(segments: segments, target: state.target,
+                                                    openEnd: recordedEnd) {
+                projectedEnd = met
+            } else {
+                let remaining = max(0, state.target - worked) + state.pendingBreak
+                projectedEnd = recordedEnd.addingTimeInterval(remaining)
+            }
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
 
             let track = Path(roundedRect: CGRect(origin: .zero, size: size),

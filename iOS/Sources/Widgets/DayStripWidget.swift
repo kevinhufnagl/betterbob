@@ -53,9 +53,17 @@ struct DayStripWidgetView: View {
             // append the remaining work directly after the LAST RECORDED
             // entry — anchoring it at the push time would insert a phantom
             // empty gap when the snapshot lands long after a clock-out.
-            let remaining = max(0, snap.target - snap.workedTotal(now: snap.updatedAt))
-                + (snap.pendingBreak ?? 0)
-            let projectedEnd = recordedEnd.addingTimeInterval(remaining)
+            // Target met: full is full — the scale pins to the moment it was
+            // reached; overtime falls off the clipped end.
+            let projectedEnd: Date
+            if let met = WidgetSnapshot.targetMetAt(segments: segments, target: snap.target,
+                                                    openEnd: recordedEnd) {
+                projectedEnd = met
+            } else {
+                let remaining = max(0, snap.target - snap.workedTotal(now: snap.updatedAt))
+                    + (snap.pendingBreak ?? 0)
+                projectedEnd = recordedEnd.addingTimeInterval(remaining)
+            }
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
 
             // Capsule track; blocks butt squarely against each other inside

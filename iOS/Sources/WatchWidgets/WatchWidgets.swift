@@ -132,9 +132,16 @@ struct DayStripComplicationView: View {
             let lastEnd = segments.compactMap(\.end).max() ?? snap.updatedAt
             let recordedEnd = open ? max(snap.updatedAt, lastEnd) : lastEnd
 
-            let remaining = max(0, snap.target - snap.workedTotal(now: snap.updatedAt))
-                + (snap.pendingBreak ?? 0)
-            let projectedEnd = recordedEnd.addingTimeInterval(remaining)
+            // Target met: full is full — see WidgetSnapshot.targetMetAt.
+            let projectedEnd: Date
+            if let met = WidgetSnapshot.targetMetAt(segments: segments, target: snap.target,
+                                                    openEnd: recordedEnd) {
+                projectedEnd = met
+            } else {
+                let remaining = max(0, snap.target - snap.workedTotal(now: snap.updatedAt))
+                    + (snap.pendingBreak ?? 0)
+                projectedEnd = recordedEnd.addingTimeInterval(remaining)
+            }
             let span = max(1, projectedEnd.timeIntervalSince(dayStart))
 
             let track = Path(roundedRect: CGRect(origin: .zero, size: size),

@@ -80,6 +80,24 @@ public struct WidgetSnapshot: Codable, Equatable {
     /// before the naive finish); a break due after you'd already be done
     /// can't delay anything. Same rule as TodayVals.doneBy, so the app,
     /// widgets, watch and Live Activity all promise the same time.
+    /// The wall-clock moment the day's worked time reached the target,
+    /// walking the work blocks chronologically — nil while still short. The
+    /// strip renderers pin their scale here: once the target is met the bar
+    /// is full and stays full, overtime falling off the clipped end instead
+    /// of stretching the day to make room.
+    public static func targetMetAt(segments: [Segment], target: TimeInterval,
+                                   openEnd: Date) -> Date? {
+        guard target > 0 else { return nil }
+        var acc: TimeInterval = 0
+        for seg in segments where !seg.isBreak {
+            let end = seg.end ?? openEnd
+            let d = max(0, end.timeIntervalSince(seg.start))
+            if acc + d >= target { return seg.start.addingTimeInterval(target - acc) }
+            acc += d
+        }
+        return nil
+    }
+
     public func doneBy(now: Date) -> Date? {
         guard state == .working else { return nil }
         let remaining = target - workedTotal(now: now)

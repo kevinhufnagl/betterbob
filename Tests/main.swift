@@ -918,6 +918,17 @@ expect(snapOwed.doneBy(now: t(11)) == t(15.5), "working: owed break firing first
 snapOwed.breakDue = t(16)
 expect(snapOwed.doneBy(now: t(11)) == t(15), "working: break due after the finish changes nothing")
 
+// The strip's overtime rule: the scale pins to the moment the target was met.
+let metSegs = [WidgetSnapshot.Segment(start: t(9), end: t(12), isBreak: false),
+               WidgetSnapshot.Segment(start: t(12), end: t(12.5), isBreak: true),
+               WidgetSnapshot.Segment(start: t(12.5), end: nil, isBreak: false)]
+expect(WidgetSnapshot.targetMetAt(segments: metSegs, target: sixH, openEnd: t(17)) == t(15.5),
+       "target met mid-open-stretch: 3h + 3h more lands at 15:30")
+expect(WidgetSnapshot.targetMetAt(segments: metSegs, target: 9 * 3600, openEnd: t(17)) == nil,
+       "target not yet met: nil")
+expect(WidgetSnapshot.targetMetAt(segments: metSegs, target: 0, openEnd: t(17)) == nil,
+       "no target: nil")
+
 let snapBreak = AttendanceLogic.widgetSnapshot(
     entries: [work(9, 12), brk(12, nil)], signedIn: true, target: sixH,
     breakEnds: t(12.5), now: t(12.25))
