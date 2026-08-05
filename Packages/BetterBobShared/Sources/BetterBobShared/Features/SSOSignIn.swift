@@ -305,7 +305,11 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                     web.evaluateJavaScript(js) { result, _ in
                         if driven, let raw = result as? String {
                             let parts = raw.components(separatedBy: "||")
-                            let step = parts[0]
+                            // The push step may carry the number-matching
+                            // challenge piggyback: "push#37".
+                            let stepParts = parts[0].components(separatedBy: "#")
+                            let step = stepParts[0]
+                            let challenge = stepParts.count > 1 ? stepParts[1] : nil
                             // The chooser also reports the rows it offered —
                             // kept out of the status line, used in the failure.
                             let offered = parts.first { $0.hasPrefix("rows:") }
@@ -373,6 +377,8 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
                             if self.drive == .assisted {
                                 if self.factor.isPush {
                                     BobState.shared.pushPending = (step == "push")
+                                    BobState.shared.pushChallenge =
+                                        step == "push" ? challenge : nil
                                 }
                                 // Even on the push route, Okta sometimes lands
                                 // on a code field (newer choosers add a second
@@ -579,7 +585,7 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // 'push' would strand the flow with nothing left to advance it.
           var chooserish = bodyText.indexOf('security method') >= 0
               || bodyText.indexOf('authenticator') >= 0;
-          var pushSent = /push notification sent|sent a push|we sent you a push|open okta verify|didn'?t receive a push/.test(bodyText);
+          var pushSent = /push notification sent|sent a push|we sent you a push|open okta verify|didn'?t receive a push|select the number/.test(bodyText);
           if (factor === 'ovp' && !present && !onHibob && !chooserish
               && (pushSent || window.__bbFactorPicked)) step = 'push';
           // Okta's own device flow (FastPass, driven by the Okta Verify app on
@@ -589,6 +595,15 @@ public final class SSOSignInController: NSObject, ObservableObject, WKNavigation
           // chooser and get its rows clicked. Making it a step stranded runs
           // whose chooser mentioned it.
           var probing = !present && !onHibob && !pushSent && /okta fastpass/.test(bodyText);
+          // Number-matching push: Okta shows a number on this page and the
+          // phone offers three — the wait is unapprovable unless the UI
+          // relays it. Carried piggyback on the step token (push#NN).
+          if (step === 'push') {
+            var nc = document.querySelector('.number-challenge-value, [data-se=number-challenge-value], [data-se=challenge-value]');
+            var num = nc ? (nc.textContent || '').replace(/\\D/g, '') : '';
+            if (!num) { var nm = bodyText.match(/select[^0-9]{0,40}?(\\d{1,3})\\b/); if (nm) num = nm[1]; }
+            if (num) step = 'push#' + num;
+          }
           // Compact page hint carried on every return — surfaced in the
           // status line when a step stalls, naming the exact stuck page.
           var hintBtns = [].slice.call(document.querySelectorAll('button, input[type=submit], [role=button]'))

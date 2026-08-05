@@ -909,6 +909,15 @@ expect(abs(snapWorking.workedTotal(now: t(11)) - 2 * 3600) < 1, "working: total 
 expect(snapWorking.breakDue == t(15), "working: carries the auto-break due time")
 expect(snapWorking.doneBy(now: t(11)) == t(15), "working: done-by = now + remaining")
 
+// The owed auto-break delays done-by only when it fires before the naive
+// finish — a break due after you'd already be done can't push anything out.
+var snapOwed = snapWorking
+snapOwed.pendingBreak = 1800
+snapOwed.breakDue = t(13)
+expect(snapOwed.doneBy(now: t(11)) == t(15.5), "working: owed break firing first delays done-by")
+snapOwed.breakDue = t(16)
+expect(snapOwed.doneBy(now: t(11)) == t(15), "working: break due after the finish changes nothing")
+
 let snapBreak = AttendanceLogic.widgetSnapshot(
     entries: [work(9, 12), brk(12, nil)], signedIn: true, target: sixH,
     breakEnds: t(12.5), now: t(12.25))

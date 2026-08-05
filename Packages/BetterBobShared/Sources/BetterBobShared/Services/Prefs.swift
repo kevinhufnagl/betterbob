@@ -187,12 +187,6 @@ public final class Prefs: ObservableObject {
         didSet { UserDefaults.standard.set(liveActivityEnabled, forKey: "liveActivityEnabled") }
     }
 
-    /// iOS: what the Live Activity's timer counts while working — the current
-    /// uninterrupted stretch (default) or the whole day's worked time.
-    @Published public var liveActivityShowsTotal: Bool {
-        didSet { UserDefaults.standard.set(liveActivityShowsTotal, forKey: "liveActivityShowsTotal") }
-    }
-
     /// One rule per network: SSID → reason. Persisted as JSON.
     @Published public var wifiRules: [WiFiRule] {
         didSet {
@@ -247,7 +241,6 @@ public final class Prefs: ObservableObject {
         self.popoverShowEntries = d.object(forKey: "popoverShowEntries") as? Bool ?? true
         self.popoverShowTimeline = d.object(forKey: "popoverShowTimeline") as? Bool ?? false
         self.liveActivityEnabled = d.object(forKey: "liveActivityEnabled") as? Bool ?? true
-        self.liveActivityShowsTotal = d.object(forKey: "liveActivityShowsTotal") as? Bool ?? false
         self.wifiAutoReasonEnabled = d.object(forKey: "wifiAutoReasonEnabled") as? Bool ?? false
         self.defaultReasonName = d.string(forKey: "defaultReasonName") ?? ""
         if let data = d.data(forKey: "wifiRules"),

@@ -84,6 +84,10 @@ public final class BobState: ObservableObject {
     /// True while an Okta Verify push is out and we're waiting for the user to
     /// approve it on their phone — the UI shows an "approve on your phone" state.
     @Published public var pushPending = false
+    /// Okta's number-matching challenge: the number shown on the sign-in page
+    /// that must be tapped (out of three) in Okta Verify. Nil for plain
+    /// approve-only pushes.
+    @Published public var pushChallenge: String?
     /// The factor the in-progress sign-in is using, so the inline UI knows from
     /// the start whether to show a code field or the push-approval state (rather
     /// than briefly flashing the code field before the push screen loads).
@@ -237,6 +241,7 @@ public final class BobState: ObservableObject {
             self.autoLoginInProgress = false
             self.awaitingOTP = false
             self.pushPending = false
+            self.pushChallenge = nil
             self.signInFactor = nil
             self.autoLoginStatus = ""
             if success {

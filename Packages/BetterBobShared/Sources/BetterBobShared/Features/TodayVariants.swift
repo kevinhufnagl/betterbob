@@ -32,9 +32,24 @@ public struct TodayVals {
         breakTotal = state.entries.filter { $0.kind == .breakTime }
             .reduce(0) { $0 + (($1.end ?? now).timeIntervalSince($1.start)) }
         autoBreakDue = state.autoBreakDue
+        pendingBreak = state.autoBreakDue != nil ? Prefs.shared.breakLength : 0
     }
 
-    public var doneBy: Date? { working && remaining > 0 ? Date().addingTimeInterval(remaining) : nil }
+    /// Length of the auto-break still owed today — it delays doneBy when it
+    /// will fire before the target is reached.
+    public var pendingBreak: TimeInterval = 0
+
+    /// Naive finish plus the owed auto-break, but only when that break will
+    /// actually fire first — the same rule as WidgetSnapshot.doneBy, so every
+    /// surface promises the same time.
+    public var doneBy: Date? {
+        guard working, remaining > 0 else { return nil }
+        var done = Date().addingTimeInterval(remaining)
+        if pendingBreak > 0, let due = autoBreakDue, due < done {
+            done = done.addingTimeInterval(pendingBreak)
+        }
+        return done
+    }
 }
 
 // MARK: - Week left
@@ -453,7 +468,7 @@ public struct TodayTimeline: View {
                 // water above it, his body inside.
                 ZStack(alignment: .topLeading) {
                     LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                               greeting: greetingText(state), bottomInset: 12,
+                               doneBy: v.doneBy, greeting: greetingText(state), bottomInset: 12,
                                wave: wave) {
                         HStack {
                             Spacer()
@@ -732,6 +747,10 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     let worked: TimeInterval
     let target: TimeInterval
     var breakTotal: TimeInterval = 0
+    /// Projected finish (break-aware, from TodayVals) — joins the subline
+    /// while working so the hero answers "when am I done" everywhere the
+    /// Live Activity does.
+    var doneBy: Date?
     /// Smaller type and padding for the popover.
     var compact = false
     /// Shown above the numbers, like the phone page's greeting line.
@@ -768,6 +787,7 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
     private var activeHue: Double { statusTint?.hueComponent ?? Color.accentHue }
 
     public init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
+         doneBy: Date? = nil,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
@@ -776,6 +796,7 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
         self.worked = worked
         self.target = target
         self.breakTotal = breakTotal
+        self.doneBy = doneBy
         self.compact = compact
         self.greeting = greeting
         self.cornerRadius = cornerRadius
@@ -1038,6 +1059,7 @@ public struct LiquidHero<Top: View, Bottom: View>: View {
         } else {
             parts.append("No target today")
         }
+        if let doneBy { parts.append("done by \(Fmt.clock(doneBy))") }
         if breakTotal > 0 { parts.append("\(Fmt.hm(breakTotal)) break") }
         return parts.joined(separator: " · ")
     }
@@ -1118,11 +1140,13 @@ extension LiquidHero {
 extension LiquidHero where Top == EmptyView, Bottom == EmptyView {
     /// Slot-less hero — the popover's compact variant.
     public init(worked: TimeInterval, target: TimeInterval, breakTotal: TimeInterval = 0,
+         doneBy: Date? = nil,
          compact: Bool = false, greeting: String? = nil, cornerRadius: CGFloat = 16,
          customFraction: Double? = nil, customBig: String? = nil,
          customLine2: String? = nil, customLine3: String? = nil,
          bottomInset: CGFloat = 0, wave: WaveModel? = nil) {
         self.init(worked: worked, target: target, breakTotal: breakTotal,
+                  doneBy: doneBy,
                   compact: compact, greeting: greeting, cornerRadius: cornerRadius,
                   customFraction: customFraction, customBig: customBig,
                   customLine2: customLine2, customLine3: customLine3,

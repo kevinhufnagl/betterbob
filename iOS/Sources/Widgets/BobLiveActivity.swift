@@ -130,43 +130,31 @@ private struct LockScreenCard: View {
 
 // MARK: - Shared pieces
 
-/// The headline number. Working: a live count-up — the whole day (anchor
-/// shifted back by the banked time) or just the open stretch, per setting.
-/// On a break: the countdown to its end.
+/// The headline number: the day's worked total, breaks excluded — the same
+/// figure the app's hero leads with. Ticking while working (anchor shifted
+/// back by the banked time); frozen on a break, because nothing accrues
+/// until it ends (the subtitle carries the return time).
 private struct BigTimer: View {
     let state: BobActivityAttributes.ContentState
 
     var body: some View {
-        if state.isOnBreak, let ends = state.breakEnds {
-            Text(timerInterval: Date()...ends, countsDown: true)
-        } else if state.showsTotal {
+        if state.isOnBreak {
+            Text(hm(state.workedBase))
+        } else {
             Text(timerInterval: state.stretchStart.addingTimeInterval(-state.workedBase)...Date.distantFuture,
                  countsDown: false)
-        } else {
-            Text(timerInterval: state.stretchStart...Date.distantFuture, countsDown: false)
         }
     }
 }
 
-/// The projection line: when today ends at the current pace, and why —
-/// naming the owed break that pushes it out. On a break, the frozen total
-/// (nothing accrues until the break ends) plus the projection.
+/// The projection line: the same break-aware "done by" the app's hero
+/// shows, or the good news once the target is met.
 private struct FooterLine: View {
     let state: BobActivityAttributes.ContentState
 
     var body: some View {
-        if state.isOnBreak {
-            if let done = state.doneBy {
-                Text("Worked \(hm(state.workedBase)) · done by \(done, style: .time)")
-            } else {
-                Text("Worked \(hm(state.workedBase)) · target met")
-            }
-        } else if let done = state.doneBy {
-            if state.pendingBreak > 0 {
-                Text("Done by \(done, style: .time) · incl. \(hm(state.pendingBreak)) break")
-            } else {
-                Text("Done by \(done, style: .time)")
-            }
+        if let done = state.doneBy {
+            Text("Done by \(done, style: .time)")
         } else {
             Text("Target met · \(hm(state.target)) done")
         }

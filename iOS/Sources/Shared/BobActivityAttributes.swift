@@ -9,8 +9,6 @@ struct BobActivityAttributes: ActivityAttributes {
         var stretchStart: Date
         var workedBase: TimeInterval
         var breakEnds: Date?
-        /// Timer counts the whole day instead of the current stretch.
-        var showsTotal: Bool = false
         /// Today's target, for the strip's projected track.
         var target: TimeInterval = 0
         /// Next auto-break while working, if one is armed.

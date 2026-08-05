@@ -136,17 +136,8 @@ struct SettingsScreen: View {
             GlassRow(showDivider: false) {
                 Toggle("Show Live Activity", isOn: $prefs.liveActivityEnabled)
             }
-            GlassRow {
-                Picker("Timer counts", selection: $prefs.liveActivityShowsTotal) {
-                    Text("Current stretch").tag(false)
-                    Text("Whole day").tag(true)
-                }
-                .pickerStyle(.menu)
-                .disabled(!prefs.liveActivityEnabled)
-            }
         }
         .onChange(of: prefs.liveActivityEnabled) { _, _ in WidgetBridge.shared.push() }
-        .onChange(of: prefs.liveActivityShowsTotal) { _, _ in WidgetBridge.shared.push() }
     }
 
     // MARK: General

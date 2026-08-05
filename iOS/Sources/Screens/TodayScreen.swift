@@ -121,7 +121,7 @@ struct TodayScreen: View {
         // Tall enough that the text block clears the dock straddling the
         // bottom edge; bottomInset reserves the covered strip inside the hero.
         LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                   compact: true, cornerRadius: 18, bottomInset: 30, wave: wave)
+                   doneBy: v.doneBy, compact: true, cornerRadius: 18, bottomInset: 30, wave: wave)
             .statusTint(state.heroLimitTint)
             .weekLine(weekHeroLine(state, now: now))
             .frame(height: 215)

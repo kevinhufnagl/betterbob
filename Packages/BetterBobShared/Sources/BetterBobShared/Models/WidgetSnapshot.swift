@@ -75,12 +75,19 @@ public struct WidgetSnapshot: Codable, Equatable {
     }
 
     /// When the target will be reached at the current pace — only meaningful
-    /// while working and still short of the target. Includes the pending
-    /// auto-break: a break still owed pushes the real clock-out later.
+    /// while working and still short of the target. The owed auto-break
+    /// counts only when it will actually fire first (its due time lands
+    /// before the naive finish); a break due after you'd already be done
+    /// can't delay anything. Same rule as TodayVals.doneBy, so the app,
+    /// widgets, watch and Live Activity all promise the same time.
     public func doneBy(now: Date) -> Date? {
         guard state == .working else { return nil }
         let remaining = target - workedTotal(now: now)
         guard remaining > 0 else { return nil }
-        return now.addingTimeInterval(remaining + (pendingBreak ?? 0))
+        var done = now.addingTimeInterval(remaining)
+        if let owed = pendingBreak, owed > 0, let due = breakDue, due < done {
+            done = done.addingTimeInterval(owed)
+        }
+        return done
     }
 }

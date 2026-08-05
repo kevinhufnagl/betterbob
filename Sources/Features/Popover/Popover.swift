@@ -348,7 +348,7 @@ struct PopoverRootView: View {
         let dryAwake = v.fraction < 0.15 && state.clockState != .clockedOut
         return ZStack(alignment: .topLeading) {
             LiquidHero(worked: v.worked, target: v.targetSecs, breakTotal: v.breakTotal,
-                       compact: true, bottomInset: 20, wave: wave)
+                       doneBy: v.doneBy, compact: true, bottomInset: 20, wave: wave)
                 .statusTint(state.heroLimitTint)
                 .weekLine(weekHeroLine(state, now: now))
                 .frame(height: 112)

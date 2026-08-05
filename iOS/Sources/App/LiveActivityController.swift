@@ -18,9 +18,9 @@ final class LiveActivityController {
         }
         switch snapshot.state {
         case .working, .onBreak:
-            // Projected clock-out. Working: the snapshot's own projection.
-            // On a break: no stretch is open, so workedBase is the whole
-            // day — remaining work starts once the break ends.
+            // Projected clock-out, one formula everywhere (see
+            // WidgetSnapshot.doneBy). On a break no stretch is open, so
+            // workedBase is the whole day and work resumes at the break's end.
             let doneBy: Date?
             if snapshot.state == .working {
                 doneBy = snapshot.doneBy(now: Date())
@@ -35,7 +35,6 @@ final class LiveActivityController {
                 stretchStart: snapshot.stretchStart ?? snapshot.updatedAt,
                 workedBase: snapshot.workedBase,
                 breakEnds: snapshot.breakEnds,
-                showsTotal: Prefs.shared.liveActivityShowsTotal,
                 target: snapshot.target,
                 breakDue: snapshot.breakDue,
                 doneBy: doneBy,

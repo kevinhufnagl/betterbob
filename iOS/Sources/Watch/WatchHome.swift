@@ -87,16 +87,13 @@ struct WatchHome: View {
         }
     }
 
-    /// Working: the day total, self-ticking from the shifted anchor. Break:
-    /// countdown to its end (or the frozen total if the end is unknown).
-    /// Clocked out: the day's final total, static.
+    /// Always the day's worked total, breaks excluded — ticking while
+    /// working, frozen otherwise (the progress line carries back-at/done-by).
     @ViewBuilder
     private func timer(_ snap: WidgetSnapshot) -> some View {
         if snap.state == .working, let start = snap.stretchStart {
             Text(timerInterval: start.addingTimeInterval(-snap.workedBase)...Date.distantFuture,
                  countsDown: false)
-        } else if snap.state == .onBreak, let ends = snap.breakEnds, ends > Date() {
-            Text(timerInterval: Date()...ends, countsDown: true)
         } else {
             Text(hm(snap.workedTotal(now: snap.updatedAt)))
         }

@@ -517,15 +517,31 @@ public struct AutoLoginInline: View {
             }
 
             if isPush {
-                // Push sign-in: no code field ever — just wait for phone approval.
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(state.pushPending
-                         ? "Waiting for you to approve the push in Okta Verify."
-                         : "A push is on its way to Okta Verify.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+                // Push sign-in: no code field ever — just wait for phone
+                // approval. Okta's number-matching variant shows a number
+                // here that must be tapped (out of three) in Okta Verify;
+                // without relaying it the push is unapprovable.
+                if let challenge = state.pushChallenge {
+                    HStack(spacing: 10) {
+                        Text(challenge)
+                            .font(.system(size: 26, weight: .bold, design: .rounded)
+                                .monospacedDigit())
+                            .foregroundStyle(Color.accentColor)
+                        Text("Tap this number in Okta Verify to approve the sign-in.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(state.pushPending
+                             ? "Waiting for you to approve the push in Okta Verify."
+                             : "A push is on its way to Okta Verify.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
                 }
             } else if handsFree {
                 // Stored secret: the code comes from the Keychain — nothing to
