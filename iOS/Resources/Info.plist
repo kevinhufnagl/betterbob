@@ -36,5 +36,7 @@
 	<array>
 		<string>k3n.betterbob.refresh</string>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

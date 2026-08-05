@@ -39,6 +39,10 @@ targets:
       # metadata extraction sees them; the file is shared with the Mac build.
       - path: ../Sources/Intents/BobIntents.swift
       - path: Resources/Assets.xcassets
+      # Required-reason API declaration (UserDefaults / CA92.1); App Store
+      # uploads scan every bundle for it.
+      - path: Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios
@@ -58,6 +62,8 @@ targets:
     sources:
       - path: Sources/Widgets
       - path: Sources/Shared
+      - path: Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios.widgets
