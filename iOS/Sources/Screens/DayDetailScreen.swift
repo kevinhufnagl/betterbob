@@ -149,7 +149,9 @@ struct DayDetailScreen: View {
     private func entriesSection(_ day: DayEntries) -> some View {
         GlassGroupedSection(header: "Entries") {
             let sorted = day.entries.sorted { $0.start < $1.start }
-            ForEach(Array(sorted.enumerated()), id: \.element.id) { i, entry in
+            // Positional identity, not entry.id — optimistic entries share a
+            // nil id, and duplicate identities scramble the rendered order.
+            ForEach(Array(sorted.enumerated()), id: \.offset) { i, entry in
                 GlassRow(showDivider: i > 0) {
                     entryRow(entry, day: day)
                 }
