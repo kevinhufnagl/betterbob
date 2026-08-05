@@ -45,7 +45,11 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios
+        # k3n.betterbob, not .ios: the .ios ids got burned into the free
+        # Personal Team by on-device dev builds, and App IDs are globally
+        # unique — the paid team can never register them. The Mac app's
+        # k3n.betterbob is only ever self-signed, so it is free to claim.
+        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob
         INFOPLIST_FILE: Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Resources/BetterBob.entitlements
         TARGETED_DEVICE_FAMILY: "1"
@@ -66,7 +70,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.ios.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.widgets
         INFOPLIST_FILE: Resources/Widgets-Info.plist
         CODE_SIGN_ENTITLEMENTS: Resources/Widgets.entitlements
         GENERATE_INFOPLIST_FILE: false
