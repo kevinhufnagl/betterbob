@@ -31,6 +31,7 @@ final class WidgetBridge {
         fillExtras(&snapshot, state: state)
         SharedStore.save(snapshot)
         LiveActivityController.shared.sync(snapshot)
+        WatchLink.shared.push(snapshot)
     }
 
     /// Engine-side facts the widgets can't derive from entries alone.

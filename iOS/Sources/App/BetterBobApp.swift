@@ -108,6 +108,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         BobState.shared.start()
         WidgetBridge.shared.start()
+        WatchLink.shared.start()
         UNUserNotificationCenter.current().delegate = self
         BackgroundRefresh.register()
         return true

@@ -23,18 +23,57 @@ struct ToggleClockIntent: AppIntent {
     }
 }
 
-/// The Live Activity's second action while working. Same app-routed perform
-/// as ToggleClockIntent, for the same reason: only the app has the session.
-struct StartBreakIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start a Break"
-    static let description = IntentDescription("Starts a break on the HiBob clock while working.")
-    static let openAppWhenRun = true
+/// The Live Activity's actions, headless. LiveActivityIntent performs in the
+/// APP's process (launched in the background if needed) without foregrounding
+/// it — so the session cookies are right there and the punch can run
+/// synchronously via `punchNow`, which returns only once the server call
+/// landed and the fresh snapshot re-rendered the activity. On any miss a
+/// local notification says so, because a headless button has no other way
+/// to admit failure.
+struct PunchIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Punch the Clock"
+    static let description = IntentDescription("Performs a HiBob clock action without opening the app.")
+
+    @Parameter(title: "Action") var action: PunchChoice
+
+    init() {}
+    init(_ action: PunchChoice) { self.action = action }
 
     @MainActor
     func perform() async throws -> some IntentResult {
         let state = BobState.shared
-        guard state.signedIn, case .working = state.projectedClockState else { return .result() }
-        state.startManualBreak()
+        guard state.signedIn else {
+            Notifier.failure("Signed out — open BetterBob to sign in.")
+            return .result()
+        }
+        let ok = await state.punchNow(action.punchAction)
+        if !ok {
+            Notifier.failure("Couldn't reach HiBob — open BetterBob to \(action.verb).")
+        }
         return .result()
+    }
+}
+
+enum PunchChoice: String, AppEnum {
+    case clockOut, startBreak, endBreak
+
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Clock Action")
+    static let caseDisplayRepresentations: [PunchChoice: DisplayRepresentation] = [
+        .clockOut: "Clock Out", .startBreak: "Start a Break", .endBreak: "End the Break",
+    ]
+
+    var punchAction: PunchAction {
+        switch self {
+        case .clockOut: return .clockOut
+        case .startBreak: return .startBreak
+        case .endBreak: return .endBreak
+        }
+    }
+    var verb: String {
+        switch self {
+        case .clockOut: return "clock out"
+        case .startBreak: return "start the break"
+        case .endBreak: return "end the break"
+        }
     }
 }

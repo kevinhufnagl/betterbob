@@ -85,10 +85,10 @@ private struct LockScreenCard: View {
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 6)
                 if state.isOnBreak {
-                    pill("End break", intent: ToggleClockIntent())
+                    pill("End break", intent: PunchIntent(.endBreak))
                 } else {
-                    pill("Break", intent: StartBreakIntent())
-                    pill("Clock out", intent: ToggleClockIntent())
+                    pill("Break", intent: PunchIntent(.startBreak))
+                    pill("Clock out", intent: PunchIntent(.clockOut))
                 }
             }
         }

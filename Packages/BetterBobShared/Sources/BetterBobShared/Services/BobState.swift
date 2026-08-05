@@ -352,6 +352,44 @@ public final class BobState: ObservableObject {
     public func startManualBreak() { enqueuePunch(.startBreak) }
     public func endBreak()         { enqueuePunch(.endBreak) }
 
+    /// Headless punch for the Live Activity pills and the Watch: unlike the
+    /// queued actions above, this performs the server call and returns only
+    /// once it landed (and the snapshot re-pushed) — the background process
+    /// is suspended the moment the caller's perform() returns, so anything
+    /// merely queued would be lost. Returns false on any miss (no session
+    /// yet, cooldown that can't be waited out, network failure); the caller
+    /// surfaces that, since headless means no UI feedback otherwise.
+    public func punchNow(_ action: PunchAction, timeout: TimeInterval = 15) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        // Cold background launch: the session boot may still be probing.
+        while employeeID == nil, signedIn || connecting, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        guard let id = employeeID else { return false }
+        // Honor the punch cooldown as far as the background budget allows.
+        let wait = (lastPunchAt ?? .distantPast)
+            .addingTimeInterval(Self.punchCooldown).timeIntervalSinceNow
+        if wait > 0 {
+            guard Date().addingTimeInterval(wait) < deadline else { return false }
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+        }
+        expectedAfterPunch = action
+        applyOptimistic(action)
+        do {
+            try await client.punch(action, employeeID: id)
+            lastPunchAt = Date()
+            if action == .endBreak { autoBreakStartedAt = nil }
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+            expectedAfterPunch = nil
+            await reconcile()   // roll the optimistic apply back to reality
+            return false
+        }
+        await reconcile()       // pushes the fresh snapshot to widgets + activity
+        return true
+    }
+
     /// The clock state you'd be in once every queued punch has fired — what the
     /// action buttons offer, so queuing several ahead of time makes sense.
     public var projectedClockState: ClockState {

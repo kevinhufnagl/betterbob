@@ -10,7 +10,7 @@ settings:
     # Personal Team you pick in Signing & Capabilities on first open.
     DEVELOPMENT_TEAM: ""
     CURRENT_PROJECT_VERSION: 1
-    MARKETING_VERSION: "2.16"
+    MARKETING_VERSION: "2.17"
 packages:
   BetterBobShared:
     path: ../Packages/BetterBobShared
@@ -60,6 +60,33 @@ targets:
       - package: BetterBobShared
       - target: BetterBobWidgets
         embed: true
+      - target: BetterBobWatch
+        embed: true
+        codeSign: true
+  # The wrist companion. No session of its own — it renders the WidgetSnapshot
+  # the phone pushes over WCSession and sends punch commands back; the phone
+  # performs them through the same headless path the Live Activity uses.
+  BetterBobWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: Sources/Watch
+      # Foundation-only by design (see its header), so the watch compiles it
+      # directly — same type, same JSON, no shared framework needed.
+      - path: ../Packages/BetterBobShared/Sources/BetterBobShared/Models/WidgetSnapshot.swift
+      - path: Resources/WatchAssets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: k3n.betterbob.watchkitapp
+        INFOPLIST_FILE: Resources/Watch-Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Nothing here needs anything newer than WCSession + basic SwiftUI;
+        # a floor of 26 would just hide the app from not-yet-updated watches.
+        WATCHOS_DEPLOYMENT_TARGET: "11.0"
+        SKIP_INSTALL: true
+
   BetterBobWidgets:
     type: app-extension
     platform: iOS
