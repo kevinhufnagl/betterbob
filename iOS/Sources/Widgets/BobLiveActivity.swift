@@ -26,6 +26,7 @@ struct BobLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     BigTimer(state: context.state)
                         .font(.title3.monospacedDigit().weight(.semibold))
+                        .multilineTextAlignment(.trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
@@ -71,9 +72,14 @@ private struct LockScreenCard: View {
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.65))
                 }
+                // The timer Text is greedy — it claims all free width, and
+                // without these two the digits sit at its leading edge,
+                // stranded mid-card instead of on the right.
+                .layoutPriority(1)
                 Spacer(minLength: 8)
                 BigTimer(state: state)
                     .font(.title2.monospacedDigit().weight(.semibold))
+                    .multilineTextAlignment(.trailing)
             }
             TimelineStrip(state: state)
                 .frame(height: 14)
