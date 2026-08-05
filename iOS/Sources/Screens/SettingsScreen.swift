@@ -16,7 +16,6 @@ struct SettingsScreen: View {
                 dailyLimitSection
                 if state.signedIn { reasonsSection }
                 liveActivitySection
-                notificationsSection
                 generalSection
                 diagnosticsSection
             }
@@ -148,21 +147,6 @@ struct SettingsScreen: View {
         }
         .onChange(of: prefs.liveActivityEnabled) { _, _ in WidgetBridge.shared.push() }
         .onChange(of: prefs.liveActivityShowsTotal) { _, _ in WidgetBridge.shared.push() }
-    }
-
-    // MARK: Notifications
-
-    private var notificationsSection: some View {
-        GlassGroupedSection(header: "Notify me when…") {
-            GlassRow(showDivider: false) {
-                Toggle("Auto-break started / ended", isOn: $prefs.notifyAutoBreak)
-            }
-            GlassRow { Toggle("Daily target reached", isOn: $prefs.notifyTargetReached) }
-            GlassRow { Toggle("Worked past the daily max", isOn: $prefs.notifyOverMax) }
-            GlassRow { Toggle("Timesheet deadline approaching", isOn: $prefs.notifyDeadline) }
-            GlassRow { Toggle("Something failed", isOn: $prefs.notifyFailures) }
-            GlassRow { Toggle("Authenticator code needed", isOn: $prefs.notifyAwaitingCode) }
-        }
     }
 
     // MARK: General

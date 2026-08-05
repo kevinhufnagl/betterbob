@@ -3,10 +3,17 @@ import UserNotifications
 
 /// Local notifications for the moments that matter: the auto-break firing,
 /// ending, repairs after sleep, and anything that failed.
+///
+/// Mac-only in effect: on iOS every call is a silent no-op — the phone app
+/// asks for no notification permission and posts nothing. Its surfaces are
+/// the app itself, the widgets and the Live Activity; the entry points stay
+/// compiled so shared engine code needs no platform checks at call sites.
 public enum Notifier {
     public static func requestAuthorization() {
+        #if os(macOS)
         UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        #endif
     }
 
     public static func autoBreakStarted(length: TimeInterval) {
@@ -74,11 +81,13 @@ public enum Notifier {
     }
 
     private static func post(title: String, body: String, identifier: String = UUID().uuidString) {
+        #if os(macOS)
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         let request = UNNotificationRequest(identifier: identifier,
                                             content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
+        #endif
     }
 }

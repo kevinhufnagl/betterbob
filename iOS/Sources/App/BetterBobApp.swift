@@ -1,6 +1,5 @@
 import BetterBobShared
 import SwiftUI
-import UserNotifications
 
 @main
 struct BetterBobApp: App {
@@ -103,19 +102,13 @@ private struct BootLoader: View {
     }
 }
 
-final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         BobState.shared.start()
         WidgetBridge.shared.start()
         WatchLink.shared.start()
-        UNUserNotificationCenter.current().delegate = self
         BackgroundRefresh.register()
         return true
-    }
-
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
     }
 }

@@ -27,9 +27,9 @@ struct ToggleClockIntent: AppIntent {
 /// APP's process (launched in the background if needed) without foregrounding
 /// it — so the session cookies are right there and the punch can run
 /// synchronously via `punchNow`, which returns only once the server call
-/// landed and the fresh snapshot re-rendered the activity. On any miss a
-/// local notification says so, because a headless button has no other way
-/// to admit failure.
+/// landed and the fresh snapshot re-rendered the activity. Failure feedback
+/// is the card itself: the optimistic flip rolls back to reality on the
+/// reconcile — the iOS app posts no notifications, by design.
 struct PunchIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Punch the Clock"
     static let description = IntentDescription("Performs a HiBob clock action without opening the app.")
@@ -42,14 +42,8 @@ struct PunchIntent: LiveActivityIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         let state = BobState.shared
-        guard state.signedIn else {
-            Notifier.failure("Signed out — open BetterBob to sign in.")
-            return .result()
-        }
-        let ok = await state.punchNow(action.punchAction)
-        if !ok {
-            Notifier.failure("Couldn't reach HiBob — open BetterBob to \(action.verb).")
-        }
+        guard state.signedIn else { return .result() }
+        _ = await state.punchNow(action.punchAction)
         return .result()
     }
 }
@@ -67,13 +61,6 @@ enum PunchChoice: String, AppEnum {
         case .clockOut: return .clockOut
         case .startBreak: return .startBreak
         case .endBreak: return .endBreak
-        }
-    }
-    var verb: String {
-        switch self {
-        case .clockOut: return "clock out"
-        case .startBreak: return "start the break"
-        case .endBreak: return "end the break"
         }
     }
 }
