@@ -959,10 +959,20 @@ public final class BobState: ObservableObject {
             cycle = c
             cycleSummary = s
             lastCycleSummaryAt = now
+            recordTargetHistory(s)
         }
         await loadMonthDays()
         // The month grid marks time-off days, so it needs the requests loaded.
         await loadTimeOff()
+    }
+
+    /// Fold a summary's stated per-day targets into the durable cross-cycle
+    /// history — the week-left fill's weekday precedent (a cycle's first
+    /// Friday has none inside the cycle itself).
+    private func recordTargetHistory(_ s: CycleSummary) {
+        TargetHistory.merge(Dictionary(
+            s.days.compactMap { d in d.target.map { (d.date, $0) } },
+            uniquingKeysWith: { a, b in max(a, b) }))
     }
 
     /// Last month's sheet, loaded on demand when the Last-month pane appears.
@@ -976,6 +986,7 @@ public final class BobState: ObservableObject {
             if let (c, s) = try await client.fetchLastClosedCycle(employeeID: id) {
                 lastMonthCycle = c
                 lastMonthSummary = s
+                recordTargetHistory(s)
                 lastMonthDays = (try? await client.fetchMonthDays(
                     employeeID: id, cycleId: c.id, reasonOptions: reasonOptions)) ?? []
             } else {
@@ -1167,6 +1178,12 @@ public final class BobState: ObservableObject {
                 cycle = c
                 cycleSummary = s
                 lastCycleSummaryAt = now
+                recordTargetHistory(s)
+                // A cycle's first Friday (etc.) has no in-cycle precedent for
+                // the week-left fill — seed from the previous sheet until
+                // every working weekday has one. loadLastMonth self-caches,
+                // so a tenant with no closed sheet retries at most per 10 min.
+                if !TargetHistory.hasWeekdayPrecedent() { await loadLastMonth() }
             }
             // The month grid is a heavy fetch + parse. Refresh it every poll
             // only when the dashboard is open — but load it ONCE regardless

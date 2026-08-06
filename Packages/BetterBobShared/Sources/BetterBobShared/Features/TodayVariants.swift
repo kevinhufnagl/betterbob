@@ -64,7 +64,9 @@ public func weekHeroLine(_ state: BobState, now: Date) -> String? {
     let week = AttendanceLogic.weekProgress(days: state.cycleSummary?.days ?? [],
                                            workedToday: today.worked,
                                            todayTarget: today.targetSecs,
-                                           now: now)
+                                           now: now,
+                                           timeOffAhead: Set(state.timeOffByDay.keys),
+                                           targetHistory: TargetHistory.load())
     guard week.hasTarget else { return nil }
     guard !week.met else {
         // Under a minute over is just done — no one wants "+0m over".

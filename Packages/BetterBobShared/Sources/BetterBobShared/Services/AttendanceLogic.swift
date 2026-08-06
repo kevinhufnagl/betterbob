@@ -512,7 +512,8 @@ public enum AttendanceLogic {
     /// How the whole week stands against its target — the weekly counterpart to
     /// the day's "time left".
     public struct WeekProgress: Equatable {
-        /// Worked across the week so far, today's live total included.
+        /// Payable across the week so far: worked hours (today's live total
+        /// included) plus booked time off, which HiBob credits like work.
         public var worked: TimeInterval
         /// The week's expected hours: the sum of its days' targets, days still
         /// to come included.
@@ -553,17 +554,29 @@ public enum AttendanceLogic {
     /// from HiBob can't erase a worked day — same rule as `weekFractions`.
     ///
     /// Days ahead count toward the target too — that's what makes "left this
-    /// week" mean anything on a Monday. Some tenants' series stops carrying
-    /// targets after today; a weekday whose target is *unknown* (no row, or a
-    /// row with no target) then takes **that same weekday's** target from
-    /// elsewhere in the cycle — a 6.5h Friday stays 6.5h, not the week's 8h
-    /// average — and only falls back to the cycle's typical weekday when that
-    /// weekday has no precedent at all. Either way the result is flagged
-    /// `estimated`. An explicit zero target (a booked day off) is left at zero.
+    /// week" mean anything on a Monday. The series stops carrying targets
+    /// after today (captured 2026-08-06: future rows are all-null); a weekday
+    /// whose target is *unknown* then takes **that same weekday's** target
+    /// from elsewhere in the cycle — a 6.5h Friday stays 6.5h, not the week's
+    /// 8h average — or, failing that, from `targetHistory` (past cycles'
+    /// stated targets, so a cycle's FIRST Friday still fills as 6.5h), and
+    /// only falls back to the typical weekday when the weekday has no
+    /// precedent anywhere. Either way the result is flagged `estimated`.
+    /// An explicit zero target (a non-working day — weekends here) is left
+    /// at zero.
+    ///
+    /// Booked time off is NOT a zero-target day: HiBob keeps the day's target
+    /// stated and ships the hours in the `timeOff` series, crediting them as
+    /// payable (a full-day holiday scores 0h overtime, not a deficit —
+    /// captured 2026-08-06). The same credit is applied here. Future rows
+    /// being all-null, days off ahead of today can only be known from the
+    /// approved requests — pass their dates as `timeOffAhead`.
     public static func weekProgress(days: [DayHours],
                                     workedToday: TimeInterval,
                                     todayTarget: TimeInterval,
                                     now: Date,
+                                    timeOffAhead: Set<String> = [],
+                                    targetHistory: [String: Double] = [:],
                                     calendar: Calendar = Calendar(identifier: .iso8601)) -> WeekProgress {
         guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else {
             return WeekProgress(worked: workedToday, target: todayTarget,
@@ -576,6 +589,8 @@ public enum AttendanceLogic {
         // Every stated weekday target in the whole cycle, keyed by weekday —
         // the precedent a silent day ahead is filled from.
         var byWeekday: [Int: [TimeInterval]] = [:]
+        // Booked time off per week day, from the sheet's series (see doc).
+        var timeOff: [String: TimeInterval] = [:]
         for day in days {
             guard let date = DayFmt.date(day.date) else { continue }
             if let stated = day.target, stated > 0 {
@@ -587,12 +602,26 @@ public enum AttendanceLogic {
             if let stated = day.target {
                 target[day.date] = max(target[day.date] ?? 0, stated * 3600)
             }
+            if let off = day.timeOff, off > 0 {
+                timeOff[day.date] = max(timeOff[day.date] ?? 0, off * 3600)
+            }
+        }
+        // Weekday precedent from past cycles — only for dates this sheet
+        // doesn't itself state, so a date isn't counted twice in the median.
+        let statedDates = Set(days.filter { $0.target != nil }.map(\.date))
+        for (dateKey, hours) in targetHistory where hours > 0 && !statedDates.contains(dateKey) {
+            guard let date = DayFmt.date(dateKey) else { continue }
+            byWeekday[calendar.component(.weekday, from: date), default: []]
+                .append(hours * 3600)
         }
         // Today's worked time comes from the live day, not the sheet; its
         // target from the sheet when stated, else the day view's own number.
         let todayKey = DayFmt.iso.string(from: now)
         worked[todayKey] = workedToday
         target[todayKey] = target[todayKey] ?? todayTarget
+        // Time off credits as payable on top of whatever was worked — for
+        // today too (a booked half day plus a worked half).
+        for (key, off) in timeOff { worked[key, default: 0] += off }
 
         /// The typical length of `weekday` (1 = Sun … 7 = Sat): the median of
         /// its own stated targets across the cycle — so a 6.5h Friday is filled
@@ -622,11 +651,20 @@ public enum AttendanceLogic {
             if cursor < todayStart {
                 if worked[key] == nil { partial = true }
             } else if cursor > todayStart {
+                let covered = timeOffAhead.contains(key)
                 if target[key] == nil, (2...6).contains(weekday), let fill = typical(weekday) {
                     target[key] = fill
-                    estimated = true
+                    // A fill the time-off credit cancels below can't move the
+                    // figure — only an uncovered guess earns the "~".
+                    if !covered { estimated = true }
                 }
-                if (target[key] ?? 0) > 0 { daysToGo += 1 }
+                if covered {
+                    // A day off ahead: the sheet's series is null past today,
+                    // so credit it here the way the series does for past days.
+                    worked[key, default: 0] += target[key] ?? 0
+                } else if (target[key] ?? 0) > 0 {
+                    daysToGo += 1
+                }
             }
             guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
             cursor = next

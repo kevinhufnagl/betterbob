@@ -90,6 +90,25 @@ breakViolationCounter
 Careful: `payableHoursBreakdown.totalHoursDisplay` is a *different* total
 (regular+overtime payable) — don't use it for "worked".
 
+## Captured: summary series semantics (2026-08-06, live grab)
+
+Verified against the running August sheet (`/timesheets/0/summary`) and the
+approved July sheet (`/timesheets/14068479/summary`):
+
+- **Every per-day series stops at today.** For days after today, `worked`,
+  `target`, `timeOff`, and `overtime` are all **null** — not zero. The sheet
+  states nothing about the future, including future booked time off; the only
+  source for upcoming holidays is the time-off requests route.
+- **A booked time-off day keeps its stated target.** 2026-07-24 (a full-day
+  holiday): `worked 0`, `target 6.5`, `timeOff 6.5`, `overtime 0h 00m` —
+  HiBob credits the time off, the day is NOT a zero-target day and NOT a
+  deficit. `totals` for that day is 6.5 (worked + timeOff = payable).
+- **Stated weekday targets** (this tenant, July): Mon–Thu 8h, **Fri 6.5h**,
+  Sat/Sun explicit 0. A cycle's first occurrence of a weekday has no
+  precedent inside the cycle — cross-cycle history is required to fill it.
+- `graphData` also carries `id=nonWorkingEvents` (0 throughout July; likely
+  public holidays) and `id=totals` (worked + timeOff per day).
+
 ## Captured: past cycles ("Last month" tab, 2026-08)
 
 `GET api/attendance/employees/{id}/timesheets` returns **every sheet HiBob

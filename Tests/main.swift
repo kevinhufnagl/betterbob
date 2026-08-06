@@ -1032,13 +1032,63 @@ expect(abs(wpShortFriday.target - 38.5 * 3600) < 1, "week: a silent Friday is fi
 expect(abs(wpShortFriday.remaining - 10.5 * 3600) < 1, "week: 28h in, 10h 30m to go")
 expect(wpShortFriday.estimated, "week: still an estimate, even a well-informed one")
 
+// An explicit zero target is a NON-WORKING day (weekends in the captures) —
+// a booked day off instead keeps its target and ships hours in `timeOff`.
 let wpDayOff = AttendanceLogic.weekProgress(
     days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
            DayHours(date: "2026-07-17", worked: 0, target: 0, overtime: nil)],
     workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14))
-expect(!wpDayOff.estimated, "week: a stated zero ahead is a booked day off, not a gap")
-expect(wpDayOff.daysToGo == 0, "week: a day off isn't a day to go")
-expect(abs(wpDayOff.target - 16 * 3600) < 1, "week: the day off adds nothing to the target")
+expect(!wpDayOff.estimated, "week: a stated zero ahead is a non-working day, not a gap")
+expect(wpDayOff.daysToGo == 0, "week: a non-working day isn't a day to go")
+expect(abs(wpDayOff.target - 16 * 3600) < 1, "week: a non-working day adds nothing to the target")
+
+// The cycle's FIRST Friday: no in-cycle precedent, so the fill leans on the
+// durable cross-cycle history (June's stated 6.5h Fridays) instead of the
+// all-weekday 8h median.
+let wpHistoryFriday = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-14", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-15", worked: 8, target: 8, overtime: nil)],
+    workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14),
+    targetHistory: ["2026-06-19": 6.5, "2026-06-26": 6.5])
+expect(abs(wpHistoryFriday.target - 38.5 * 3600) < 1,
+       "week: a first Friday with no in-cycle precedent fills from past cycles")
+expect(wpHistoryFriday.estimated, "week: a history fill is still an estimate")
+
+// Approved time off AHEAD of today comes from the requests (future sheet
+// rows are all-null): the day is filled, credited, and not a day to go.
+let wpOffAhead = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-14", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-15", worked: 8, target: 8, overtime: nil)],
+    workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14),
+    timeOffAhead: ["2026-07-17"])
+expect(wpOffAhead.daysToGo == 0, "week: a booked Friday off isn't a day to go")
+expect(abs(wpOffAhead.remaining - 4 * 3600) < 1,
+       "week: a covered Friday adds nothing to what's left")
+expect(!wpOffAhead.estimated,
+       "week: a fill the time-off credit cancels isn't an estimate")
+
+// A booked day off keeps its stated target in the sheet (captured live
+// 2026-08-06): the hours arrive in the timeOff series instead, and HiBob
+// credits them as payable — a holiday week is not "behind".
+let wpTimeOffCredit = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-13", worked: 8, target: 8, overtime: nil),
+           DayHours(date: "2026-07-14", worked: 0, target: 6.5, overtime: nil, timeOff: 6.5),
+           DayHours(date: "2026-07-15", worked: 8, target: 8, overtime: nil)],
+    workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14))
+expect(abs(wpTimeOffCredit.worked - 26.5 * 3600) < 1,
+       "week: booked time off credits as payable, like HiBob's own totals")
+expect(abs(wpTimeOffCredit.remaining - 12 * 3600) < 1,
+       "week: today's 4h and the filled Friday remain; the day off adds nothing")
+
+// A half day off today: the live clock covers the worked half, the sheet's
+// timeOff series the booked half — both count.
+let wpHalfToday = AttendanceLogic.weekProgress(
+    days: [DayHours(date: "2026-07-16", worked: 0, target: 8, overtime: nil, timeOff: 4)],
+    workedToday: 4 * 3600, todayTarget: 8 * 3600, now: t(14))
+expect(abs(wpHalfToday.worked - 8 * 3600) < 1,
+       "week: today's live hours plus today's booked half day both count")
 
 let wpPartial = AttendanceLogic.weekProgress(
     days: [DayHours(date: "2026-07-16", worked: 0, target: 8, overtime: nil)],
@@ -1049,6 +1099,24 @@ expect(abs(wpPartial.worked - 3 * 3600) < 1, "week: a partial week counts what i
 expect(!AttendanceLogic.weekProgress(days: [], workedToday: 0, todayTarget: 0,
                                      now: t(14)).hasTarget,
        "week: no target without cycle data")
+
+print("TargetHistory")
+
+let thSuite = "betterbob-tests-target-history"
+let thDefaults = UserDefaults(suiteName: thSuite)!
+thDefaults.removePersistentDomain(forName: thSuite)
+TargetHistory.merge(["2026-07-03": 6.5, "2026-07-06": 8], into: thDefaults)
+TargetHistory.merge(["2026-07-06": 8.5], into: thDefaults)
+let th = TargetHistory.load(thDefaults)
+expect(th["2026-07-03"] == 6.5 && th["2026-07-06"] == 8.5,
+       "target history: merge upserts by date")
+expect(!TargetHistory.hasWeekdayPrecedent(thDefaults),
+       "target history: a Friday and a Monday alone don't cover the week")
+TargetHistory.merge(["2026-07-07": 8, "2026-07-08": 8, "2026-07-09": 8],
+                    into: thDefaults)
+expect(TargetHistory.hasWeekdayPrecedent(thDefaults),
+       "target history: all five weekdays seen")
+thDefaults.removePersistentDomain(forName: thSuite)
 
 print("AttendanceLogic.nextBackgroundRefresh")
 
