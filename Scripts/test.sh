@@ -21,6 +21,8 @@ done < <(find Sources Packages -name '*.swift' -type f \
            -not -path 'Sources/App/*' -not -path '*/.build/*' \
            -not -name 'Package.swift' -print0)
 
-swiftc -target "$TARGET" -o "$BIN" "${SWIFT_FILES[@]}" Tests/main.swift
+# -j: swiftc won't parallelize frontend jobs on its own here — one flag is
+# the difference between ~17s (serial) and ~6s on this many files.
+swiftc -j "$(sysctl -n hw.ncpu)" -target "$TARGET" -o "$BIN" "${SWIFT_FILES[@]}" Tests/main.swift
 
 "$BIN"
